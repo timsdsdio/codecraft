@@ -4,6 +4,23 @@ Start with `README.md` for the layout of the repo. The design lives in the wiki
 (`apps/wiki/src/content/`). The stack and its lessons are in `docs/STACK.md`, and decisions that
 differ from either are in `DEVIATIONS.md`.
 
+## The wiki and the changelog
+
+The wiki is not updated with every change. Keeping it current on each step costs more than it's
+worth while the game is being built, so expect parts of it to lag behind the code.
+
+Instead, `CHANGELOG.md` collects changes to **how CodeCraft works**: behaviour, mechanics,
+controls, architecture, anything a wiki page describes or should describe. It doesn't list edits
+to the wiki itself, refactors with no visible effect, or bug fixes that only restore intended
+behaviour.
+
+- Add an entry under **Unreleased** whenever a change makes something in the wiki untrue or
+  incomplete. One or two lines, naming the affected pages when you know them.
+- Every so often (or when asked), do a wiki pass: apply the Unreleased entries to the pages
+  following the copy rules below, then move them under a dated heading.
+- When the code and the wiki disagree, check the changelog first. If it doesn't explain the
+  difference, the code is the source of truth and the wiki is stale.
+
 ## Writing copy
 
 This covers wiki pages, READMEs, `DEVIATIONS.md`, UI text and code comments.

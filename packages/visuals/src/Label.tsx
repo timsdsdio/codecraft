@@ -51,21 +51,26 @@ function draw(canvas: HTMLCanvasElement, o: LabelOpts): number {
   const color = o.color ?? '#bff9ff';
   ctx.font = main;
   ctx.letterSpacing = `${spacing}px`;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = o.glow ?? px * 0.3;
-  ctx.fillStyle = color;
   const y1 = pad * 0.2 + px * 0.75;
-  ctx.fillText(o.text, W / 2, y1);
+  // soft glow, then a thick dark outline so the text reads against bright neon behind it
+  ctx.shadowColor = color;
+  ctx.shadowBlur = o.glow ?? px * 0.25;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = px * 0.16;
+  ctx.strokeStyle = 'rgba(0,0,0,0.92)';
+  ctx.strokeText(o.text, W / 2, y1);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ffffff';
-  ctx.globalAlpha = 0.85;
+  ctx.strokeText(o.text, W / 2, y1);
+  ctx.fillStyle = color;
   ctx.fillText(o.text, W / 2, y1);
-  ctx.globalAlpha = 1;
   if (o.sub) {
     ctx.letterSpacing = '0px';
     ctx.font = sub;
-    ctx.fillStyle = o.subColor ?? 'rgba(180,220,235,0.8)';
-    ctx.fillText(o.sub, W / 2, y1 + px * 0.75 + subPx * 0.7);
+    const y2 = y1 + px * 0.75 + subPx * 0.7;
+    ctx.lineWidth = subPx * 0.22;
+    ctx.strokeText(o.sub, W / 2, y2);
+    ctx.fillStyle = o.subColor ?? 'rgba(200,232,242,0.95)';
+    ctx.fillText(o.sub, W / 2, y2);
   }
   return W / H;
 }
@@ -126,7 +131,8 @@ export function Label({
   depthTest?: boolean;
 }) {
   const { texture, aspect } = useLabelTexture(o);
-  const color = useMemo(() => new THREE.Color(intensity, intensity, intensity), [intensity]);
+  // capped at 1 so labels stay below the bloom threshold and don't halo
+  const color = useMemo(() => { const k = Math.min(1, intensity); return new THREE.Color(k, k, k); }, [intensity]);
   return (
     <sprite position={position} scale={[height * aspect, height, 1]} renderOrder={renderOrder} raycast={() => null}>
       <spriteMaterial map={texture} color={color} transparent opacity={opacity} depthWrite={false} depthTest={depthTest} toneMapped={false} />
@@ -150,7 +156,8 @@ export function FlatLabel({
   rotation?: [number, number, number];
 }) {
   const { texture, aspect } = useLabelTexture(o);
-  const color = useMemo(() => new THREE.Color(intensity, intensity, intensity), [intensity]);
+  // capped at 1 so labels stay below the bloom threshold and don't halo
+  const color = useMemo(() => { const k = Math.min(1, intensity); return new THREE.Color(k, k, k); }, [intensity]);
   return (
     <mesh position={position} rotation={rotation} scale={[height * aspect, height, 1]} raycast={() => null}>
       <planeGeometry />
