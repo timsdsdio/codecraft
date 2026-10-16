@@ -1,0 +1,38 @@
+---
+title: Todo App
+category: Reference
+summary: The reference app the first version is built around.
+status: draft
+aliases: [Reference App, Todo List]
+infobox:
+  scene: surface
+  caption: The todo app, seen from on top of it.
+  rows:
+    Viewport: 400 × 720 px
+    Components: 6 types
+    Floors: "3"
+---
+
+The first version of CodeCraft is built around one small app: a todo list with a scrolling list, an add form and filters. It's ordinary React with nothing visualizer-specific in it. It was chosen because it has each thing the factory needs to show:
+
+- state at the root (`todos`, `filter`) and local state (`AddTodo`'s `title`);
+- props going down two levels;
+- callbacks coming back up two levels (`onToggle`, `onRemove`);
+- a keyed list (`todos.map`);
+- a scroll area (the list).
+
+## Components
+
+<ComponentTable />
+
+That makes three floors: `App` on floor 1; `Header`, `AddTodo`, `TodoList` and `FilterBar` on floor 2; one `TodoItem` per todo on floor 3.
+
+<SceneFigure name="overview" float="none" height={340} caption="The whole thing: three floors, with the screen on top." />
+
+## Source
+
+<TodoSource />
+
+<Question>
+Should the reference app keep its todos on a server, using the Postgres + Electric stack from `docs/STACK.md`? Data would then enter the factory from outside, through a pipe coming up out of the ground into App's tank, which would be a nice way to show sync. See [[Open Questions]].
+</Question>

@@ -1,29 +1,27 @@
 ---
 title: Controls
 category: Gameplay
-summary: Desktop and touch controls for first person and the map view.
-status: prototype
-aliases: [Keys, Keybindings, First Person]
+summary: Keyboard, mouse and touch controls.
+status: draft
+aliases: [Keys, Keybindings, Touch]
 ---
-
-CodeCraft is played in **first person** by default: you walk around inside the program. The [[Map View]] is one key away.
-
-## First person
 
 | Action | Desktop | Touch |
 |---|---|---|
-| Move | <Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key> / arrows | left-half joystick |
-| Look | mouse (drag to look if pointer lock isn't available) | right-half look pad |
-| Jump | <Key>Space</Key> | Jump button |
-| Sprint | <Key>Shift</Key>, or double-tap <Key>W</Key> | push the joystick past 90 % |
-| Use tool | left click, <Key>E</Key> | tap the target |
-| Cancel | right click, <Key>Q</Key> | Cancel button |
-| Pick tool | <Key>1</Key>–<Key>4</Key>, wheel | tap the hotbar |
-| Map view | <Key>M</Key> / <Key>Tab</Key> | toggle in the HUD |
-| Respawn | <Key>R</Key> | from the pause card |
+| Move | <Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key> | left-thumb joystick |
+| Look | mouse (pointer lock) | right-thumb drag |
+| Jump / up a floor | <Key>Space</Key> | Jump button |
+| Crouch / down a floor | <Key>Shift</Key> | Crouch button |
+| Straight to the screen | <Key>Home</Key> | long-press Jump |
+| Sprint | <Key>Ctrl</Key> | push the joystick to the edge |
+| Use the app (click) | left click on the crosshair | tap the screen |
+| Inspect | look at something | tap a machine |
+| Stop typing | <Key>Esc</Key> | tap outside the input |
 
-The joystick and look pad track separate fingers, so you can strafe and turn at once.
+Crouch is <Key>Shift</Key>, as in Minecraft, so sprint moves to <Key>Ctrl</Key>.
 
-## Movement
+## Using the app while small
 
-You're 1.8 m tall and a [[Block]] is 1.4 m, so a block is something you can *just* jump onto, as in Minecraft. There's no auto-step: walking into a block stops you. You can stand and walk on top of blocks, and from there see over the [[Network Wall]].
+Clicking goes to the app element under your crosshair. The game works out where the crosshair hits the screen and sends the app a real click there ([[Screen Rendering]]). Clicking an input focuses it. From then on, your keys type into the app instead of moving you, until you press <Key>Esc</Key> or click away.
+
+On touch, taps on the screen go to the app wherever you tap. Taps on machines inspect them.

@@ -4,58 +4,60 @@ category: Meta
 summary: Start here.
 ---
 
-**CodeCraft** is a tech mod where the machines are programs. Every part of an app is a [[Block]]. Every TypeScript interface is a [[Socket]] with its own shape and colour. You build working software by running [[Cable|cables]] between blocks, and the app runs live on a [[Monitor]].
+**CodeCraft** shrinks you down to 100 pixels tall and drops you onto a running React app. The app's screen lies face-up on the ground, and you stand on it, on top of the buttons and list rows. **Crouch** and you drop through the screen into the factory underneath: the machinery that makes the app. Brass pipes carry props up to each part of the screen, green [[Logic Casing|logic casings]] turn props into output, and [[Telescoping Piston|telescoping pistons]] push out one arm for every item in a list. **Jump** to go back up.
 
-This wiki is where the design gets worked out *before* it gets built. Pages describe how things should work. When a design is agreed it gets implemented, and the wiki stays as the player-facing reference.
+It's in the spirit of the *Create* mod for Minecraft, but much smaller: a handful of machines, all of them there to show what React is doing.
 
-<SceneFigure name="link" float="wide" height={300} caption="A server block feeds a cable through the network wall. The link block in the portal carries it to the client side. Flashes travel along the cable for each call and its response." />
+<SceneFigure name="overview" float="wide" height={380} caption="The reference todo app with its factory underneath. Each floor is one level of the component tree, and the screen is the roof. A render wave climbs from App's state tanks up to the screen." />
 
 <div className="cc-portals">
 <div className="cc-portal">
 
+### Start here
+
+[[How It Works]] · [[Todo App]] · [[Open Questions]]
+
+The whole idea on one page, the app we're building it around, and what's still undecided.
+
+</div>
+<div className="cc-portal">
+
 ### Concepts
 
-[[Block|Blocks]] · [[Socket|Sockets]] · [[Interface|Interfaces]] · [[Cable|Cables]]
+[[Screen]] · [[Floors]] · [[Data Flow]] · [[Render]] · [[Value Kinds]]
 
-The four ideas everything else is built from.
-
-</div>
-<div className="cc-portal">
-
-### Blocks
-
-[[System Clock]] · [[Todo Service]] · [[Mock Link]] · [[Todo List]] · [[App Shell]] · [[Monitor]]
-
-The starter set, from the prototype's todo app.
+How an app maps onto a building.
 
 </div>
 <div className="cc-portal">
 
-### Tools
+### Machines
 
-[[Probe]] · [[Wire Coil]] · [[Wire Cutters]] · [[Wrench]]
+[[Logic Casing]] · [[State Tank]] · [[Pipe]] · [[Display Link]] · [[Telescoping Piston]] · [[Conveyor Belt]] · [[Fold]] · [[Event Wire]]
 
-What you carry in your hotbar.
+Everything in the factory.
 
 </div>
 <div className="cc-portal">
 
-### Mechanics
+### Playing
 
-[[Zone|Zones]] · [[Network Wall]] · [[Composition]] · [[Controls]]
+[[Player]] · [[Controls]] · [[Inspecting]]
 
-How a world of blocks becomes a running app.
+Being small, and getting around.
+
+</div>
+<div className="cc-portal">
+
+### Engineering
+
+[[Probe]] · [[World Layout]] · [[Screen Rendering]] · [[Update Replay]]
+
+How the game reads an app without changing its code.
 
 </div>
 </div>
 
 ## Reading this wiki
 
-Each page carries a design status:
-
-- **Prototype**: how the Socketworld prototype already works. A starting point, open to change.
-- **Draft**: a proposal that hasn't been agreed.
-- **Open question**: options for something undecided.
-- **Settled**: agreed, and ready to build.
-
-Red links like [[Crafting]] point to pages nobody has written yet. The [Wanted pages](/special/wanted-pages) list collects them, so it doubles as the design backlog. See [[About this wiki]] for how pages and 3D views are written.
+Each page carries a design status: **Draft** (proposed, not agreed), **Open question** (options for something undecided), or **Settled** (agreed and ready to build). Red links like [[Engineer's Goggles]] point to pages nobody has written yet. The [Wanted pages](/special/wanted-pages) list is the design backlog. [[About this wiki]] explains how pages and 3D views are written.

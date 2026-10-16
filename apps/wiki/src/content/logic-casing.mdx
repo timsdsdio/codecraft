@@ -1,0 +1,44 @@
+---
+title: Logic Casing
+category: Machines
+summary: A component's code, as a sealed green box. Props in the bottom, output out the top.
+status: draft
+aliases: [Casing, Black Box, Component]
+infobox:
+  scene: casing
+  caption: AddTodo's casing, with its title tank beside it and its onAdd wire below.
+  rows:
+    One per: mounted component instance
+    Size: fits its footprint (max 110 × 70 px)
+    Inputs: props (bottom)
+    Outputs: children, screen (top)
+---
+
+A **logic casing** is one mounted component. It stands for everything in the function body above the `return`: hooks, derived values, handlers. It's deliberately a black box. You see what goes in and what comes out, not the code.
+
+## Appearance
+
+Dark green glass in a brass frame, with a brass cog inside. Its name floats above it. The cog idles slowly and spins up whenever the component [[Render|renders]].
+
+## Placement
+
+A casing stands on the [[Floors|floor]] for its depth in the tree, centred under its component's box on the [[Screen]]. It's sized to fit that box, with limits so tiny components stay visible and big ones don't become walls.
+
+## Connections
+
+| Where | What | Machine |
+|---|---|---|
+| bottom | props from the parent | [[Pipe]] |
+| side | each `useState` | [[State Tank]] |
+| top | props for each child component | [[Pipe]] |
+| top | a list of children | [[Telescoping Piston]] |
+| top | this component's own pixels | [[Display Link]] |
+| alongside the pipes | function props, back down | [[Event Wire]] |
+
+## What counts as "the component's own output"
+
+The JSX a component returns mixes plain elements (`div`, `li`, text) with child components. Child components get their own casings, one floor up. Plain elements don't become machines; they're what the display link paints.
+
+<Question>
+Should the casing show *how* props become output, for example with a separate small gear for each derived value like `remaining = todos.filter(…).length`? It would make the box less black, but it needs source analysis, which the [[Probe]] doesn't do. The proposal for now is no.
+</Question>

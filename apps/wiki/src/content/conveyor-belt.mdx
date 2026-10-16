@@ -1,0 +1,27 @@
+---
+title: Conveyor Belt
+category: Machines
+summary: The floor of a scroll area. Scrolling drives the belt and everything above it rides along.
+status: draft
+aliases: [Belt, Scroll, Scrolling]
+infobox:
+  scene: fold
+  caption: The todo list scrolling. The belt drives the piston rod, and rows slide through the folds at each end.
+  rows:
+    One per: scrollable element
+    Lies on: its owner's floor
+---
+
+A **conveyor belt** runs along the floor under every scrollable area, on the floor of the component whose JSX renders the scrolling element. Its surface moves with the scroll position: scroll the list down and the belt carries everything toward the top of the screen.
+
+Riding on the belt is everything inside the scroll area: the [[Telescoping Piston]]'s heads on the belt's own floor, and every item's casing, pipe and link above it. All of them move with their rows, because their positions come from the rows' real positions on the screen.
+
+At each end, things leave the scroll area through a [[Fold]] and stop being drawn.
+
+## Why a belt
+
+You scroll by dragging the screen, so the floor under you should look like it's moving. A belt also explains why the piston rod slides through its casing instead of the casing moving: the casing belongs to the component that *owns* the scroll area, which doesn't scroll itself.
+
+<Question>
+Horizontal scroll areas would need belts running across instead of along. Nested scroll areas would mean a belt riding on a belt. Neither is in the todo app; both should work with the same clipping.
+</Question>

@@ -1,6 +1,6 @@
 import { Route, Switch } from 'wouter';
 import { Layout } from './wiki/Layout';
-import { AllPages, CategoryView, PageView, WantedPages } from './wiki/views';
+import { AllPages, CategoryView, PageView, SceneView, WantedPages } from './wiki/views';
 
 export default function App() {
   return (
@@ -11,6 +11,7 @@ export default function App() {
         <Route path="/category/:name">{(p) => <CategoryView name={decodeURIComponent(p.name)} />}</Route>
         <Route path="/special/all-pages" component={AllPages} />
         <Route path="/special/wanted-pages" component={WantedPages} />
+        <Route path="/special/scene/:name">{(p) => <SceneView name={p.name} />}</Route>
         <Route>{() => <PageView slug="not-found" />}</Route>
       </Switch>
     </Layout>

@@ -2,7 +2,6 @@
 import type { ComponentType } from 'react';
 import type { MDXComponents } from 'mdx/types';
 import { slugify, WIKILINK_RE } from '../remark-wikilinks.ts';
-import { BLOCKS } from './data/catalog';
 
 export type Status = 'prototype' | 'draft' | 'open' | 'settled';
 
@@ -13,8 +12,6 @@ export interface Frontmatter {
   status?: Status;
   aliases?: string[];
   infobox?: {
-    block?: string;
-    tool?: 'probe' | 'wire' | 'cutter' | 'wrench';
     scene?: string;
     caption?: string;
     rows?: Record<string, string>;
@@ -81,6 +78,6 @@ export function wanted(): { slug: string; from: Page[] }[] {
   return [...m].map(([slug, from]) => ({ slug, from: from.sort(byTitle) })).sort((a, b) => b.from.length - a.from.length || a.slug.localeCompare(b.slug));
 }
 
-export const CATEGORY_ORDER = ['Concepts', 'Blocks', 'Tools', 'Mechanics', 'Gameplay', 'Meta'];
+export const CATEGORY_ORDER = ['Concepts', 'Machines', 'Gameplay', 'Reference', 'Engineering', 'Meta'];
 
-export const titleFromSlug = (slug: string) => BLOCKS[slug]?.title ?? LINK_NAMES[slug] ?? slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+export const titleFromSlug = (slug: string) => LINK_NAMES[slug] ?? slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());

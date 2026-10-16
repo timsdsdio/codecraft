@@ -1,0 +1,43 @@
+---
+title: World Layout
+category: Engineering
+summary: Turning a snapshot of the component tree into floors, machines and pipes.
+status: draft
+aliases: [Layout, layoutFactory]
+infobox:
+  scene: floors
+  caption: "Layout output for the todo app, from the side."
+---
+
+`layoutFactory(snapshot)` turns a [[Probe]] snapshot into everything the factory draws. It's a pure function in `packages/visuals/src/factory/layout.ts`. The 3D views on this wiki already run the [[Todo App]]'s snapshot through it, so the diagrams and the game can't drift apart.
+
+## Coordinates
+
+- 1 world unit = 100 CSS px = the [[Player]]'s height.
+- Screen x → world x. Screen y → world z (the top of the app is at −z).
+- Floor *d* (tree depth, root = 1) is at y = (*d* − 1) × 1.6. The screen is at y = floors × 1.6.
+
+## Placement rules
+
+| Thing | Where |
+|---|---|
+| [[Logic Casing]] | its floor, centred under its rect; 60 % × 70 % of the rect, clamped to 32–110 × 26–70 px |
+| scroll owner's casing | at the near edge of its scroll viewport, so the piston rod can run through it |
+| [[State Tank]] | in a row on the casing's −x side |
+| [[Pipe]] (plain child) | up from the parent's top to a lane under the next floor (one lane height per sibling), across in x then z, up into the child |
+| [[Telescoping Piston]] | rod along +z from the casing, one head at each keyed child's z |
+| piston feed pipe | out of the head's +x side, up, back over, into the child |
+| [[Event Wire]] | the same route as its pipe, offset slightly, running the other way |
+| [[Display Link]] | from the casing's top to the centre of its rect on the screen's underside |
+| [[Conveyor Belt]] | under the piston rod, the length of the scroll viewport |
+| [[Fold]] | the scroll viewport's footprint, from the owner's floor up to the screen |
+
+## Clipping
+
+Anything with a `clip` gets four `THREE.Plane`s (x ≥ x0, x ≤ x1, z ≥ z0, z ≤ z1) on all of its materials, through a React context (`ClipRegion`). Nested regions concatenate their planes. The renderer needs `localClippingEnabled`.
+
+## Known weak spots
+
+- Pipe routes can overlap when many siblings share a parent. Fine for the todo app; a real router (lanes per corridor) comes later if needed.
+- Very small components get a minimum-size casing that can spill outside their rect.
+- Rects move every scroll frame, so positions are eased on the client rather than snapped.

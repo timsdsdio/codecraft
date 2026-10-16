@@ -7,6 +7,8 @@ import { StatusBanner, StatusChip } from './bits';
 import { Toc, useHeadings } from './Toc';
 import { mdxComponents } from './mdx';
 import { WikiLink } from './WikiLink';
+import { Viewport } from '../embeds/Embed';
+import { SCENE_NAMES, type SceneName } from '../embeds/spec';
 
 function useTitle(t: string) {
   useEffect(() => {
@@ -161,6 +163,26 @@ export function WantedPages() {
           </li>
         ))}
       </ul>
+    </article>
+  );
+}
+
+/** One scene, full width: for inspecting a scene while working on it. */
+export function SceneView({ name }: { name: string }) {
+  useTitle(`Scene: ${name}`);
+  const ok = (SCENE_NAMES as readonly string[]).includes(name);
+  return (
+    <article className="cc-article">
+      <Head title={`Scene: ${name}`} />
+      {ok ? <Viewport key={name} spec={{ type: 'scene', name: name as SceneName }} height={560} /> : <p>No scene called “{name}”.</p>}
+      <p className="cc-sig">
+        {SCENE_NAMES.map((n, i) => (
+          <span key={n}>
+            {i > 0 && ' · '}
+            <Link href={`/special/scene/${n}`}>{n}</Link>
+          </span>
+        ))}
+      </p>
     </article>
   );
 }

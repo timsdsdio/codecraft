@@ -1,199 +1,179 @@
-// The 3D chunk (lazy-loaded). Each embed is one small <Stage> scene built from @codecraft/visuals.
-import type { ReactNode } from 'react';
+// The 3D chunk (lazy-loaded). Each embed is one small <Stage> scene built from @codecraft/visuals,
+// mostly by running the reference app's snapshot through layoutFactory().
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Block,
-  Cable,
-  CUBE_Y,
-  Monitor,
-  NEON,
-  monitorRootAt,
-  SHAPES,
-  Socket,
+  Avatar,
+  Belt,
+  Casing,
+  DisplayLink,
+  Factory,
+  Floor,
+  Pipe,
+  Piston,
   Stage,
-  ToolModel,
-  Wall,
-  socketAt,
-  type BlockSpec,
-  type SocketState,
+  Tank,
+  layoutFactory,
+  floorY,
+  SLAB,
   type StageProps,
   type Vec3,
 } from '@codecraft/visuals';
-import { blockOrThrow, IFACES } from '../data/catalog';
+import { drawTodoApp, todoSnapshot } from '../data/todoApp';
 import type { EmbedSpec, SceneName } from './spec';
 
-type Placed = { spec: BlockSpec; at: [number, number] };
+const drawDefault = (ctx: CanvasRenderingContext2D, w: number, h: number) => drawTodoApp(ctx, w, h);
 
-/** Cable from `a.out` to `b.in`, styled by the provider's interface. */
-function Wire({ a, out, b, inp, pulse = 2.4, active = true }: { a: Placed; out: string; b: Placed; inp: string; pulse?: number; active?: boolean }) {
-  const from = socketAt(a.spec, a.at, out);
-  const to = socketAt(b.spec, b.at, inp);
-  const iface = a.spec.ports.find((p) => p.name === out)?.iface ?? out;
-  if (!from || !to) return null;
-  return <Cable from={from} to={to} iface={iface} kind={IFACES[iface]?.kind} pulseEvery={pulse} active={active} roundTrip={IFACES[iface]?.kind === 'cable'} />;
+function useTodoLayout(items = 10, scrollTop = 40) {
+  return useMemo(() => layoutFactory(todoSnapshot({ items, scrollTop })), [items, scrollTop]);
 }
 
-const put = (id: string, at: [number, number]): Placed => ({ spec: blockOrThrow(id), at });
-
-function scene(name: SceneName): { stage: Partial<StageProps>; body: ReactNode } {
-  switch (name) {
-    case 'wiring': {
-      const clock = put('system-clock', [-1.4, -2.6]);
-      const ids = put('id-gen', [1.4, -2.6]);
-      const repo = put('memory-todo-repo', [0, 0.8]);
-      return {
-        stage: { eye: [7.5, 4.6, 3], target: [0, 0.8, -0.9] },
-        body: (
-          <>
-            <Block spec={clock.spec} at={clock.at} connected={['clock']} />
-            <Block spec={ids.spec} at={ids.at} connected={['ids']} />
-            <Block spec={repo.spec} at={repo.at} connected={['clock', 'ids']} portLabels />
-            <Wire a={clock} out="clock" b={repo} inp="clock" pulse={1.7} />
-            <Wire a={ids} out="ids" b={repo} inp="ids" pulse={2.3} />
-          </>
-        ),
-      };
-    }
-    case 'link': {
-      const svc = put('todo-service', [0, -3.4]);
-      const link = put('mock-link', [0, 0]);
-      const model = put('todos-model', [0, 3.4]);
-      return {
-        stage: { eye: [8.5, 4.8, 2.5], target: [0, 1, 0] },
-        body: (
-          <>
-            <Wall />
-            <Block spec={svc.spec} at={svc.at} connected={['api']} />
-            <Block spec={link.spec} at={link.at} connected={['handler', 'remote']} title={false} />
-            <Block spec={model.spec} at={model.at} connected={['api']} />
-            <Wire a={svc} out="api" b={link} inp="handler" pulse={2.6} />
-            <Wire a={link} out="remote" b={model} inp="api" pulse={2.6} />
-          </>
-        ),
-      };
-    }
-    case 'missing':
-    case 'replace': {
-      const missing = name === 'missing';
-      const list = put('todo-list', [0, 0]);
-      const todos = put('todos-model', [-1.3, -3.2]);
-      const filter = put('filter-model', [1.3, -3.2]);
-      const item = put('todo-item', [-2.6, 0]);
-      const neon = put('neon-todo-item', [2.6, 0]);
-      const portState: Record<string, SocketState> = missing ? { item: 'missing' } : {};
-      return {
-        stage: { eye: [4.6, 5.4, 6.2], target: [0, 1, -1.2] },
-        body: (
-          <>
-            <Block spec={list.spec} at={list.at} connected={missing ? ['todos', 'filter'] : ['todos', 'filter', 'item']} portState={portState} portLabels />
-            <Block spec={todos.spec} at={todos.at} connected={['model']} />
-            <Block spec={filter.spec} at={filter.at} connected={['model']} />
-            <Wire a={todos} out="model" b={list} inp="todos" />
-            <Wire a={filter} out="model" b={list} inp="filter" pulse={3.1} />
-            {!missing && (
-              <>
-                <Block spec={item.spec} at={item.at} connected={['view']} />
-                <Wire a={item} out="view" b={list} inp="item" pulse={1.9} />
-                <Block spec={neon.spec} at={neon.at} active={false} portState={{ view: 'highlight' }} />
-              </>
-            )}
-          </>
-        ),
-      };
-    }
-    case 'monitor':
-    case 'monitor-missing': {
-      const ok = name === 'monitor';
-      const shell = put('app-shell', [0, -4.2]);
-      const root = monitorRootAt([0, 0]);
-      const from = socketAt(shell.spec, shell.at, 'root');
-      return {
-        stage: { eye: ok ? [7.5, 4.5, 8] : [-7, 4.2, -8], target: [0, 2, -1.2], fov: 42 },
-        body: (
-          <>
-            <Monitor ok={ok} connected={ok} />
-            <Block spec={shell.spec} at={shell.at} active={ok} connected={ok ? ['root'] : []} />
-            {ok && from && <Cable from={from} to={root} iface="ui.Root@1" kind="view" pulseEvery={1.6} />}
-          </>
-        ),
-      };
-    }
-    case 'shapes': {
-      // every socket shape, male (top row) and female (bottom row), on a dark panel
-      const row = (female: boolean, y: number) =>
-        SHAPES.map((shape, k) => {
-          return (
-            <Socket
-              key={`${shape}${female}`}
-              iface={shape}
-              visual={{ shape, color: NEON[k] }}
-              state="active"
-              placement={{ pos: [(k - 3.5) * 0.62, y, 0.05], normal: [0, 0, 1], euler: [0, 0, 0], face: 'front', female, radius: 0.17 }}
-            />
-          );
-        });
-      return {
-        stage: { eye: [0, 1.25, 7], target: [0, 1.2, 0], floor: false, fov: 38, autoRotate: false },
-        body: (
-          <>
-            <mesh position={[0, 1.2, 0]}>
-              <boxGeometry args={[5.4, 1.7, 0.1]} />
-              <meshStandardMaterial color="#060b14" metalness={0.6} roughness={0.3} />
-            </mesh>
-            {row(false, 1.6)}
-            {row(true, 0.8)}
-          </>
-        ),
-      };
-    }
-    case 'faces': {
-      const list = put('todo-list', [0, 0]);
-      return {
-        stage: { eye: [4.2, 3.8, 3.6], target: [0, CUBE_Y, 0] },
-        body: <Block spec={list.spec} at={list.at} portLabels />,
-      };
-    }
-    case 'demand': {
-      const stats = put('stats', [-1.6, -3.4]);
-      const shell = put('app-shell', [0, -0.2]);
-      const spare = put('neon-todo-item', [3.4, -2.6]);
-      const root = monitorRootAt([0, 3.6]);
-      const from = socketAt(shell.spec, shell.at, 'root');
-      return {
-        stage: { eye: [9, 6, 4], target: [0, 1.4, 0] },
-        body: (
-          <>
-            <Monitor at={[0, 3.6]} connected />
-            <Block spec={shell.spec} at={shell.at} connected={['root', 'footer']} />
-            <Block spec={stats.spec} at={stats.at} connected={['view']} portState={{ todos: 'missing' }} />
-            <Block spec={spare.spec} at={spare.at} active={false} />
-            <Wire a={stats} out="view" b={shell} inp="footer" />
-            {from && <Cable from={from} to={root} iface="ui.Root@1" kind="view" pulseEvery={1.6} />}
-          </>
-        ),
-      };
-    }
-  }
+/** Ticks a value on an interval (for scenes that loop through states). */
+function useCycle<T>(values: T[], ms: number): T {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setI((v) => (v + 1) % values.length), ms);
+    return () => window.clearInterval(id);
+  }, [values.length, ms]);
+  return values[i];
 }
+
+/** Smoothly oscillating scroll offset, re-rendered ~20×/s. */
+function useScrollWave(min: number, max: number, period = 6) {
+  const [s, setS] = useState(min);
+  useEffect(() => {
+    const t0 = performance.now();
+    const id = window.setInterval(() => {
+      const t = (performance.now() - t0) / 1000;
+      setS(Math.round(min + (max - min) * (0.5 - 0.5 * Math.cos((t / period) * Math.PI * 2))));
+    }, 50);
+    return () => window.clearInterval(id);
+  }, [min, max, period]);
+  return s;
+}
+
+function Overview() {
+  const layout = useTodoLayout();
+  return <Factory layout={layout} demo screen={{ draw: drawDefault, opacity: 0.55 }} avatar={{ pos: [0.6, layout.screenY + SLAB, 2.2], yaw: 2.6 }} />;
+}
+
+function Surface() {
+  const layout = useTodoLayout();
+  return <Factory layout={layout} screen={{ draw: drawDefault }} labels={false} avatar={{ pos: [-0.4, layout.screenY + SLAB, 1.1], yaw: 0.4 }} />;
+}
+
+function Cutaway() {
+  const layout = useTodoLayout();
+  return <Factory layout={layout} demo maxFloor={2} avatar={{ pos: [-1.3, floorY(2) + SLAB, 2.4], yaw: 2.9 }} />;
+}
+
+function Floors() {
+  const layout = useTodoLayout();
+  return <Factory layout={layout} labels screen={{ draw: drawDefault, opacity: 0.35 }} />;
+}
+
+function FoldDemo() {
+  const scrollTop = useScrollWave(0, 200, 7);
+  const layout = useTodoLayout(12, scrollTop);
+  return <Factory layout={layout} demo screen={{ draw: (c, w, h) => drawTodoApp(c, w, h, { items: 12, scrollTop }), opacity: 0.3 }} labels={false} />;
+}
+
+function PistonDemo() {
+  const count = useCycle([3, 4, 5, 6, 5, 4], 1400);
+  const heads = useMemo(() => Array.from({ length: count }, (_, i) => ({ key: `k${i}`, pos: [0, 0.28, -0.6 + i * 0.56] as Vec3 })), [count]);
+  return (
+    <>
+      <Casing pos={[0, SLAB, -1.15]} size={[0.8, 0.5, 0.5]} name="TodoList" />
+      <Belt box={{ x0: -0.25, x1: 0.25, z0: -0.9, z1: 3.2 }} y={SLAB} />
+      <Piston base={[0, 0.28, -0.9]} heads={heads} />
+      {heads.map((h, i) => (
+        <Pipe key={h.key} points={[[0.12, 0.28, h.pos[2]], [0.45, 0.28, h.pos[2]], [0.45, 1.1, h.pos[2]]]} kind="object" sendEvery={2.8} sendOffset={i * 0.15} />
+      ))}
+    </>
+  );
+}
+
+function CasingDemo() {
+  return (
+    <>
+      <Casing pos={[0, SLAB, 0]} size={[0.9, 0.5, 0.6]} name="AddTodo" renderEvery={2.4} />
+      <Tank pos={[-0.72, SLAB, 0]} info={{ name: 'title', kind: 'string', preview: '"Buy milk"' }} fill={0.6} />
+      <Pipe points={[[0, -0.6, 0.8], [0, -0.3, 0.8], [0, -0.3, 0], [0, SLAB, 0]]} kind="function" radius={0.02} sendEvery={2.4} />
+      <DisplayLink from={[0, SLAB + 0.5, 0]} rect={{ x0: -1.4, x1: 1.4, z0: -0.35, z1: 0.35 }} screenY={1.6} renderEvery={2.4} renderOffset={0.2} />
+    </>
+  );
+}
+
+function TankDemo() {
+  const fill = useCycle([0.3, 0.55, 0.8, 0.55], 1500);
+  return (
+    <>
+      <Tank pos={[-0.4, 0, 0]} radius={0.16} height={0.6} info={{ name: 'todos', kind: 'array', preview: 'Array(10)' }} fill={fill} />
+      <Tank pos={[0.1, 0, 0]} radius={0.16} height={0.6} info={{ name: 'filter', kind: 'string', preview: '"all"' }} fill={0.4} />
+      <Tank pos={[0.6, 0, 0]} radius={0.16} height={0.6} info={{ name: 'open', kind: 'boolean', preview: 'true' }} fill={1} />
+    </>
+  );
+}
+
+function PipeDemo() {
+  const runs: { kind: 'array' | 'object' | 'string' | 'number' | 'boolean'; x: number }[] = [
+    { kind: 'array', x: -0.8 },
+    { kind: 'object', x: -0.4 },
+    { kind: 'string', x: 0 },
+    { kind: 'number', x: 0.4 },
+    { kind: 'boolean', x: 0.8 },
+  ];
+  return (
+    <>
+      {runs.map((r, i) => (
+        <Pipe key={r.kind} kind={r.kind} points={[[r.x, 0.05, 1], [r.x, 0.05, 0], [r.x, 1.2, 0], [r.x, 1.2, -0.6]]} sendEvery={2.5} sendOffset={i * 0.3} />
+      ))}
+      <Pipe kind="function" radius={0.016} points={[[1.2, 1.2, -0.6], [1.2, 1.2, 0], [1.2, 0.05, 0], [1.2, 0.05, 1]]} sendEvery={2.5} sendOffset={1.6} />
+    </>
+  );
+}
+
+function LinkDemo() {
+  const y = 1.4;
+  return (
+    <>
+      <Floor size={[3, 2]} y={0} level={3} label={false} />
+      <Casing pos={[0, SLAB, 0]} size={[0.9, 0.5, 0.4]} name="TodoItem" renderEvery={2.2} />
+      <DisplayLink from={[0, SLAB + 0.5, 0]} rect={{ x0: -1.4, x1: 1.4, z0: -0.26, z1: 0.26 }} screenY={y} renderEvery={2.2} />
+    </>
+  );
+}
+
+function EventDemo() {
+  const layout = useTodoLayout(6, 0);
+  return <Factory layout={layout} demo event="item2" labels screen={{ draw: (c, w, h) => drawTodoApp(c, w, h, { items: 6, scrollTop: 0 }), opacity: 0.4 }} />;
+}
+
+function AvatarDemo() {
+  return (
+    <>
+      <Avatar pos={[0, 0, 0]} yaw={0.5} />
+      <Floor size={[2.4, 2.4]} y={-SLAB} level={0} label={false} />
+    </>
+  );
+}
+
+/** Each scene's body and camera. Floors are 1.6 units apart; the screen is on top. */
+const SCENES: Record<SceneName, { stage: Partial<StageProps>; body: () => ReactNode }> = {
+  overview: { stage: { eye: [5.6, 5.4, 6.2], target: [0, 2.4, 0.2], fov: 42 }, body: () => <Overview /> },
+  surface: { stage: { eye: [-0.9, 5.75, 3.3], target: [0.1, 4.8, -0.6], fov: 60, autoRotate: false }, body: () => <Surface /> },
+  cutaway: { stage: { eye: [5.5, 4.8, 6], target: [0, 1.8, 0.5], fov: 42 }, body: () => <Cutaway /> },
+  floors: { stage: { eye: [8, 3.2, 3], target: [0, 2.2, 0], fov: 40, autoRotate: false }, body: () => <Floors /> },
+  casing: { stage: { eye: [1.2, 1.3, 2.6], target: [-0.2, 0.35, 0], fov: 40 }, body: () => <CasingDemo /> },
+  tank: { stage: { eye: [0.3, 1.1, 2.4], target: [0.1, 0.35, 0], fov: 40, floor: true }, body: () => <TankDemo /> },
+  pipe: { stage: { eye: [2.6, 2, 2.6], target: [0.1, 0.5, 0.1], fov: 40 }, body: () => <PipeDemo /> },
+  link: { stage: { eye: [2.4, 1.6, 2.6], target: [0, 0.75, 0], fov: 42 }, body: () => <LinkDemo /> },
+  piston: { stage: { eye: [2.3, 1.7, 3.4], target: [0, 0.3, 0.9], fov: 42 }, body: () => <PistonDemo /> },
+  fold: { stage: { eye: [6, 5.2, 4.5], target: [0, 2.4, 0.6], fov: 40, autoRotate: false }, body: () => <FoldDemo /> },
+  event: { stage: { eye: [3.6, 4.6, 3.2], target: [0, 2.2, -0.5], fov: 45 }, body: () => <EventDemo /> },
+  avatar: { stage: { eye: [1.1, 0.9, 1.6], target: [0, 0.5, 0], fov: 40 }, body: () => <AvatarDemo /> },
+};
 
 export default function EmbedScene({ spec }: { spec: EmbedSpec }) {
-  if (spec.type === 'block') {
-    const blk = blockOrThrow(spec.id);
-    const eye: Vec3 = [2.6, 2.1, 3.2];
-    return (
-      <Stage eye={eye} target={[0, CUBE_Y + 0.15, 0]}>
-        <Block spec={blk} portLabels={spec.portLabels ?? true} title={spec.title ?? false} />
-      </Stage>
-    );
-  }
-  if (spec.type === 'tool') {
-    return (
-      <Stage eye={[0, 1.4, 3.2]} target={[0, 1.1, 0]} autoRotate={false}>
-        <group position={[0, 1.1, 0]}>
-          <ToolModel tool={spec.tool} />
-        </group>
-      </Stage>
-    );
-  }
-  const s = scene(spec.name);
-  return <Stage {...s.stage}>{s.body}</Stage>;
+  const s = SCENES[spec.name];
+  return <Stage {...s.stage}>{s.body()}</Stage>;
 }

@@ -6,12 +6,21 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { Environment, Grid, Lightformer, OrbitControls } from '@react-three/drei';
 import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
-import type { Vec3 } from './layout';
+import type { Vec3 } from './factory/layout';
 
 export const FOG_COLOR = '#03070f';
 
 export const isCoarsePointer = () =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+
+/** Scroll folds need per-material clipping planes. */
+function LocalClipping() {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    gl.localClippingEnabled = true;
+  }, [gl]);
+  return null;
+}
 
 function ToneMappingSwitch({ post }: { post: boolean }) {
   const gl = useThree((s) => s.gl);
@@ -106,6 +115,7 @@ export function Stage({
         minPolarAngle={0.25}
         maxPolarAngle={Math.PI / 2 - 0.06}
       />
+      <LocalClipping />
       <ToneMappingSwitch post={bloom} />
       {bloom && (
         <EffectComposer multisampling={coarse ? 0 : 4} enableNormalPass={false}>

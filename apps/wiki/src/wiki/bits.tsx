@@ -1,25 +1,99 @@
 // Small inline pieces used in page bodies and infoboxes.
 import type { ReactNode } from 'react';
-import { ShapeSwatch, ZONE_TINT, type Zone } from '@codecraft/visuals/2d';
-import { BLOCKS, IFACES } from '../data/catalog';
-import { WikiLink } from './WikiLink';
+import { KIND_COLOR, KindSwatch, layoutFactory, type ValueKind } from '@codecraft/visuals/2d';
 import type { Status } from '../pages';
+import { todoSnapshot } from '../data/todoApp';
 
-/** Interface id with its socket swatch. */
-export function Iface({ id, female }: { id: string; female?: boolean }) {
+/** A value kind with its pipe colour: <Kind k="array" />. */
+export function Kind({ k }: { k: ValueKind }) {
   return (
-    <span className="cc-iface" title={IFACES[id]?.sig}>
-      <ShapeSwatch iface={id} size={15} female={female} />
-      <code>{id}</code>
+    <span className="cc-kind" style={{ color: KIND_COLOR[k] }}>
+      <KindSwatch kind={k} size={12} /> {k}
     </span>
   );
 }
 
-export function ZoneTag({ zone }: { zone: Zone }) {
+const KIND_ROWS: { k: ValueKind; what: string }[] = [
+  { k: 'array', what: 'lists; `todos`' },
+  { k: 'object', what: 'records; `todo`' },
+  { k: 'string', what: 'text; `title`, `filter`' },
+  { k: 'number', what: '`remaining`' },
+  { k: 'boolean', what: '`done`' },
+  { k: 'node', what: 'JSX passed as a prop (`children`)' },
+  { k: 'nullish', what: '`null`, `undefined`' },
+  { k: 'function', what: 'callbacks; drawn as event wires, not pipes' },
+];
+
+export function KindTable() {
   return (
-    <span className="cc-zone" style={{ color: ZONE_TINT[zone], borderColor: ZONE_TINT[zone] }}>
-      {zone}
-    </span>
+    <div className="cc-table-wrap">
+      <table className="cc-table">
+        <thead>
+          <tr>
+            <th>Kind</th>
+            <th>Examples</th>
+          </tr>
+        </thead>
+        <tbody>
+          {KIND_ROWS.map((r) => (
+            <tr key={r.k}>
+              <td className="cc-nowrap">
+                <Kind k={r.k} />
+              </td>
+              <td>{r.what.split('`').map((s, i) => (i % 2 ? <code key={i}>{s}</code> : s))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The reference app's components, as the factory lays them out. */
+export function ComponentTable() {
+  const snap = todoSnapshot({ items: 3 });
+  const layout = layoutFactory(snap);
+  const floor = new Map(layout.casings.map((c) => [c.id, c.depth]));
+  const seen = new Set<string>();
+  const rows = snap.nodes.filter((n) => (seen.has(n.name) ? false : (seen.add(n.name), true)));
+  return (
+    <div className="cc-table-wrap">
+      <table className="cc-table">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Floor</th>
+            <th>Props in</th>
+            <th>State tanks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((n) => (
+            <tr key={n.id}>
+              <td>
+                <code>{n.name}</code>
+                {n.key !== undefined && <div className="cc-sig">one per todo (keyed list)</div>}
+              </td>
+              <td>{floor.get(n.id)}</td>
+              <td>
+                {n.props.length ? n.props.map((p) => (
+                  <div key={p.name}>
+                    <KindSwatch kind={p.kind} size={11} /> {p.name}
+                  </div>
+                )) : '—'}
+              </td>
+              <td>
+                {n.state.length ? n.state.map((p) => (
+                  <div key={p.name}>
+                    <KindSwatch kind={p.kind} size={11} /> {p.name}
+                  </div>
+                )) : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -54,74 +128,6 @@ export function Question({ children, title = 'Design question' }: { children: Re
     <div className="cc-question">
       <div className="cc-question-title">{title}</div>
       {children}
-    </div>
-  );
-}
-
-/** Table of every interface in the catalog, with male/female swatches. */
-export function InterfaceTable() {
-  const users = (id: string, side: 'in' | 'out') =>
-    Object.values(BLOCKS).filter((b) => b.ports.some((p) => p.iface === id && p.side === side));
-  return (
-    <div className="cc-table-wrap">
-      <table className="cc-table">
-        <thead>
-          <tr>
-            <th>Socket</th>
-            <th>Interface</th>
-            <th>Kind</th>
-            <th>Provided by</th>
-            <th>Required by</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.values(IFACES).map((f) => (
-            <tr key={f.id}>
-              <td className="cc-nowrap">
-                <ShapeSwatch iface={f.id} size={20} /> <ShapeSwatch iface={f.id} size={20} female />
-              </td>
-              <td>
-                <code>{f.id}</code>
-                <div className="cc-sig">{f.sig}</div>
-              </td>
-              <td>{f.kind}</td>
-              <td>{users(f.id, 'out').map((b, i) => <span key={b.id}>{i ? ', ' : ''}<WikiLink to={b.id}>{b.title}</WikiLink></span>)}</td>
-              <td>{users(f.id, 'in').map((b, i) => <span key={b.id}>{i ? ', ' : ''}<WikiLink to={b.id}>{b.title}</WikiLink></span>)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/** Table of every block in the catalog. */
-export function BlockTable() {
-  return (
-    <div className="cc-table-wrap">
-      <table className="cc-table">
-        <thead>
-          <tr>
-            <th>Block</th>
-            <th>Zone</th>
-            <th>Inputs</th>
-            <th>Outputs</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.values(BLOCKS).map((b) => (
-            <tr key={b.id}>
-              <td>
-                <WikiLink to={b.id}>{b.title}</WikiLink>
-                <div className="cc-sig">{b.summary}</div>
-              </td>
-              <td><ZoneTag zone={b.zone} /></td>
-              <td>{b.ports.filter((p) => p.side === 'in').map((p) => <div key={p.name}><ShapeSwatch iface={p.iface} size={14} female /> {p.name}{p.many ? ' (many)' : ''}</div>)}</td>
-              <td>{b.ports.filter((p) => p.side === 'out').map((p) => <div key={p.name}><ShapeSwatch iface={p.iface} size={14} /> {p.name}</div>)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

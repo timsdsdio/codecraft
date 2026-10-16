@@ -1,7 +1,7 @@
 // Page chrome: top bar with search, collapsible sidebar, content column.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { ShapeSwatch } from '@codecraft/visuals/2d';
+import { CogIcon } from '@codecraft/visuals/2d';
 import { CATEGORY_ORDER, categories, PAGES } from '../pages';
 
 function Search({ onGo }: { onGo: () => void }) {
@@ -80,7 +80,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <span />
         </button>
         <Link href="/" className="cc-logo">
-          <ShapeSwatch iface="ui.Root@1" size={22} />
+          <CogIcon size={22} />
           <span className="cc-logo-main">CODECRAFT</span>
           <span className="cc-logo-sub">WIKI</span>
         </Link>

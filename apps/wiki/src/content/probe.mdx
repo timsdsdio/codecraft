@@ -1,26 +1,50 @@
 ---
 title: Probe
-category: Tools
-summary: Inspect a block, socket or cable; open the app on a screen.
-status: prototype
-aliases: [Scanner]
-infobox:
-  tool: probe
-  rows:
-    Use on: Block, socket, cable, screen
+category: Engineering
+summary: How the game reads a running React app without changing its code.
+status: draft
+aliases: [Instrumentation, DevTools Hook]
 ---
 
-The **Probe** is a scanner pen with a glowing tip. Use it on something to open the inspector for it.
+The **probe** is a small script that runs inside the app's page and reports what React is doing. It's the only thing that touches the app. It does so the way React DevTools does, so the app's source code stays untouched.
 
-## Uses
+## Attaching
 
-| Aimed at | Result |
+React looks for a global `__REACT_DEVTOOLS_GLOBAL_HOOK__` when `react-dom` loads. If one exists, React registers itself with it and calls `onCommitFiberRoot(rendererId, root)` after **every commit**. The probe installs that hook before the app's scripts run.
+
+Getting the probe in first is a build-config change, not a code change: a small Vite plugin adds one `<script>` tag to the app's `index.html` in development. The app's components, state and dependencies are all untouched.
+
+## What it reads on each commit
+
+It walks the fiber tree from `root.current` and keeps only **component** fibers (function, class, `memo`, `forwardRef`). For each one:
+
+| Field | Source |
 |---|---|
-| a [[Block]] | the inspector: description, sockets, what each is plugged into |
-| a [[Socket]] | the same, scrolled to that socket, with its full interface type |
-| a [[Cable]] | both ends and the interface it carries |
-| the [[Monitor]] screen | the live app, full size, so you can use it |
+| name | `type.displayName ?? type.name` |
+| stable id | a `WeakMap` from fiber (and its `alternate`) to an id |
+| parent | nearest component ancestor |
+| key | `fiber.key`, kept when same-type siblings are all keyed ([[Telescoping Piston]]) |
+| props | `memoizedProps`, summarised into [[Value Kinds|kind]] + preview |
+| state | the hook list on `memoizedState`; hooks with a dispatch queue are `useState` / `useReducer` |
+| rendered? | the `PerformedWork` flag on the fiber |
+| changed props | `Object.is` against `alternate.memoizedProps` |
+| rect | union of the client rects of its top-level DOM nodes |
+| clip | intersection of every scrolling DOM ancestor's box, and the viewport |
 
-<Question>
-Should the probe show live traffic, such as recent calls on a cable with their inputs and outputs? It would make the probe a debugger.
-</Question>
+Function props are traced to where they were made: walk up the ancestors until one doesn't have the same function in its own props; that one created it ([[Event Wire]]).
+
+Scroll areas are DOM elements whose computed `overflow` is `auto` or `scroll` and whose content is taller than their box. Each one's owner is the component that rendered it.
+
+## Between commits
+
+Scrolling and resizing move things without a commit. The probe listens for `scroll` (capture phase) and uses a `ResizeObserver`, and sends a lighter **layout-only** update: rects, clips and scroll offsets.
+
+It also listens for `click`, `input`, `submit` and `keydown` in the capture phase, so the next commit can be tied to the component where the event started.
+
+## Output
+
+A JSON snapshot, the `Snapshot` type in `packages/visuals/src/factory/layout.ts`, plus a commit record (see [[Update Replay]]). Same-origin pages pass it to the game with `postMessage`. Because it's plain JSON, it could also go over the network later.
+
+## Risks
+
+Fiber internals aren't a public API, and they change between React versions. The probe will pin a React major version and come with a test that renders the [[Todo App]] and checks the snapshot. This is the same trade React DevTools makes.

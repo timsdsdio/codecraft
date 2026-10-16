@@ -39,7 +39,7 @@ export function Viewport({ spec, height = 240, label }: { spec: EmbedSpec; heigh
   const [ref, near] = useNearViewport<HTMLDivElement>();
   const flat = <div className="cc-embed-flat">{label ?? '3D view'}</div>;
   return (
-    <div ref={ref} className="cc-embed-view" style={{ height }} data-embed={spec.type === 'scene' ? spec.name : spec.type}>
+    <div ref={ref} className="cc-embed-view" style={{ height }} data-embed={spec.name}>
       {near ? (
         <Boundary fallback={flat}>
           <Suspense fallback={<div className="cc-embed-flat cc-loading">loading…</div>}>

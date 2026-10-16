@@ -5,7 +5,7 @@ summary: How pages, statuses and 3D views work.
 status: draft
 ---
 
-This wiki is the design document for CodeCraft. It's written as a game wiki so that every idea gets described the way a player would meet it: a block, what it connects to, what it does, how you use it.
+This wiki is the design document for CodeCraft. It's written as a game wiki so that every idea gets described the way a player would meet it: what a machine looks like, what it's connected to, and what it tells you.
 
 ## Workflow
 
@@ -16,18 +16,19 @@ This wiki is the design document for CodeCraft. It's written as a game wiki so t
 
 ## Writing pages
 
-Pages are MDX files in `apps/wiki/src/content/`. The file name is the page's address: `wire-coil.mdx` is `/wiki/wire-coil`. Each file starts with frontmatter:
+Pages are MDX files in `apps/wiki/src/content/`. The file name is the page's address: `logic-casing.mdx` is `/wiki/logic-casing`. Each file starts with frontmatter:
 
 ```yaml
 ---
-title: Wire Coil
-category: Tools          # Concepts, Blocks, Tools, Mechanics, Gameplay, Meta
+title: Logic Casing
+category: Machines        # Concepts, Machines, Gameplay, Reference, Engineering, Meta
 summary: One line for search and category lists.
-status: prototype        # prototype | draft | open | settled
-aliases: [Coil]          # other names that link here
+status: draft             # draft | open | settled
+aliases: [Casing]         # other names that link here
 infobox:
-  tool: wire             # or `block: todo-service`, or `scene: monitor`
-  rows: { Use on: "Socket, then a matching socket" }
+  scene: casing           # a 3D scene from the Scene Gallery
+  caption: Plain text under the 3D view.
+  rows: { Inputs: "props (bottom)" }
 ---
 ```
 
@@ -35,21 +36,13 @@ Link to another page with `[[Page name]]` or `[[Page name|link text]]`. A link t
 
 ## 3D views
 
-The 3D views use the same components the game will use, from `packages/visuals`. A page can drop one in anywhere:
+Drop a scene anywhere with `<SceneFigure name="fold" caption="…" />`. It takes `float` (`right`, `left`, `wide`, `none`), `width` and `height`. The [[Scene Gallery]] lists every scene. `/special/scene/<name>` shows one full size, which is handy while working on it.
 
-| Component | Shows |
-|---|---|
-| `<BlockFigure id="todo-service" />` | one block, with its port names |
-| `<SceneFigure name="link" />` | a small named scene, defined in `embeds/scenes.tsx` |
-| `<ToolFigure tool="wire" />` | a hand tool |
-
-Each one takes `caption`, `float` (`right`, `left`, `wide`, `none`), `width` and `height`. Blocks and interfaces are defined once in `apps/wiki/src/data/catalog.ts`, so a block looks the same on every page.
-
-A view only starts its 3D renderer while it is near the screen. Until then, and if WebGL isn't available, it shows a flat placeholder.
+Scenes live in `apps/wiki/src/embeds/scenes.tsx`. They're built from `packages/visuals`, the same components the game will use. Most of them run the [[Todo App]] snapshot (`src/data/todoApp.ts`) through the real layout function ([[World Layout]]). A scene only starts rendering when it's near the screen.
 
 ## Other helpers
 
-- `<Iface id="core.Clock@1" />`: an interface id with its socket swatch.
+- `<Kind k="array" />`: a value kind with its colour.
+- `<KindTable />`, `<ComponentTable />`, `<TodoSource />`: generated from the reference app.
 - `<Question>…</Question>`: a highlighted unresolved design question.
 - `<Key>E</Key>`: a key cap.
-- `<InterfaceTable />` and `<BlockTable />`: tables generated from the catalog.

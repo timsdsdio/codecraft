@@ -1,0 +1,43 @@
+---
+title: Screen Rendering
+category: Engineering
+summary: Putting the live app on the floor of a 3D world, and clicking it from first person.
+status: draft
+aliases: [CSS3D, Iframe]
+---
+
+The [[Screen]] has to be the real, interactive app, lying flat in a 3D world you walk on.
+
+## The approach: a CSS3D iframe
+
+The app runs in a same-origin `<iframe>` at its viewport size (400 × 720). The iframe is placed in the scene with drei's `<Html transform>`, rotated to lie flat and scaled so 1 CSS px = 0.01 world units. The browser renders it as real DOM with a 3D transform: text stays sharp, and inputs, focus and scrolling all work as normal.
+
+Why an iframe and not the app mounted straight into the game page:
+
+- **Isolation.** The app gets its own React copy, its own CSS and its own globals. The game's React (R3F) and the app's React never share a DevTools hook.
+- **Honesty.** It's the app's own page, unchanged.
+
+## Seeing 3D over the screen
+
+Normally DOM sits on top of the WebGL canvas, which would hide anything drawn on the screen (click sparks, other players). drei's `occlude="blending"` mode puts the DOM *behind* the canvas and makes the canvas transparent where the screen is. 3D objects can then draw over the app.
+
+## Clicking from first person
+
+With pointer lock there's no mouse cursor on the app. On click:
+
+1. Intersect the crosshair ray with the screen plane, giving app coordinates in px.
+2. Call `iframe.contentDocument.elementFromPoint(x, y)`.
+3. Dispatch `pointerdown`, `mousedown`, `pointerup`, `mouseup` and `click` at those coordinates, and focus the element if it's focusable.
+
+When an input has focus, keystrokes naturally go to the iframe's document, not the game, so you stop walking while you type. The probe hands <Key>Esc</Key> back to the game.
+
+On touch screens there's no pointer lock. Taps land on the iframe directly through normal browser hit-testing.
+
+## Going below
+
+When you crouch below the screen, the iframe is hidden with `visibility: hidden`, so it keeps running, and the factory's underside view takes over. A hidden iframe still commits, so the probe keeps reporting.
+
+## Alternatives rejected
+
+- **Rendering the app to a texture** (html2canvas and similar): slow, not interactive, and inaccurate.
+- **Recreating the app's UI in WebGL**: that would mean the game, not the app, decides what the app looks like.

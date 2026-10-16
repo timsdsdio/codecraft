@@ -1,0 +1,31 @@
+---
+title: Telescoping Piston
+category: Machines
+summary: What items.map(...) becomes. One arm per item, each feeding that item through a side pipe.
+status: draft
+aliases: [Piston, List, map]
+infobox:
+  scene: piston
+  caption: TodoList's piston. The number of arms follows the number of todos.
+  rows:
+    One per: keyed list of components
+    Arms: one per item
+    Feeds: each item's casing, via a side pipe
+---
+
+When a component renders a list, such as `todos.map((todo) => <TodoItem key={todo.id} … />)`, the list becomes a **telescoping piston**. A rod leaves the [[Logic Casing]] and runs under the list, with one brass head under each item. Each head has an outlet on its side, and a [[Pipe]] from that outlet rises and hooks over into the item's casing on the floor above.
+
+## Behaviour
+
+- **Adding an item** pushes a new head out of the last one, and its side pipe connects.
+- **Removing an item** pulls its head back into the next one.
+- **Reordering** slides heads along the rod. Heads are keyed, so a moved item keeps its head; this is `key` made visible. With no keys (or index keys), heads would be reused in place and the wrong pipes would light up, which is what happens in React too.
+- **Scrolling** slides the whole rod through the casing; see [[Conveyor Belt]] and [[Fold]].
+
+## How a list is recognised
+
+React doesn't keep a record of the `.map` call. The [[Probe]] treats a run of sibling components of the same type that all have keys as one list. That covers the normal way of rendering lists.
+
+<Question>
+A `.map` that produces plain elements (like the three filter buttons in `FilterBar`) has no child components, so it gets no piston in this design. Should it? A small piston with no item casings might be a nice touch, since it's still a map.
+</Question>

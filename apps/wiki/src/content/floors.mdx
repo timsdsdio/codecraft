@@ -1,0 +1,37 @@
+---
+title: Floors
+category: Concepts
+summary: One floor per level of the component tree, root at the bottom.
+status: draft
+aliases: [Floor, Levels, Depth]
+infobox:
+  scene: cutaway
+  caption: Floor 2 of the todo app, with everything above it cut away.
+  rows:
+    Floor height: 160 px (1.6 m)
+    Floor 1: the root component
+    Top floor: the deepest components
+---
+
+The factory has one **floor** per level of the component tree. Floor 1 holds the root component. Floor 2 holds its children, floor 3 their children, and the [[Screen]] sits on top of the highest floor.
+
+## What's on a floor
+
+Every component at that depth, each as a [[Logic Casing]] standing under the patch of screen it renders. A component's footprint is its DOM box, so a floor looks like the screen's layout drawn in machines: the header's casing under the header, each list row's casing under its row.
+
+Floors are steel grating. You can see down through them to the floors below, but not up: everything above your floor is cut away so nothing blocks your view.
+
+## Moving between floors
+
+- **Crouch** drops you through the grating to the floor below.
+- **Jump** lifts you to the floor above. From the top floor it puts you back on the screen.
+
+You keep your position on the screen as you move between floors, so if you crouch while standing on a list row, you land next to that row's machine.
+
+## When the tree changes depth
+
+If a deeper component mounts (say, a tooltip inside a list row), the building gains a floor and the screen rises to make room. When that component unmounts, the floor goes away again. If you're standing on the screen you ride it up or down, like a lift.
+
+<Question>
+Components that only wrap others (context providers, layout shells) add floors with nothing much on them. Should they be collapsed into their child's floor? It's simpler to leave them, and the reference app doesn't have any.
+</Question>

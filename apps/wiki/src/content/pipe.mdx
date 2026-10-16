@@ -1,0 +1,30 @@
+---
+title: Pipe
+category: Machines
+summary: Carries a child's props up from its parent's casing.
+status: draft
+aliases: [Pipes]
+infobox:
+  scene: pipe
+  caption: One pipe for each value kind, and a thin event wire on the right.
+  rows:
+    One per: parent → child component
+    Carries: all the child's data props
+    Direction: up
+---
+
+A **pipe** carries props from a parent's [[Logic Casing]] up to a child's casing on the floor above. Every child component gets one pipe, carrying all its data props as a bundle. Function props go down [[Event Wire|event wires]] instead.
+
+## Reading a pipe
+
+- **Colour**: the most structured [[Value Kinds|kind]] of value in the bundle.
+- **Fluid**: drifts slowly upward whenever the pipe is connected. It's there to show direction.
+- **Slugs**: a bright pulse travels up the pipe when the parent renders **and** at least one prop is a different value than last time (compared with `Object.is`, as `memo` would). No slug means the child got the same props as before.
+
+## Routing
+
+Pipes leave the top of the parent's casing, rise to just under the next floor, run across, then come up through the grating into the child's casing. Sibling pipes run at slightly different heights so they don't merge. Pipes are straight runs with brass couplings at each bend, like the pipes in Create.
+
+<Question>
+Should you be able to tap a pipe and see each prop separately, maybe splitting the bundle into colour-coded strands? See [[Inspecting]].
+</Question>

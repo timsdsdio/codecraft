@@ -1,0 +1,46 @@
+---
+title: Open Questions
+category: Meta
+summary: Design decisions still to make, roughly in order of how much they matter.
+status: open
+aliases: [Questions, Backlog]
+---
+
+Each page has its own design questions in pink boxes. These are the ones that affect more than one page.
+
+## 1. What is the server stack for?
+
+`docs/STACK.md` describes a multi-user stack: Postgres, Electric, TanStack DB and tRPC, with the server in charge. A single-player visualizer of one app doesn't need any of it. Everything happens in the browser, between the app's page and the game. Options:
+
+- **A. Local only, for now.** Build the visualizer with no server. *(Recommended for the first version.)*
+- **B. The reference app uses the stack.** The todo app keeps its todos in Postgres and syncs them through Electric. Data then enters the factory from outside, through an intake pipe coming up out of the ground into `App`'s tank. A second browser adding a todo would make it flow in on its own.
+- **C. Multiplayer visits.** Other people walk around the same running app with you. The game's own state (who's where, what's selected) uses the stack, as the brief describes.
+
+B and C can be added later without changing anything in A.
+
+## 2. How literal should the Create look be?
+
+At the moment it's "neon brass": the old prototype's dark Tron palette, plus brass, andesite and green glass. A fuller Create look would add wood and stone textures, chunkier pipes, and shafts and gears driving everything. That's more charming but busier. Readability comes first. See [[Value Kinds]].
+
+## 3. Context
+
+React context skips levels. A provider's value reaches consumers several floors up without passing through the floors in between. Create's *Redstone Link* is a wireless transmitter–receiver pair tuned by a frequency, which is a natural fit: providers are transmitters, `useContext` consumers are receivers, and the frequency is the context. The todo app doesn't use context, so this waits for the second app.
+
+## 4. Which hooks get machines?
+
+Only `useState` / `useReducer` ([[State Tank]]) in the first version. Candidates for later: `useMemo` (a hopper that refills only when its inputs change), `useRef` (a locked crate), `useEffect` (fires after the [[Display Link]]).
+
+## 5. Slow motion
+
+Should there be a mode that queues commits and plays them one at a time, with step controls? See [[Render]] and [[Update Replay]].
+
+## 6. Settled so far
+
+Decisions already made while writing these pages, with reasons. Push back on any of them:
+
+- **Floors are tree depth, with the root at the bottom** ([[Floors]]). Each machine sits under what it draws, and nothing overlaps.
+- **Jump goes up one floor, not straight to the screen** ([[Player]]). This keeps you oriented in a deep tree; <Key>Home</Key> goes straight up.
+- **Scrolling is clipping** ([[Fold]]). It's cheap, exact, and needs no special-case physics.
+- **The app runs unmodified in an iframe** ([[Screen Rendering]]), and is read with the DevTools hook ([[Probe]]).
+- **One pipe per child, carrying all its props**, rather than one per prop ([[Pipe]]). This keeps the factory readable.
+- **Function props are wires running downward, not pipes** ([[Event Wire]]). They're the only thing that flows the other way.

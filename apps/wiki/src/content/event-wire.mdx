@@ -1,0 +1,30 @@
+---
+title: Event Wire
+category: Machines
+summary: Function props, drawn as thin red wires that carry events down to the state that changes.
+status: draft
+aliases: [Wire, Wires, Callback, Handler]
+infobox:
+  scene: event
+  caption: A click on a row runs down the wire to App, then the render climbs back.
+  rows:
+    One per: child with function props
+    Direction: down
+    Ends at: the casing that created the function
+---
+
+An **event wire** is a function prop seen from the other end. A parent passes `onToggle` up to a child; when the child calls it, a signal comes back down. Wires are thin red cables that run beside the [[Pipe|pipes]]. They stay dark until they're used.
+
+## When an event fires
+
+1. You click something on the [[Screen]]. A spark appears where you clicked.
+2. A red pulse runs down from the clicked component's casing along the wire, floor by floor, to the casing that created the handler.
+3. If the handler changes state, the matching [[State Tank]] sloshes, and the [[Render]] wave starts climbing.
+
+## Where the wire ends
+
+The [[Probe]] follows a function prop down by identity. `TodoItem` got `onToggle` from `TodoList`, which got it from `App`, which made it. So the wire runs all the way to `App`, even though `TodoList` only passed it along.
+
+<Question>
+Handlers that don't come from props, like an `onClick` defined and used inside the same component, never leave their casing. Should they show as a short spark inside it, or not at all?
+</Question>

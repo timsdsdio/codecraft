@@ -1,0 +1,47 @@
+---
+title: Update Replay
+category: Engineering
+summary: How a commit, which happens instantly, is played back as a visible chain of cause and effect.
+status: draft
+aliases: [Replay, Animation, Timeline]
+---
+
+React commits in a single frame. Shown that fast, cause and effect would be invisible. So the factory keeps two clocks:
+
+- **Structure is live.** Machines appear, disappear and move to match the latest snapshot straight away, with short eases (about 150 ms) so nothing teleports.
+- **Activity is replayed.** Each commit becomes a short animation played after the fact.
+
+This mirrors the rule in `docs/STACK.md`: state is discrete, and frames are tweens between states.
+
+## A commit record
+
+```ts
+interface CommitRecord {
+  index: number;
+  cause?: { type: 'click' | 'input' | 'submit' | 'keydown'; component: string };
+  rendered: string[];           // component ids, in tree order
+  changedProps: Record<string, string[]>;  // pipe id → prop names
+  changedState: string[];       // tank ids
+  mounted: string[];
+  unmounted: string[];
+}
+```
+
+## Playback
+
+| Phase | What | Timing |
+|---|---|---|
+| event | spark at the clicked spot; a pulse runs down the [[Event Wire]] chain | ~0.35 s per floor |
+| state | the changed [[State Tank|tanks]] slosh | 0.3 s |
+| render | cogs spin floor by floor from the lowest rendered casing upward; [[Pipe|pipes]] with changed props carry slugs | ~0.45 s per floor |
+| paint | [[Display Link|display links]] flare at the top of the wave | 0.3 s |
+
+A commit with no event (a timer, or data arriving) skips straight to the state phase.
+
+## Keeping up
+
+Typing in an input commits on every keystroke. Playback must never fall far behind:
+
+- Commits that arrive during playback are **merged** into the next replay (the union of rendered sets and changes).
+- If the queue is more than about a second behind, playback speeds up.
+- A [[Render]] slow-motion mode (open question) would do the opposite: queue everything and step through it.

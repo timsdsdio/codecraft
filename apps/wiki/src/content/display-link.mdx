@@ -1,0 +1,28 @@
+---
+title: Display Link
+category: Machines
+summary: A beam from a casing up to the patch of screen its component draws.
+status: draft
+aliases: [Link, Beam]
+infobox:
+  scene: link
+  caption: A TodoItem's link, outlining its row on the screen's underside.
+  rows:
+    One per: component that paints pixels
+    Ends at: its DOM box on the screen
+---
+
+A **display link** is the last step of the journey: a thin beam from the top of a [[Logic Casing]] straight up to the underside of the [[Screen]]. Where it arrives, the component's box is outlined.
+
+The name is borrowed from Create, where a Display Link sends information to a display board.
+
+## Behaviour
+
+- It flares whenever its component [[Render|renders]].
+- It passes straight through any floors in between. A shallow component like `Header` has a long link; a list row has a short one.
+- A component whose own JSX paints nothing (a pure layout wrapper like `App`'s `main`) has no link.
+- Inside a scroll area, links are clipped by the [[Fold]] along with everything else.
+
+<Question>
+Mount and unmount could be shown here: a new component's patch "materialises" on the screen as its link first arrives. On the real screen the change is instant, so this would be a brief overlay drawn over the frame.
+</Question>

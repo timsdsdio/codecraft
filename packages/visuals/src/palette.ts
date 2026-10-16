@@ -6,16 +6,6 @@ export type SocketShape = (typeof SHAPES)[number];
 
 export const NEON = ['#00fff0', '#ff00e5', '#ffe600', '#39ff14', '#ff6a00', '#7a5cff', '#ff2050', '#00a2ff'] as const;
 
-/** Block tints by zone. */
-export const ZONE_TINT = {
-  client: '#00fff0',
-  server: '#ff6a00',
-  link: '#ff00e5',
-  db: '#7d8796',
-  fixture: '#00a2ff',
-} as const;
-export type Zone = keyof typeof ZONE_TINT;
-
 /** FNV-1a 32-bit */
 export function fnv1a(s: string): number {
   let h = 0x811c9dc5;
@@ -57,11 +47,27 @@ export function setVisualOverride(base: string, v: Partial<SocketVisual>) {
   OVERRIDES[base] = v;
 }
 
-export type Tool = 'probe' | 'wire' | 'cutter' | 'wrench';
+/** What a value is, as far as the factory cares. Decides pipe/fluid colour. */
+export type ValueKind = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'function' | 'node' | 'nullish';
 
-export const TOOL_COLOR: Record<Tool, string> = {
-  probe: '#00fff0',
-  wire: '#ff00e5',
-  cutter: '#ff6a00',
-  wrench: '#ffe600',
+export const KIND_COLOR: Record<ValueKind, string> = {
+  string: '#00fff0',
+  number: '#ffb000',
+  boolean: '#39ff14',
+  array: '#ff00e5',
+  object: '#00a2ff',
+  function: '#ff2050',
+  node: '#7a5cff',
+  nullish: '#7d8796',
 };
+
+/** Factory materials (Create-ish: brass, andesite, dark steel) and the logic-casing green. */
+export const FACTORY = {
+  brass: '#c8963e',
+  copper: '#c4683a',
+  andesite: '#4a4f52',
+  steel: '#151c25',
+  casing: '#19ff8a',
+  link: '#d8f6ff',
+  fold: '#cfd8ff',
+} as const;

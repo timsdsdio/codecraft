@@ -1,0 +1,33 @@
+---
+title: State Tank
+category: Machines
+summary: One useState hook, as a glass tank of glowing fluid.
+status: draft
+aliases: [Tank, State, useState]
+infobox:
+  scene: tank
+  caption: App's two tanks, and a boolean tank for comparison.
+  rows:
+    One per: useState / useReducer hook
+    Attached to: its component's casing
+---
+
+A **state tank** is one `useState` (or `useReducer`) hook. Tanks stand in a row beside their component's [[Logic Casing]], in the order the hooks are called.
+
+## Reading a tank
+
+- **Colour**: the value's [[Value Kinds|kind]].
+- **Label**: the hook's name and a short preview of its value, such as `todos · Array(10)`.
+- **Level**: how full it is, as a rough feel only. For arrays, the level follows the length. For other values the level doesn't mean anything; the tank just sloshes when its value changes.
+
+## When state changes
+
+An [[Event Wire]] pulse arrives, the fluid sloshes and settles at its new level, and the casing [[Render|renders]]. Every change in the factory starts at a tank.
+
+## Names
+
+React doesn't record hook variable names. The [[Probe]] reads them from source maps when they're available (as React DevTools does). Otherwise the tank is labelled by position (`state 1`, `state 2`).
+
+<Question>
+Should other hooks get machines too? `useMemo` could be a hopper that only refills when its inputs change, `useRef` a locked box, and `useEffect` something that fires *after* the display link. The proposal: tanks only, until the todo app needs more.
+</Question>

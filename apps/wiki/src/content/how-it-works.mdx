@@ -1,0 +1,51 @@
+---
+title: How It Works
+category: Concepts
+summary: The whole design on one page.
+status: draft
+aliases: [Overview, Concept]
+infobox:
+  scene: floors
+  caption: "Side view: App on floor 1, its children on floor 2, list items on floor 3, the screen on top."
+  rows:
+    You are: 100 px tall
+    Screen: the roof
+    Floors: one per tree level
+---
+
+CodeCraft turns a running React app into a building you can walk around inside.
+
+## The idea in one paragraph
+
+The app's [[Screen]] lies face-up as the roof. Under it, each [[Floors|floor]] holds one level of the component tree: the root at the bottom, its children on the floor above, and so on up to the screen. Every component is a [[Logic Casing]] standing directly beneath the part of the screen it draws. Props flow **up** through [[Pipe|pipes]] from each casing to its children's casings. A [[Display Link]] carries each component's output the rest of the way up to its patch of screen. Clicks and keypresses flow **down** [[Event Wire|event wires]] to the component that owns the state, then a [[Render|render]] climbs back up.
+
+## Why it's shaped like this
+
+**The building is the component tree, and the roof is what that tree draws.** Standing on a row of the list, the machine making that row is directly under your feet. Its parent is one floor further down, under a bigger patch of screen, and so on down to the root.
+
+**A child's footprint is inside its parent's.** A component's DOM box sits inside its parent's box, so each floor's machines sit inside the floor below's. Nothing overlaps, because siblings at the same depth don't overlap on screen.
+
+**Deeper means closer to the source.** State lives in [[State Tank|tanks]], and in most apps it lives near the root. So crouching moves you toward the truth, and jumping moves you toward what the user sees. Data rises, events sink.
+
+## The two tricks
+
+1. **Scrolling is clipping, not physics.** A scroll area becomes a [[Conveyor Belt]] on its owner's floor. Everything inside the scroll area rides along with it, and anything that slides out of view is cut off by a [[Fold]]: the scroll area's footprint, extended from its floor up to the screen. That's the "higher-dimensional" scroll. Machines aren't stacked or hidden; they pass through a seam and stop being drawn.
+2. **The app never knows it's being watched.** The real app runs unmodified in a frame laid flat as the screen. A [[Probe]] attached the way React DevTools attaches reads the component tree after every commit. The game builds the factory from what it reads ([[World Layout]]).
+
+## A click, end to end
+
+<SceneFigure name="event" float="right" width={320} caption="A click on a todo row: the signal runs down the red wires to App, then the render climbs back up." />
+
+You click the checkbox on "Write the wiki". On the screen it ticks immediately, because the app is real. Underneath, the factory replays what happened ([[Update Replay]]):
+
+1. A red pulse leaves the row's casing and runs down its `onToggle` [[Event Wire|wire]], past `TodoList`, to `App`, the casing that created the function.
+2. `App`'s `todos` tank sloshes: its state changed.
+3. `App`'s cog spins: it rendered. Its pipe to `TodoList` carries a new array up.
+4. `TodoList` renders. Its piston pushes a new `todo` object up the third arm only. The other todos are the same objects as before, so nothing travels up their arms.
+5. Every row's cog still spins, because nothing in this app is memoized and React re-runs them all. Only the third row's display link changes anything on the screen.
+
+You watch React's one-way data flow happen, at a scale where you can walk around it.
+
+## Scope
+
+The aim is a good visualizer for **one** small app (the [[Todo App]]), then iteration. It doesn't need to handle every React app. What it must not do is require changes to the app's code.

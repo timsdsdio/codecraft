@@ -1,0 +1,30 @@
+---
+title: Data Flow
+category: Concepts
+summary: Props rise through pipes; events sink through wires.
+status: draft
+aliases: [Props, Events]
+infobox:
+  scene: pipe
+  caption: "Pipes by value kind, with an event wire on the right."
+---
+
+There are two directions in the factory, and they never mix.
+
+## Up: props
+
+A component's props come from its parent. In the factory that's a [[Pipe]] from the parent's [[Logic Casing]] on the floor below up into the child's casing. Each child gets **one pipe**, a bundle of all its data props. The pipe's colour is the most interesting kind of value it carries (see [[Value Kinds]]).
+
+When a prop changes, a glowing slug travels up the pipe. When the parent re-renders but a prop stays identical, nothing moves through that pipe. That gap is useful: it shows you which props actually changed.
+
+From a casing, the last step up is a [[Display Link]] to the screen.
+
+## Down: events
+
+Function props, like `onToggle`, aren't data the child draws. They're a way for the child to signal back down. They're drawn as thin red [[Event Wire|event wires]] running alongside the pipes, and they stay dark until something calls them.
+
+A wire runs to the casing that **created** the function, not just the one that passed it on. `TodoItem`'s `onToggle` goes past `TodoList` down to `App`, because `App` defined `toggle`.
+
+## State
+
+State is the only place data comes from. Each `useState` is a [[State Tank]] bolted to its component's casing. An event fills or empties a tank. A changed tank makes its component render, and the change flows up from there.

@@ -1,0 +1,15 @@
+---
+title: Value Kinds
+category: Concepts
+summary: The colour code for what flows through pipes and sits in tanks.
+status: draft
+aliases: [Kinds, Colours, Colors]
+---
+
+Every value in the factory is coloured by what *kind* of value it is. The kinds are deliberately few: enough to tell a list from a string at a glance, not a type system.
+
+<KindTable />
+
+A [[Pipe]] carries several props at once, so it takes the colour of the most structured one: arrays before objects, objects before strings, and so on. A [[State Tank]] shows exactly one value, so it's always that value's colour.
+
+Functions never travel up a pipe. They're drawn as [[Event Wire|event wires]] instead.

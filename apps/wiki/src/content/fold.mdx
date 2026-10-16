@@ -1,0 +1,29 @@
+---
+title: Fold
+category: Machines
+summary: The edge of a scroll area. Whatever slides past it is folded away.
+status: draft
+aliases: [Folds, Clipping, Overflow]
+infobox:
+  scene: fold
+  caption: Twelve todos; only the rows inside the list's viewport are drawn.
+  rows:
+    Shape: the scroll viewport, from its floor to the screen
+    Hides: everything inside the scroll area that's out of view
+---
+
+A **fold** is a shimmering boundary around a scroll area. It's the scroll viewport's footprint extended into a column from the owner's floor up through the [[Screen]]. Machines that belong to the scroll area are only drawn inside it. A row that scrolls out of view doesn't fall off an edge or stack up somewhere; it slides into the fold and is gone, and slides back out when you scroll back.
+
+That's the "higher-dimensional" part: content beyond the scroll area still exists (React still renders it), it just isn't drawn in this space.
+
+## What a fold clips
+
+Only things that belong to the scroll area's content: list items' casings, their pipes and links, and the piston heads. The scroll owner's own casing stays put, half inside the fold, with the piston rod sliding through it.
+
+## How it's drawn
+
+Technically a fold is four clipping planes applied to every material inside the scroll area. Nested scroll areas intersect their planes. See [[World Layout]].
+
+<Question>
+Should folded-away content leave a hint, such as a faint count ("+4 above") on the fold's wall? The real list shows a scrollbar for this; the factory has nothing yet.
+</Question>

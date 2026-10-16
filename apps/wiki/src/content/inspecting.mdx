@@ -1,0 +1,24 @@
+---
+title: Inspecting
+category: Gameplay
+summary: Look at anything to see what it is and what value it holds.
+status: draft
+aliases: [Tooltip, Inspect]
+---
+
+Look at a machine and a tooltip at the top of the screen tells you what it is, in the style of Minecraft's Jade/WAILA mods:
+
+| Looking at | Tooltip |
+|---|---|
+| [[Logic Casing]] | component name, render count, time since last render |
+| [[State Tank]] | hook name and current value |
+| [[Pipe]] | parent → child, then each prop and its current value; changed props marked |
+| [[Telescoping Piston]] head | the item's key and its props |
+| [[Event Wire]] | the function's name and where it was created |
+| a patch of [[Screen]] (from below) | which component draws it |
+
+Values are previews: strings in quotes, `Array(10)`, `{ title: "Buy milk", … }`. A long value can be expanded by clicking on it.
+
+<Question>
+In Create, extra detail comes from wearing [[Engineer's Goggles]]. Should detailed tooltips (full prop values) need goggles, so the default view stays uncluttered?
+</Question>

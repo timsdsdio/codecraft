@@ -1,16 +1,17 @@
 # CodeCraft
 
-A "Minecraft tech mod" where the machines are programs: blocks are pieces of an app, sockets are
-TypeScript interfaces, cables wire them together, and the app runs live on a monitor.
+Shrink to 100 px tall and stand on a running React app. Crouch, and you drop into the factory
+underneath it, Create-mod style: logic casings for components, tanks for state, pipes carrying props
+up to the screen, telescoping pistons for lists, and conveyor belts for scrolling.
 
 **Current phase: design.** The game is being designed in a wiki first, then built alongside it.
 
 ```
 apps/wiki/          the design wiki (Vite + React + MDX, 3D embeds)
   src/content/      one .mdx file per page  ← most iteration happens here
-  src/data/         catalog of blocks and interfaces shared by infoboxes and 3D views
+  src/data/         the reference todo app: source, mock probe snapshot, screen drawing
   src/embeds/       lazy-loaded 3D scenes
-packages/visuals/   R3F/drei components ported from the Socketworld prototype; the game will reuse them
+packages/visuals/   factory machines (R3F/drei) + layoutFactory(); shared by the wiki and the future game
 docs/STACK.md       the stack and lessons the real app will follow
 DEVIATIONS.md       decisions and departures from the plan, with reasons
 socketworld-src.tar.gz   the original prototype (unpacked copy in reference/, git-ignored)

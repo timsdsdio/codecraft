@@ -1,0 +1,23 @@
+---
+title: Render
+category: Concepts
+summary: What a re-render looks like in the factory.
+status: draft
+aliases: [Rendering, Re-render, Commit]
+---
+
+A **render** is a component running its function again. In the factory:
+
+- the cog inside its [[Logic Casing]] spins up and the green glass brightens, then both settle;
+- each [[Pipe]] whose props changed carries a slug up to the child;
+- its [[Display Link]] flares, and its patch of screen is outlined for a moment.
+
+A component that rendered but produced the same output still spins its cog. That's honest: React did run it. Seeing a whole floor of cogs spin when one row changed is how you'd notice a missing `memo`.
+
+## Commits
+
+React applies a batch of renders to the screen in one **commit**. The factory plays each commit back as a wave that climbs from the lowest component that rendered up to the screen, about half a second per floor. The real screen has already updated by then. The replay is there to show cause and effect, not to hold the app back. See [[Update Replay]].
+
+<Question>
+Should there be a slow-motion or step-through mode that queues commits and plays them one at a time? It would be useful for teaching, but the replay can fall behind a busy app.
+</Question>

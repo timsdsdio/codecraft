@@ -402,15 +402,14 @@ pre code {
   --c: var(--green);
 }
 .cc-chip {
-  --c: var(--blue);
   display: inline-block;
   font-size: 10.5px;
   font-family: var(--font-head);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--c);
-  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  color: var(--c, var(--blue));
+  border: 1px solid color-mix(in srgb, var(--c, var(--blue)) 60%, transparent);
   border-radius: 999px;
   padding: 0 8px;
   margin-left: 6px;
@@ -649,11 +648,9 @@ pre code {
   white-space: nowrap;
 }
 
-.cc-iface {
+.cc-kind {
   white-space: nowrap;
-}
-.cc-iface svg {
-  margin-right: 4px;
+  font-weight: 700;
 }
 .cc-zone {
   display: inline-block;

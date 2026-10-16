@@ -47,9 +47,9 @@ export function Toc({ items }: { items: Item[] }) {
               n3 = 0;
             } else n3++;
             return (
-              <li key={it.id} className={it.level === 3 ? 'cc-toc-sub' : undefined}>
+              <li key={it.id} className={it.level === 3 && n2 ? 'cc-toc-sub' : undefined}>
                 <a href={`#${it.id}`}>
-                  <span className="cc-toc-num">{it.level === 2 ? n2 : `${n2}.${n3}`}</span> {it.text}
+                  <span className="cc-toc-num">{it.level === 2 ? n2 : n2 ? `${n2}.${n3}` : n3}</span> {it.text}
                 </a>
               </li>
             );

@@ -1,0 +1,33 @@
+---
+title: Player
+category: Gameplay
+summary: You, 100 pixels tall. Walking, crouching through floors, jumping back up.
+status: draft
+aliases: [You, Scale, Movement, Crouch, Jump]
+infobox:
+  scene: avatar
+  caption: Exactly 100 CSS px tall.
+  rows:
+    Height: 100 px (1 unit)
+    Eye height: 90 px
+    Reach: 300 px
+---
+
+You're a small figure, exactly **100 CSS pixels tall**. Every size in the game follows from that. One world unit is 100 px, so the reference app's 400 × 720 screen is a 4 × 7.2 floor and each floor of the factory is 1.6 units high.
+
+## Moving
+
+First person, Minecraft-style: walk, sprint, jump. On the [[Screen]] you walk on the app's surface. In the factory you walk on steel grating between the machines. Machines are solid. Pipes, wires and beams aren't; you walk through them.
+
+## Changing floors
+
+- **Crouch** drops you to the floor below, at the same spot. The grating opens under you for a moment and you fall gently; it's a short animated drop, not a cut.
+- **Jump** on a factory floor lifts you to the floor above. From the top floor it puts you back on the screen. On the screen itself, jump is just a jump.
+
+If you'd land inside a machine, you're nudged to the nearest clear spot.
+
+This is the one place the design departs from "jump teleports you back to the screen". One floor at a time keeps you oriented in a deep tree. A separate key takes you straight to the surface ([[Controls]]).
+
+## What you can see
+
+On a floor, everything above you is cut away, so the view up is clear: pipes rise toward the screen's underside, and the outlines of [[Display Link|display links]] show what's drawn where. Floors below you show dimly through the grating.
