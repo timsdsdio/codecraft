@@ -49,18 +49,6 @@ body,
   padding: 1px 10px;
   background: rgba(2, 8, 16, 0.7);
 }
-.hud-button {
-  pointer-events: auto;
-  min-height: 32px;
-  padding: 0 10px;
-  font: inherit;
-  font-size: 12px;
-  color: #d6f7ff;
-  background: rgba(2, 8, 16, 0.75);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  cursor: pointer;
-}
 .hud-center {
   position: absolute;
   z-index: 20;

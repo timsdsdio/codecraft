@@ -105,6 +105,8 @@ export interface StageProps {
   touchOrbit?: boolean;
   /** tiny frame-rate readout in the bottom-left corner (the parent must be positioned) */
   fps?: boolean;
+  /** give the canvas an alpha channel, so DOM placed behind it shows through transparent pixels */
+  alpha?: boolean;
 }
 
 export function Stage({
@@ -121,6 +123,7 @@ export function Stage({
   walk,
   touchOrbit = false,
   fps = true,
+  alpha = false,
 }: StageProps) {
   const fpsEl = useRef<HTMLDivElement>(null);
   const [coarse] = useState(isCoarsePointer);
@@ -130,7 +133,7 @@ export function Stage({
       <Canvas
         className={className}
         dpr={quality === 'low' ? 1 : coarse ? [1, 1.5] : [1, 2]}
-        gl={{ antialias: !bloom, powerPreference: 'high-performance', alpha: false, stencil: false }}
+        gl={{ antialias: !bloom, powerPreference: 'high-performance', alpha, stencil: false }}
         camera={{ fov, near: 0.05, far: 200, position: eye }}
         style={{ touchAction: coarse && mode === 'orbit' && !touchOrbit ? 'pan-y' : 'none' }}
       >

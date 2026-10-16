@@ -48,6 +48,10 @@ depends on, each with its reason. When one changes, edit its entry.
 - **The screen is placed with three.js's `CSS3DRenderer`, not drei's `<Html>`.** `<Html>` hit
   React 19's "synchronously unmount a root" race and lost its contents. The iframe is created
   once, outside React, so no re-render can reload the app.
+- **The page sits behind the WebGL canvas**, which writes transparent pixels where the screen is.
+  Machines in front of the screen draw over it. From below you see the page's back face (the app,
+  mirrored), dimmed by a downward-facing tint. The screen is always opaque: translucency made the
+  browser flatten the 3D-transformed page, which flickered.
 - **The game asks for a snapshot until it gets one** (`sync`). The probe's first message can
   arrive before the game is listening.
 - **`layoutFactory()` is a pure function in `packages/visuals`.** The wiki's diagrams run the

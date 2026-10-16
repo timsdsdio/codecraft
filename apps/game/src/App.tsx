@@ -14,8 +14,6 @@ const APP_URL = import.meta.env.VITE_APP_URL ?? `${location.protocol}//${locatio
 const VIEWPORT = { w: 400, h: 720 };
 /** How far away (world units) you can press things on the screen. */
 const REACH = 4;
-/** Screen opacities that T (or the HUD button) cycles through. Below 1, the factory shows through. */
-const OPACITIES = [1, 0.7, 0.4];
 /** Replay speeds the speed button cycles through. */
 const SPEEDS = [1, 0.5, 0.25, 0.1];
 
@@ -32,9 +30,6 @@ export function App() {
   const [level, setLevel] = useState<string>('Screen');
   const camera = useRef<THREE.Camera | null>(null);
   const onScreen = level === 'Screen';
-  const [opacityIndex, setOpacityIndex] = useState(0);
-  const opacity = OPACITIES[opacityIndex];
-  const cycleOpacity = () => setOpacityIndex((i) => (i + 1) % OPACITIES.length);
   const [inspected, setInspected] = useState<Cargo | null>(null);
   const [paused, setPaused] = useState(false);
   const [speedIndex, setSpeedIndex] = useState(0);
@@ -53,7 +48,6 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      if (e.code === 'KeyT') cycleOpacity();
       if (e.code === 'KeyP') togglePause();
       if (e.code === 'KeyR') probe.replay();
     };
@@ -83,6 +77,7 @@ export function App() {
   return (
     <div className="game">
       <Stage
+        alpha
         mode={levels ? 'walk' : 'orbit'}
         walk={levels ? { levels: levels.map((l) => l.y), spawn, onLevel: (i) => setLevel(levels[i]?.name ?? '') } : undefined}
         eye={[6, 7, 9]}
@@ -93,19 +88,14 @@ export function App() {
         <CameraRef out={camera} />
         {layout && <Factory layout={layout} activity={probe.activity} />}
         {layout && <Inspector onChange={setInspected} />}
-        {layout && <ScreenSlab layout={layout} />}
-        <AppScreen layout={layout} frame={probe.frame} visible={onScreen || !layout} opacity={layout ? opacity : 1} />
+        {layout && <ScreenWindow layout={layout} />}
+        <AppScreen layout={layout} frame={probe.frame} />
         {layout && !coarse && <DesktopInput enabled={onScreen} layout={layout} send={probe.send} />}
       </Stage>
 
       <div className="hud">
         <span className="hud-title">CODECRAFT</span>
         {layout && <span className="hud-level">{level}</span>}
-        {layout && (
-          <button type="button" className="hud-button" onClick={(e) => (cycleOpacity(), e.currentTarget.blur())} title="Screen opacity (T)">
-            screen {Math.round(opacity * 100)}%
-          </button>
-        )}
       </div>
       {layout && (
         <div className="hud-time" role="group" aria-label="Time">
@@ -134,7 +124,7 @@ export function App() {
       {layout && !coarse && !probe.editing && (
         <div className="hud-hint">
           Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · click the screen to press · wheel scrolls ·{' '}
-          <kbd>Shift</kbd> down a floor · <kbd>Space</kbd> up · <kbd>T</kbd> screen · <kbd>P</kbd> pause · <kbd>R</kbd> replay
+          <kbd>Shift</kbd> down a floor · <kbd>Space</kbd> up · <kbd>P</kbd> pause · <kbd>R</kbd> replay
         </div>
       )}
       {layout && coarse && (
@@ -195,20 +185,14 @@ function DesktopInput({ enabled, layout, send }: { enabled: boolean; layout: Fac
 
 /**
  * The app itself: a real iframe lying face up as the factory's roof, placed with three.js's
- * CSS3DRenderer (1 CSS px = 0.01 units). The iframe is created once, outside React, so nothing
- * the game re-renders can reload the app.
+ * CSS3DRenderer (1 CSS px = 0.01 units). The iframe is created once, outside React, so nothing the
+ * game re-renders can reload the app.
+ *
+ * The page sits *behind* the WebGL canvas, which is transparent only where the screen is
+ * (see ScreenWindow). So anything in front of the screen draws over it, and from below you see the
+ * page's back face: the app, mirrored, as if through glass.
  */
-function AppScreen({
-  layout,
-  frame,
-  visible,
-  opacity,
-}: {
-  layout: FactoryLayout | null;
-  frame: MutableRefObject<HTMLIFrameElement | null>;
-  visible: boolean;
-  opacity: number;
-}) {
+function AppScreen({ layout, frame }: { layout: FactoryLayout | null; frame: MutableRefObject<HTMLIFrameElement | null> }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
@@ -218,7 +202,7 @@ function AppScreen({
     const host = gl.domElement.parentElement?.parentElement;
     if (!host) return;
     const renderer = new CSS3DRenderer();
-    Object.assign(renderer.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '1' });
+    Object.assign(renderer.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '-1' });
     host.appendChild(renderer.domElement);
     const iframe = document.createElement('iframe');
     iframe.src = APP_URL;
@@ -247,25 +231,52 @@ function AppScreen({
   useFrame(() => {
     const c = css.current;
     if (!c) return;
-    c.obj.position.y = (layout?.screenY ?? 0) + SLAB + 0.002;
-    c.renderer.domElement.style.visibility = visible ? 'visible' : 'hidden';
-    // on the iframe, not the renderer's root: opacity on an ancestor makes the browser flatten the
-    // 3D-transformed page into a 2D layer, which flickers when the plane reaches behind the camera
-    const iframe = frame.current;
-    if (iframe && iframe.style.opacity !== String(opacity)) iframe.style.opacity = String(opacity);
+    c.obj.position.y = (layout?.screenY ?? 0) + SLAB;
     c.renderer.render(c.scene, camera);
   });
   return null;
 }
 
-/** Dark slab under the screen: the roof you see from inside the factory. */
-function ScreenSlab({ layout }: { layout: FactoryLayout }) {
+/**
+ * Where the screen is, the canvas writes fully transparent pixels so the page behind it shows
+ * through, from above and below. It still writes depth, so machines behind the screen stay hidden
+ * and machines in front of it draw over it. A thin frame marks the screen's edge.
+ */
+const windowMaterial = new THREE.MeshBasicMaterial({
+  color: 0x000000,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.NoBlending,
+  side: THREE.DoubleSide,
+});
+
+/** Faces down only: dims the page seen from below, so it doesn't glare in the dark factory. */
+const undersideTint = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false });
+
+function ScreenWindow({ layout }: { layout: FactoryLayout }) {
   const [w, d] = layout.size;
+  const y = layout.screenY + SLAB;
+  const t = 0.04;
   return (
-    <mesh position={[0, layout.screenY + SLAB / 2, 0]}>
-      <boxGeometry args={[w + 0.08, SLAB, d + 0.08]} />
-      <meshStandardMaterial color="#0a0f16" metalness={0.6} roughness={0.4} />
-    </mesh>
+    <group position={[0, y, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} material={windowMaterial} renderOrder={-1}>
+        <planeGeometry args={[w, d]} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -0.004, 0]} material={undersideTint} raycast={() => {}}>
+        <planeGeometry args={[w, d]} />
+      </mesh>
+      {[
+        [0, -d / 2 - t / 2, w + 2 * t, t],
+        [0, d / 2 + t / 2, w + 2 * t, t],
+        [-w / 2 - t / 2, 0, t, d],
+        [w / 2 + t / 2, 0, t, d],
+      ].map(([x, z, sx, sz], i) => (
+        <mesh key={i} position={[x, -SLAB / 2, z]}>
+          <boxGeometry args={[sx, SLAB, sz]} />
+          <meshStandardMaterial color="#0a0f16" metalness={0.6} roughness={0.4} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
