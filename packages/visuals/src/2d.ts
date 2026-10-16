@@ -4,3 +4,4 @@ export * from './palette';
 export * from './factory/layout';
 export { KindSwatch, CogIcon } from './icons';
 export { LOOKS, LookProvider, useLook, useMetal, type Look, type MetalRole } from './factory/look';
+export { walkInput, TOUCH_LOOK_SCALE, isCoarsePointer } from './input';

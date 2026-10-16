@@ -8,11 +8,11 @@ import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postp
 import { ToneMappingMode } from 'postprocessing';
 import type { Vec3 } from './factory/layout';
 import { LookProvider, type Look } from './factory/look';
+import { WalkControls, type WalkSpawn } from './WalkControls';
+import { isCoarsePointer } from './input';
 
 export const FOG_COLOR = '#03070f';
 
-export const isCoarsePointer = () =>
-  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
 /** Scroll folds need per-material clipping planes. */
 function LocalClipping() {
@@ -63,6 +63,12 @@ export interface StageProps {
   className?: string;
   /** machine materials: neon edges (tron) or Create-style brass */
   look?: Look;
+  /** 'walk' = first person (see WalkControls); 'orbit' = turntable camera */
+  mode?: 'orbit' | 'walk';
+  /** walk mode: standing heights and where you start */
+  walk?: { levels?: number[]; spawn?: WalkSpawn; onLevel?: (i: number) => void };
+  /** orbit mode: allow drag-to-orbit on touch screens (off inline, so the page can scroll) */
+  touchOrbit?: boolean;
 }
 
 export function Stage({
@@ -75,6 +81,9 @@ export function Stage({
   quality = 'high',
   className,
   look = 'tron',
+  mode = 'orbit',
+  walk,
+  touchOrbit = false,
 }: StageProps) {
   const [coarse] = useState(isCoarsePointer);
   const bloom = quality === 'high';
@@ -84,7 +93,7 @@ export function Stage({
       dpr={quality === 'low' ? 1 : coarse ? [1, 1.5] : [1, 2]}
       gl={{ antialias: !bloom, powerPreference: 'high-performance', alpha: false, stencil: false }}
       camera={{ fov, near: 0.05, far: 200, position: eye }}
-      style={{ touchAction: coarse ? 'pan-y' : 'none' }}
+      style={{ touchAction: coarse && mode === 'orbit' && !touchOrbit ? 'pan-y' : 'none' }}
     >
       <color attach="background" args={[FOG_COLOR]} />
       <fog attach="fog" args={[FOG_COLOR, 14, 40]} />
@@ -107,18 +116,22 @@ export function Stage({
         />
       )}
       <LookProvider look={look}>{children}</LookProvider>
-      {/* touch: no drag-to-orbit, so the page still scrolls under a finger */}
-      <OrbitControls
-        makeDefault
-        target={target}
-        enabled={!coarse}
-        enableZoom={false}
-        enablePan={false}
-        autoRotate={autoRotate}
-        autoRotateSpeed={0.6}
-        minPolarAngle={0.25}
-        maxPolarAngle={Math.PI / 2 - 0.06}
-      />
+      {mode === 'walk' ? (
+        <WalkControls levels={walk?.levels} spawn={walk?.spawn} onLevel={walk?.onLevel} />
+      ) : (
+        // inline on touch: no drag-to-orbit, so the page still scrolls under a finger
+        <OrbitControls
+          makeDefault
+          target={target}
+          enabled={!coarse || touchOrbit}
+          enableZoom={touchOrbit}
+          enablePan={false}
+          autoRotate={autoRotate}
+          autoRotateSpeed={0.6}
+          minPolarAngle={0.25}
+          maxPolarAngle={Math.PI / 2 - 0.06}
+        />
+      )}
       <LocalClipping />
       <ToneMappingSwitch post={bloom} />
       {bloom && (

@@ -23,6 +23,7 @@ import {
   SLAB,
   type Look,
   type StageProps,
+  type WalkSpawn,
   type Vec3,
 } from '@codecraft/visuals';
 import { drawTodoApp, todoSnapshot } from '../data/todoApp';
@@ -203,27 +204,55 @@ function WirelessDemo() {
   );
 }
 
-/** Each scene's body and camera. Floors are 1.6 units apart; the screen is on top. */
-const SCENES: Record<SceneName, { stage: Partial<StageProps>; body: () => ReactNode }> = {
-  overview: { stage: { eye: [5.6, 5.4, 6.2], target: [0, 2.4, 0.2], fov: 42 }, body: () => <Overview /> },
-  surface: { stage: { eye: [-0.9, 5.75, 3.3], target: [0.1, 4.8, -0.6], fov: 60, autoRotate: false }, body: () => <Surface /> },
-  cutaway: { stage: { eye: [5.5, 4.8, 6], target: [0, 1.8, 0.5], fov: 42 }, body: () => <Cutaway /> },
-  floors: { stage: { eye: [8, 3.2, 3], target: [0, 2.2, 0], fov: 40, autoRotate: false }, body: () => <Floors /> },
-  casing: { stage: { eye: [1.2, 1.3, 2.6], target: [-0.2, 0.35, 0], fov: 40 }, body: () => <CasingDemo /> },
-  tank: { stage: { eye: [0.3, 1.1, 2.4], target: [0.1, 0.35, 0], fov: 40, floor: true }, body: () => <TankDemo /> },
-  pipe: { stage: { eye: [2.6, 2, 2.6], target: [0.1, 0.5, 0.1], fov: 40 }, body: () => <PipeDemo /> },
-  link: { stage: { eye: [2.4, 1.6, 2.6], target: [0, 0.75, 0], fov: 42 }, body: () => <LinkDemo /> },
-  piston: { stage: { eye: [2.3, 1.7, 3.4], target: [0, 0.3, 0.9], fov: 42 }, body: () => <PistonDemo /> },
-  fold: { stage: { eye: [6, 5.2, 4.5], target: [0, 2.4, 0.6], fov: 40, autoRotate: false }, body: () => <FoldDemo /> },
-  event: { stage: { eye: [3.6, 4.6, 3.2], target: [0, 2.2, -0.5], fov: 45 }, body: () => <EventDemo /> },
-  wireless: { stage: { eye: [3.6, 4.4, 4.2], target: [0, 2.1, 0], fov: 45 }, body: () => <WirelessDemo /> },
-  avatar: { stage: { eye: [1.1, 0.9, 1.6], target: [0, 0.5, 0], fov: 40 }, body: () => <AvatarDemo /> },
+/** Where you can stand in walk mode, and what each level is called. */
+interface WalkSpec {
+  levels: { y: number; name: string }[];
+  spawn: WalkSpawn;
+}
+const floorsUpTo = (n: number, screen: boolean) => [
+  ...Array.from({ length: n }, (_, i) => ({ y: floorY(i + 1) + SLAB, name: `Floor ${i + 1}` })),
+  ...(screen ? [{ y: floorY(n + 1) + SLAB, name: 'Screen' }] : []),
+];
+const TODO_WALK: WalkSpec = { levels: floorsUpTo(3, true), spawn: { pos: [-1.1, floorY(4) + SLAB, 3.3], yaw: -0.2 } };
+const ground = (pos: Vec3, yaw = 0): WalkSpec => ({ levels: [{ y: 0, name: 'Ground' }], spawn: { pos, yaw } });
+
+/** Each scene's body, camera, and walk-mode levels. Floors are 1.6 units apart; the screen is on top. */
+const SCENES: Record<SceneName, { stage: Partial<StageProps>; body: () => ReactNode; walk: WalkSpec }> = {
+  overview: { stage: { eye: [5.6, 5.4, 6.2], target: [0, 2.4, 0.2], fov: 42 }, body: () => <Overview />, walk: TODO_WALK },
+  surface: { stage: { eye: [-0.9, 5.75, 3.3], target: [0.1, 4.8, -0.6], fov: 60, autoRotate: false }, body: () => <Surface />, walk: TODO_WALK },
+  cutaway: { stage: { eye: [5.5, 4.8, 6], target: [0, 1.8, 0.5], fov: 42 }, body: () => <Cutaway />, walk: { levels: floorsUpTo(2, false), spawn: { pos: [1.4, floorY(2) + SLAB, 2.9], yaw: 0.35 } } },
+  floors: { stage: { eye: [8, 3.2, 3], target: [0, 2.2, 0], fov: 40, autoRotate: false }, body: () => <Floors />, walk: TODO_WALK },
+  casing: { stage: { eye: [1.2, 1.3, 2.6], target: [-0.2, 0.35, 0], fov: 40 }, body: () => <CasingDemo />, walk: ground([0.5, 0, 2], 0.2) },
+  tank: { stage: { eye: [0.3, 1.1, 2.4], target: [0.1, 0.35, 0], fov: 40, floor: true }, body: () => <TankDemo />, walk: ground([0.1, 0, 1.6]) },
+  pipe: { stage: { eye: [2.6, 2, 2.6], target: [0.1, 0.5, 0.1], fov: 40 }, body: () => <PipeDemo />, walk: ground([0.3, 0, 2.6]) },
+  link: { stage: { eye: [2.4, 1.6, 2.6], target: [0, 0.75, 0], fov: 42 }, body: () => <LinkDemo />, walk: { levels: [{ y: SLAB, name: 'Floor 3' }], spawn: { pos: [0.6, SLAB, 1.8], yaw: 0.25 } } },
+  piston: { stage: { eye: [2.3, 1.7, 3.4], target: [0, 0.3, 0.9], fov: 42 }, body: () => <PistonDemo />, walk: ground([1.1, 0, 3.6], 0.3) },
+  fold: { stage: { eye: [6, 5.2, 4.5], target: [0, 2.4, 0.6], fov: 40, autoRotate: false }, body: () => <FoldDemo />, walk: TODO_WALK },
+  event: { stage: { eye: [3.6, 4.6, 3.2], target: [0, 2.2, -0.5], fov: 45 }, body: () => <EventDemo />, walk: TODO_WALK },
+  wireless: { stage: { eye: [3.6, 4.4, 4.2], target: [0, 2.1, 0], fov: 45 }, body: () => <WirelessDemo />, walk: { levels: floorsUpTo(3, false), spawn: { pos: [1.2, SLAB, 1.6], yaw: 0.6 } } },
+  avatar: { stage: { eye: [1.1, 0.9, 1.6], target: [0, 0.5, 0], fov: 40 }, body: () => <AvatarDemo />, walk: ground([0.3, 0, 1.8]) },
 };
 
-export default function EmbedScene({ spec, look }: { spec: EmbedSpec; look: Look }) {
+export default function EmbedScene({
+  spec,
+  look,
+  mode = 'orbit',
+  onLevel,
+}: {
+  spec: EmbedSpec;
+  look: Look;
+  /** fullscreen: walk around in first person, or orbit with touch enabled */
+  mode?: 'orbit' | 'walk' | 'explore-orbit';
+  onLevel?: (name: string) => void;
+}) {
   const s = SCENES[spec.name];
+  const walk = {
+    levels: s.walk.levels.map((l) => l.y),
+    spawn: s.walk.spawn,
+    onLevel: (i: number) => onLevel?.(s.walk.levels[i]?.name ?? ''),
+  };
   return (
-    <Stage {...s.stage} look={look}>
+    <Stage {...s.stage} look={look} mode={mode === 'walk' ? 'walk' : 'orbit'} walk={walk} touchOrbit={mode === 'explore-orbit'}>
       {s.body()}
     </Stage>
   );

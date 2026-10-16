@@ -855,3 +855,222 @@ pre code {
     border-top: 0;
   }
 }
+
+/* ─── fullscreen explorer ─────────────────────────────────────────────────── */
+
+.cc-embed-expand {
+  position: absolute;
+  z-index: 2;
+  top: 6px;
+  right: 6px;
+  width: var(--tap);
+  height: var(--tap);
+  display: grid;
+  place-items: center;
+  color: var(--cyan);
+  background: rgba(2, 8, 16, 0.72);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.cc-embed-expand:hover,
+.cc-embed-expand:focus-visible {
+  opacity: 1;
+  box-shadow: 0 0 12px rgba(0, 255, 240, 0.3);
+}
+
+.cc-explore {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #03070f;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.cc-explore-view {
+  position: absolute;
+  inset: 0;
+}
+.cc-explore-bar {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(8px + var(--sa-t)) calc(10px + var(--sa-r)) 8px calc(12px + var(--sa-l));
+  background: linear-gradient(rgba(2, 5, 12, 0.85), rgba(2, 5, 12, 0));
+  pointer-events: none;
+}
+.cc-explore-bar > * {
+  pointer-events: auto;
+}
+.cc-explore-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 255, 240, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-explore-level {
+  flex: none;
+  font-size: 12px;
+  color: #e9feff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 10px;
+  white-space: nowrap;
+}
+.cc-explore-spacer {
+  flex: 1;
+}
+.cc-explore-modes {
+  flex: none;
+  display: flex;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cc-explore-modes button,
+.cc-explore-close {
+  min-width: var(--tap);
+  height: 40px;
+  padding: 0 12px;
+  background: rgba(2, 8, 16, 0.8);
+  border: 0;
+  color: var(--muted);
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.cc-explore-modes button[aria-pressed='true'] {
+  color: var(--cyan);
+  background: rgba(0, 255, 240, 0.12);
+}
+.cc-explore-close {
+  flex: none;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  font-size: 16px;
+  color: #e9feff;
+}
+.cc-crosshair {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--cyan), var(--cyan)) center / 2px 14px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) center / 14px 2px no-repeat;
+  filter: drop-shadow(0 0 3px var(--cyan));
+  opacity: 0.8;
+}
+.cc-explore-hint {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: calc(20px + var(--sa-b));
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  text-align: center;
+  font-size: 12.5px;
+  color: #d6f7ff;
+  background: rgba(2, 8, 16, 0.8);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 8px 14px;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+.cc-explore-hint kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin: 0 1px;
+}
+.cc-hide {
+  opacity: 0;
+}
+
+.cc-touch {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.cc-touch-stick,
+.cc-touch-look {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  touch-action: none;
+}
+.cc-touch-stick {
+  left: 0;
+  width: 45%;
+}
+.cc-touch-look {
+  right: 0;
+  width: 55%;
+}
+.cc-touch-knob-base {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 255, 240, 0.45);
+  background: rgba(0, 255, 240, 0.06);
+  pointer-events: none;
+}
+.cc-touch-knob {
+  position: absolute;
+  left: 28px;
+  top: 28px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 255, 240, 0.35);
+  box-shadow: 0 0 14px rgba(0, 255, 240, 0.5);
+}
+.cc-touch-floors {
+  position: absolute;
+  right: calc(14px + var(--sa-r));
+  bottom: calc(24px + var(--sa-b));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cc-touch-floors button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(2, 8, 16, 0.75);
+  color: var(--cyan);
+  font-size: 18px;
+  touch-action: none;
+}
+.cc-touch-floors button:active {
+  background: rgba(0, 255, 240, 0.2);
+}

@@ -1,7 +1,7 @@
 export * from './2d';
 export { Label, FlatLabel, useLabelTexture, type LabelOpts } from './Label';
 export { Beacon } from './Beacon';
-export { Stage, FOG_COLOR, isCoarsePointer, type StageProps } from './Stage';
+export { Stage, FOG_COLOR, type StageProps } from './Stage';
 export { ClipRegion, useClip } from './factory/clip';
 export { Cog, cogGeometry } from './factory/Cog';
 export { Casing } from './factory/Casing';
@@ -16,3 +16,4 @@ export { Fold } from './factory/Fold';
 export { Avatar } from './factory/Avatar';
 export { Factory, type FactoryProps } from './factory/Factory';
 export { AccessPoint, Receiver, WirelessLink, WirelessRange } from './factory/Wireless';
+export { WalkControls, EYE, type WalkSpawn } from './WalkControls';

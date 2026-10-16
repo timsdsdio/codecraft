@@ -19,7 +19,7 @@ socketworld-src.tar.gz   the original prototype (unpacked copy in reference/, gi
 
 ```bash
 pnpm install
-pnpm wiki          # http://localhost:5310
+pnpm wiki          # http://localhost:5310, and on your Wi-Fi at http://<this-mac's-ip>:5310
 ```
 
 See the wiki's *About this wiki* page for how to write pages and drop 3D views into them.

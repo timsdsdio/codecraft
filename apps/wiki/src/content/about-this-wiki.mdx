@@ -38,7 +38,7 @@ Link to another page with `[[Page name]]` or `[[Page name|link text]]`. A link t
 
 Drop a scene anywhere with `<SceneFigure name="fold" caption="…" />`. It takes `float` (`right`, `left`, `wide`, `none`), `width` and `height`. The [[Scene Gallery]] lists every scene. `/special/scene/<name>` shows one full size, which is handy while working on it.
 
-Scenes live in `apps/wiki/src/embeds/scenes.tsx`. They're built from `packages/visuals`, the same components the game will use. Most of them run the [[Todo App]] snapshot (`src/data/todoApp.ts`) through the real layout function ([[World Layout]]). A scene only starts rendering when it's near the screen. The **TRON / BRASS** button in the top bar switches the look of every scene (it's remembered in your browser).
+Scenes live in `apps/wiki/src/embeds/scenes.tsx`. They're built from `packages/visuals`, the same components the game will use. Most of them run the [[Todo App]] snapshot (`src/data/todoApp.ts`) through the real layout function ([[World Layout]]). A scene only starts rendering when it's near the screen. Every 3D view has a ⛶ button that opens it fullscreen to **explore**: walk around it in first person (<Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key> and mouse; on a phone, a joystick and drag-to-look), use <Key>Space</Key> / <Key>Shift</Key> (▲ / ▼ on touch) to move between floors, or switch to orbit. The **TRON / BRASS** button in the top bar switches the look of every scene (it's remembered in your browser).
 
 ## Other helpers
 
