@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["vite/client", "mdx"] },
+  "include": ["src", "vite.config.ts", "remark-wikilinks.ts"]
+}

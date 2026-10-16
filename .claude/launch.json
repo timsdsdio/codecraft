@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wiki",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/wiki", "dev"],
+      "port": 5310
+    }
+  ]
+}

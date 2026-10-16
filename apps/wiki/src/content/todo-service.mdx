@@ -1,0 +1,29 @@
+---
+title: Todo Service
+category: Blocks
+summary: Validates and trims titles; serves the TodoApi network cable.
+status: prototype
+infobox:
+  block: todo-service
+---
+
+The **Todo Service** is the server side of the todo app. It takes a <Iface id="todo.TodoRepo@1" female /> and serves the <Iface id="todo.TodoApi@1:handler" /> half of a [[Cable#Network cables|network cable]].
+
+It holds the app's rules: titles are trimmed, and empty titles are refused. The repository behind it only stores things.
+
+## Usage
+
+The service's output is a thick network socket. It can't plug into a client block directly; it has to go through a link block such as [[Mock Link]] in the [[Network Wall]].
+
+## Contract
+
+```ts
+type TodoApi = {
+  list(input: {}): Promise<Todo[]>
+  add(input: { title: string }): Promise<Todo>
+  toggle(input: { id: string }): Promise<Todo>
+  remove(input: { id: string }): Promise<{ ok: true }>
+}
+```
+
+Every method takes one JSON object and returns JSON, so the contract survives a real network.

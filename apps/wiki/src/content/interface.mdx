@@ -1,0 +1,37 @@
+---
+title: Interface
+category: Concepts
+summary: A named TypeScript type that two blocks agree on.
+status: prototype
+aliases: [Interfaces, Iface]
+---
+
+An **interface** is a named TypeScript type that blocks agree on. Every [[Socket]] belongs to exactly one interface, and a [[Cable]] can only join two sockets of the same interface.
+
+## Ids
+
+An interface id looks like `ns.Name@major`, with an optional `:role`:
+
+- <Iface id="core.Clock@1" /> — namespace `core`, name `Clock`, major version 1.
+- <Iface id="todo.TodoApi@1:handler" /> — the server half of a [[Cable#Network cables|network cable]].
+
+The id decides the socket's shape and colour. The role and version are ignored for that, so the two halves of a network cable look alike.
+
+## Nominal and structural
+
+Two checks keep a world honest:
+
+- **The id** answers "is this the socket you meant?". `todo.TodoRepo@1` never plugs into `todo.TodoRepo@2`, even if the two happen to have the same shape of methods.
+- **The TypeScript type** answers "does the thing in it fit?". Once a world is compiled, `tsc` checks that each provider really satisfies the type.
+
+## Kinds
+
+| Kind | What flows | Cable |
+|---|---|---|
+| value | an object with methods | thin |
+| view | a React component (a render slot) | medium; plugs into a block's top |
+| cable | an RPC contract that crosses the network | thick; needs a link block |
+
+<Question>
+Should versions be visible? [[Version Notches]] would draw `@2` as two notches on the rim, so `@1` and `@2` look related but visibly don't mate.
+</Question>

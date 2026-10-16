@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+# the unpacked prototype is reference material; the tarball is the record
+reference/
+shots/

@@ -1,0 +1,18 @@
+---
+title: App Shell
+category: Blocks
+summary: Lays out header, main and footer views; provides the app's root.
+status: prototype
+infobox:
+  block: app-shell
+---
+
+The **App Shell** is the top of the app. It has three view slots on its top: `header`, `main` and `footer`. Each takes any number of views, in the order their cables were plugged. Its front provides <Iface id="ui.Root@1" />, which plugs into the back of the [[Monitor]].
+
+## Order
+
+A *many* socket keeps its cables in order, and the views render in that order. In the starter world, `main` holds the add form, the [[Todo List]] and the filter bar.
+
+<Question>
+How does a player reorder cables in a *many* socket? Options: re-plug in the order you want, a [[Probe]] menu, or numbered positions on the socket.
+</Question>

@@ -1,0 +1,38 @@
+---
+title: Composition
+category: Mechanics
+summary: How the monitor's demand turns wired blocks into a running app.
+status: prototype
+aliases: [Demand, Active, Idle, Beacon]
+infobox:
+  scene: demand
+  caption: The shell and stats are active. The spare item is idle. Stats is missing its input, so its beacon is lit.
+---
+
+**Composition** is how a room of blocks becomes a running app. It happens live, every time a cable is added or removed. Moving blocks around never recomposes.
+
+## Demand
+
+Nothing runs because it exists. It runs because the [[Monitor]] needs it.
+
+1. Start at the monitor's root socket and follow cables backwards. Every block reached is **active**; everything else is **idle** and drawn dim.
+2. Order the active blocks so each one comes after everything it depends on. A loop is an error.
+3. Create each block in that order, handing it what its inputs are plugged into.
+
+A spare block on the floor costs nothing and can't cause an error.
+
+## When something is missing
+
+If a required input on the active chain is empty, the app can't start. The monitor shows a red diagnostics screen listing what's missing, like `todo-list.item ← todo.ItemView@1`. The empty socket pulses red and a red **beacon** rises above its block, so you can find it from across the room.
+
+<SceneFigure name="missing" float="left" width={320} caption="Todo List with nothing in its item slot. The beacon points to the gap." />
+
+The broken app explains itself on the very screen where it would have rendered.
+
+## Watching it run
+
+Every call between blocks flashes along the cable that carries it (see [[Cable#Pulses|Pulses]]). Every render of a view flashes its cable too, throttled so a busy view doesn't flicker.
+
+<Question>
+A block's setup is synchronous today. A database block has to open a connection first. Should blocks get an async start-up phase, or should the database block hide the wait inside its own interface?
+</Question>

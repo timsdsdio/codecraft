@@ -1,0 +1,11 @@
+{
+  "name": "codecraft",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "wiki": "pnpm --filter @codecraft/wiki dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
