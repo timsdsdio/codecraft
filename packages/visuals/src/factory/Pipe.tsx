@@ -7,7 +7,7 @@ import { KIND_COLOR, type ValueKind } from '../palette';
 import { useClip } from './clip';
 import { useActivity } from './activity';
 import { useMetal } from './look';
-import type { Vec3 } from './layout';
+import { seeThrough, type Vec3 } from './layout';
 
 const vert = /* glsl */ `
   #include <common>
@@ -144,7 +144,7 @@ export function Pipe({
 
   return (
     <group>
-      <mesh geometry={geo.tube} material={mat} />
+      <mesh geometry={geo.tube} material={mat} raycast={seeThrough} />
       {geo.joints.map((p, i) => (
         <mesh key={i} position={p}>
           <sphereGeometry args={[radius * 1.45, 10, 8]} />

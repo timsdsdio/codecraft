@@ -30,12 +30,10 @@ export function Inspector({ onChange, maxDistance = 8 }: { onChange: (c: Cargo |
     const locked = document.pointerLockElement === gl.domElement;
     ray.setFromCamera(locked ? center : pointer, camera);
     ray.far = maxDistance;
-    let found: Cargo | undefined;
-    for (const hit of ray.intersectObjects(scene.children, true)) {
-      if (!visible(hit.object)) continue;
-      found = cargoOf(hit.object);
-      if (found) break;
-    }
+    // the first visible thing hit decides: solid things (the screen slab, casings) block what's behind
+    // them; see-through parts (duct glass, grating, beams) opt out of raycasting altogether
+    const hit = ray.intersectObjects(scene.children, true).find((h) => visible(h.object));
+    const found = hit ? cargoOf(hit.object) : undefined;
     const key = found ? `${found.label}|${JSON.stringify(found.value)}` : '';
     if (key !== last.current) {
       last.current = key;

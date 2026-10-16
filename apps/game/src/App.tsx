@@ -15,7 +15,7 @@ const VIEWPORT = { w: 400, h: 720 };
 /** How far away (world units) you can press things on the screen. */
 const REACH = 4;
 /** Screen opacities that T (or the HUD button) cycles through. Below 1, the factory shows through. */
-const OPACITIES = [0.7, 0.4, 1];
+const OPACITIES = [1, 0.7, 0.4];
 /** Replay speeds the speed button cycles through. */
 const SPEEDS = [1, 0.5, 0.25, 0.1];
 
@@ -249,7 +249,10 @@ function AppScreen({
     if (!c) return;
     c.obj.position.y = (layout?.screenY ?? 0) + SLAB + 0.002;
     c.renderer.domElement.style.visibility = visible ? 'visible' : 'hidden';
-    c.renderer.domElement.style.opacity = String(opacity);
+    // on the iframe, not the renderer's root: opacity on an ancestor makes the browser flatten the
+    // 3D-transformed page into a 2D layer, which flickers when the plane reaches behind the camera
+    const iframe = frame.current;
+    if (iframe && iframe.style.opacity !== String(opacity)) iframe.style.opacity = String(opacity);
     c.renderer.render(c.scene, camera);
   });
   return null;

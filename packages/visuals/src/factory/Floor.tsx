@@ -2,7 +2,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Label } from '../Label';
-import { SLAB } from './layout';
+import { SLAB, seeThrough } from './layout';
 import { useLook, useMetal } from './look';
 
 function gratingTexture(bar: string) {
@@ -32,12 +32,12 @@ export function Floor({ size, y, level, label = true }: { size: [number, number]
   useEffect(() => () => tex.dispose(), [tex]);
   return (
     <group position={[0, y, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SLAB, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SLAB, 0]} raycast={seeThrough}>
         <planeGeometry args={[w, d]} />
         <meshStandardMaterial map={tex} alphaTest={0.5} metalness={0.7} roughness={0.5} side={THREE.DoubleSide} emissive={tron ? '#00b8c0' : '#000000'} emissiveMap={tron ? tex : null} emissiveIntensity={tron ? 0.22 : 0} />
       </mesh>
       {/* under-plate glow so lower floors read through the grating */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SLAB * 0.4, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, SLAB * 0.4, 0]} raycast={seeThrough}>
         <planeGeometry args={[w, d]} />
         <meshBasicMaterial color="#04121a" transparent opacity={0.35} depthWrite={false} />
       </mesh>

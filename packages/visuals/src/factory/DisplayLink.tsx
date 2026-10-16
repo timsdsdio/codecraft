@@ -6,7 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import { FACTORY } from '../palette';
 import { useClip } from './clip';
 import { useActivity } from './activity';
-import type { Box, Vec3 } from './layout';
+import { seeThrough, type Box, type Vec3 } from './layout';
 
 export function DisplayLink({
   from,
@@ -47,7 +47,7 @@ export function DisplayLink({
   const ed = rect.z1 - rect.z0;
   return (
     <group>
-      <mesh position={[from[0], from[1] + h / 2, from[2]]}>
+      <mesh position={[from[0], from[1] + h / 2, from[2]]} raycast={seeThrough}>
         <cylinderGeometry args={[0.012, 0.012, h, 6]} />
         <meshBasicMaterial ref={beam} color={base} toneMapped={false} transparent opacity={0.7} depthWrite={false} blending={THREE.AdditiveBlending} clippingPlanes={clip} />
       </mesh>
@@ -58,7 +58,7 @@ export function DisplayLink({
           [-ew / 2, 0, t, ed],
           [ew / 2, 0, t, ed],
         ].map(([x, z, sx, sz], i) => (
-          <mesh key={i} position={[x, 0, z]}>
+          <mesh key={i} position={[x, 0, z]} raycast={seeThrough}>
             <boxGeometry args={[sx, 0.006, sz]} />
             <meshBasicMaterial ref={i === 0 ? edge : undefined} color={base} toneMapped={false} clippingPlanes={clip} />
           </mesh>

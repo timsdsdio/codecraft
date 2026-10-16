@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { FACTORY } from '../palette';
-import type { Box } from './layout';
+import { seeThrough, type Box } from './layout';
 
 const curtain = new THREE.ShaderMaterial({
   transparent: true,
@@ -47,7 +47,7 @@ export function Fold({ box, y0, y1 }: { box: Box; y0: number; y1: number }) {
   return (
     <group>
       {walls.map((wl, i) => (
-        <mesh key={i} position={wl.p} rotation={[0, wl.r, 0]} material={curtain}>
+        <mesh key={i} position={wl.p} rotation={[0, wl.r, 0]} material={curtain} raycast={seeThrough}>
           <planeGeometry args={[wl.len, h]} />
         </mesh>
       ))}
@@ -57,7 +57,7 @@ export function Fold({ box, y0, y1 }: { box: Box; y0: number; y1: number }) {
         [box.x0, box.z1],
         [box.x1, box.z1],
       ].map(([x, z], i) => (
-        <mesh key={i} position={[x, y0 + h / 2, z]}>
+        <mesh key={i} position={[x, y0 + h / 2, z]} raycast={seeThrough}>
           <boxGeometry args={[0.012, h, 0.012]} />
           <meshBasicMaterial color={edge} toneMapped={false} />
         </mesh>

@@ -415,3 +415,6 @@ function bundleKind(props: ValueInfo[]): ValueKind {
   for (const k of order) if (props.some((p) => p.kind === k)) return k;
   return 'nullish';
 }
+
+/** Use as `raycast={seeThrough}` on meshes that shouldn't block picking (glass, grating, beams). */
+export const seeThrough = () => {};

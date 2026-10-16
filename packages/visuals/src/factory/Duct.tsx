@@ -8,7 +8,7 @@ import { KIND_COLOR, type ValueKind } from '../palette';
 import { DUCT_SPEED, useActivity, type Cargo, type Shipment } from './activity';
 import { useClip } from './clip';
 import { useMetal } from './look';
-import type { Vec3 } from './layout';
+import { seeThrough, type Vec3 } from './layout';
 
 const POOL = 10;
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -101,11 +101,11 @@ export function Duct({
 
   return (
     <group>
-      <mesh geometry={geo.tube}>
+      <mesh geometry={geo.tube} raycast={seeThrough}>
         <meshStandardMaterial color={glass} emissive={glass} emissiveIntensity={0.6} transparent opacity={0.22} depthWrite={false} metalness={0.1} roughness={0.05} clippingPlanes={clip} />
       </mesh>
       {geo.rings.map((rg, i) => (
-        <mesh key={i} geometry={ringGeo} position={rg.pos} quaternion={rg.quat} scale={radius * 1.08}>
+        <mesh key={i} geometry={ringGeo} position={rg.pos} quaternion={rg.quat} scale={radius * 1.08} raycast={seeThrough}>
           <meshStandardMaterial {...frame} clippingPlanes={clip} />
         </mesh>
       ))}

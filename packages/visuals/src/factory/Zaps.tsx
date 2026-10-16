@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { KIND_COLOR } from '../palette';
 import { ZAP_TIME, useActivity } from './activity';
+import { seeThrough } from './layout';
 
 const POOL = 6;
 const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true).rotateX(Math.PI / 2); // along z
@@ -51,7 +52,7 @@ export function Zaps() {
     <group>
       {Array.from({ length: POOL }, (_, i) => (
         <group key={i}>
-          <mesh ref={(m) => void (beams.current[i] = m)} geometry={beamGeo} visible={false}>
+          <mesh ref={(m) => void (beams.current[i] = m)} geometry={beamGeo} visible={false} raycast={seeThrough}>
             <meshBasicMaterial color={new THREE.Color('#ff2050').multiplyScalar(2.4)} toneMapped={false} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
           </mesh>
           <mesh ref={(m) => void (items.current[i] = m)} geometry={itemGeo} visible={false}>
