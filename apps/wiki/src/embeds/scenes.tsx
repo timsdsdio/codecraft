@@ -10,11 +10,18 @@ import {
   Floor,
   Pipe,
   Piston,
+  AccessPoint,
+  Receiver,
+  WirelessLink,
+  WirelessRange,
+  NEON,
+  fnv1a,
   Stage,
   Tank,
   layoutFactory,
   floorY,
   SLAB,
+  type Look,
   type StageProps,
   type Vec3,
 } from '@codecraft/visuals';
@@ -157,6 +164,45 @@ function AvatarDemo() {
   );
 }
 
+function WirelessDemo() {
+  const channel = NEON[fnv1a('ThemeContext') & 7];
+  const y = (f: number) => floorY(f) + SLAB;
+  const every = 3;
+  const ap: Vec3 = [0, y(1) + 0.5, 0.3];
+  const consumers: { name: string; at: Vec3 }[] = [
+    { name: 'ThemeToggle', at: [-0.75, y(3), -0.75] },
+    { name: 'TodoItem', at: [0.75, y(3), 0.8] },
+  ];
+  const quiet: { name: string; at: Vec3; floor: number }[] = [
+    { name: 'Toolbar', at: [-0.75, y(2), -0.75], floor: 2 },
+    { name: 'TodoList', at: [0.75, y(2), 0.8], floor: 2 },
+    { name: 'Header', at: [0.75, y(3), -0.75], floor: 3 },
+  ];
+  return (
+    <>
+      {[1, 2, 3].map((f) => (
+        <Floor key={f} size={[3, 3]} y={floorY(f)} level={f} />
+      ))}
+      <Casing pos={[0, y(1), 0.3]} size={[0.9, 0.5, 0.5]} name="App" renderEvery={every} />
+      <AccessPoint pos={ap} channel={channel} pulseEvery={every} pulseOffset={0.15} />
+      <WirelessRange box={{ x0: -1.5, x1: 1.5, z0: -1.5, z1: 1.5 }} y0={0} y1={floorY(4)} channel={channel} />
+      {quiet.map((q) => (
+        <Casing key={q.name} pos={q.at} size={[0.7, 0.45, 0.4]} name={q.name} dim />
+      ))}
+      {consumers.map((c, i) => (
+        <group key={c.name}>
+          <Casing pos={c.at} size={[0.7, 0.45, 0.4]} name={c.name} renderEvery={every} renderOffset={0.85} />
+          <Receiver pos={[c.at[0] + 0.25, c.at[1] + 0.45, c.at[2]]} channel={channel} />
+          <WirelessLink from={[ap[0], ap[1] + 0.39, ap[2]]} to={[c.at[0] + 0.25, c.at[1] + 0.65, c.at[2]]} channel={channel} pulseEvery={every} pulseOffset={0.2 + i * 0.05} />
+        </group>
+      ))}
+      {[quiet[0], quiet[1]].map((q) => (
+        <Pipe key={q.name} kind="object" points={[[0, y(1) + 0.5, 0.3], [0, y(2) - 0.25, 0.3], [q.at[0], y(2) - 0.25, 0.3], [q.at[0], y(2) - 0.25, q.at[2]], [q.at[0], y(2), q.at[2]]]} dim />
+      ))}
+    </>
+  );
+}
+
 /** Each scene's body and camera. Floors are 1.6 units apart; the screen is on top. */
 const SCENES: Record<SceneName, { stage: Partial<StageProps>; body: () => ReactNode }> = {
   overview: { stage: { eye: [5.6, 5.4, 6.2], target: [0, 2.4, 0.2], fov: 42 }, body: () => <Overview /> },
@@ -170,10 +216,15 @@ const SCENES: Record<SceneName, { stage: Partial<StageProps>; body: () => ReactN
   piston: { stage: { eye: [2.3, 1.7, 3.4], target: [0, 0.3, 0.9], fov: 42 }, body: () => <PistonDemo /> },
   fold: { stage: { eye: [6, 5.2, 4.5], target: [0, 2.4, 0.6], fov: 40, autoRotate: false }, body: () => <FoldDemo /> },
   event: { stage: { eye: [3.6, 4.6, 3.2], target: [0, 2.2, -0.5], fov: 45 }, body: () => <EventDemo /> },
+  wireless: { stage: { eye: [3.6, 4.4, 4.2], target: [0, 2.1, 0], fov: 45 }, body: () => <WirelessDemo /> },
   avatar: { stage: { eye: [1.1, 0.9, 1.6], target: [0, 0.5, 0], fov: 40 }, body: () => <AvatarDemo /> },
 };
 
-export default function EmbedScene({ spec }: { spec: EmbedSpec }) {
+export default function EmbedScene({ spec, look }: { spec: EmbedSpec; look: Look }) {
   const s = SCENES[spec.name];
-  return <Stage {...s.stage}>{s.body()}</Stage>;
+  return (
+    <Stage {...s.stage} look={look}>
+      {s.body()}
+    </Stage>
+  );
 }

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { CogIcon } from '@codecraft/visuals/2d';
+import { setLook, useWikiLook } from '../look';
 import { CATEGORY_ORDER, categories, PAGES } from '../pages';
 
 function Search({ onGo }: { onGo: () => void }) {
@@ -67,6 +68,17 @@ function Sidebar() {
   );
 }
 
+/** Switches every 3D view between the tron and brass looks. */
+function LookToggle() {
+  const look = useWikiLook();
+  const next = look === 'tron' ? 'brass' : 'tron';
+  return (
+    <button type="button" className={`cc-look cc-look-${look}`} onClick={() => setLook(next)} title={`3D look: ${look} (click for ${next})`} aria-label={`3D look: ${look}. Switch to ${next}.`}>
+      {look}
+    </button>
+  );
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState(false);
   const [loc] = useLocation();
@@ -85,6 +97,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="cc-logo-sub">WIKI</span>
         </Link>
         <Search onGo={() => setMenu(false)} />
+        <LookToggle />
       </header>
       <div className="cc-body">
         <nav className={`cc-side${menu ? ' cc-open' : ''}`} aria-label="Site">

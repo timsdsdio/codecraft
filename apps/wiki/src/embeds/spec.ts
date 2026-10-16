@@ -12,6 +12,7 @@ export const SCENE_NAMES = [
   'piston',
   'fold',
   'event',
+  'wireless',
   'avatar',
 ] as const;
 export type SceneName = (typeof SCENE_NAMES)[number];

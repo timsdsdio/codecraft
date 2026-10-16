@@ -3,6 +3,7 @@
 // placeholder if WebGL fails.
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { EmbedSpec } from './spec';
+import { useWikiLook } from '../look';
 
 const EmbedScene = lazy(() => import('./scenes'));
 
@@ -37,13 +38,14 @@ function useNearViewport<T extends Element>(margin = '300px') {
 
 export function Viewport({ spec, height = 240, label }: { spec: EmbedSpec; height?: number; label?: string }) {
   const [ref, near] = useNearViewport<HTMLDivElement>();
+  const look = useWikiLook();
   const flat = <div className="cc-embed-flat">{label ?? '3D view'}</div>;
   return (
     <div ref={ref} className="cc-embed-view" style={{ height }} data-embed={spec.name}>
       {near ? (
         <Boundary fallback={flat}>
           <Suspense fallback={<div className="cc-embed-flat cc-loading">loading…</div>}>
-            <EmbedScene spec={spec} />
+            <EmbedScene spec={spec} look={look} />
           </Suspense>
         </Boundary>
       ) : (

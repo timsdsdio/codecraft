@@ -173,6 +173,29 @@ pre code {
   border-radius: 1px;
 }
 
+.cc-look {
+  flex: none;
+  height: 38px;
+  min-width: 64px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgba(0, 20, 30, 0.7);
+  border: 1px solid var(--line-soft);
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.cc-look-tron {
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 255, 240, 0.6);
+}
+.cc-look-brass {
+  color: #e0b060;
+  border-color: rgba(200, 150, 62, 0.5);
+}
 .cc-search {
   position: relative;
   margin-left: auto;

@@ -8,33 +8,30 @@ aliases: [Questions, Backlog]
 
 Each page has its own design questions in pink boxes. These are the ones that affect more than one page.
 
-## 1. What is the server stack for?
+## 1. Look and feel
 
-`docs/STACK.md` describes a multi-user stack: Postgres, Electric, TanStack DB and tRPC, with the server in charge. A single-player visualizer of one app doesn't need any of it. Everything happens in the browser, between the app's page and the game. Options:
+The goal is **Create's UX with the prototype's Tron look**. Two material sets exist, and the **TRON / BRASS** switch in the top bar flips every 3D view on the wiki between them:
 
-- **A. Local only, for now.** Build the visualizer with no server. *(Recommended for the first version.)*
-- **B. The reference app uses the stack.** The todo app keeps its todos in Postgres and syncs them through Electric. Data then enters the factory from outside, through an intake pipe coming up out of the ground into `App`'s tank. A second browser adding a todo would make it flow in on its own.
-- **C. Multiplayer visits.** Other people walk around the same running app with you. The game's own state (who's where, what's selected) uses the stack, as the brief describes.
+- **Tron** (default): dark bodies, glowing neon edges, cyan floor grids.
+- **Brass**: Create-style brass, copper and andesite, with the same neon fluids.
 
-B and C can be added later without changing anything in A.
+Pick one by looking at both, or mix them, for example Tron structure with brass only on moving parts.
 
-## 2. How literal should the Create look be?
+"Create UX" mostly means interaction patterns rather than art: Jade-style tooltips ([[Inspecting]]), [[Engineer's Goggles]] for extra detail, and **Ponder**. Create's Ponder scenes are small animated dioramas that explain one mechanism each, and they're essentially what this wiki's 3D figures already are. A Ponder-style "explain this" view for any machine in the game could reuse them.
 
-At the moment it's "neon brass": the old prototype's dark Tron palette, plus brass, andesite and green glass. A fuller Create look would add wood and stone textures, chunkier pipes, and shafts and gears driving everything. That's more charming but busier. Readability comes first. See [[Value Kinds]].
+## 2. The second reference app
 
-## 3. Context
+The second reference app should use context, so the [[Wireless Access Point]] gets exercised.
 
-React context skips levels. A provider's value reaches consumers several floors up without passing through the floors in between. Create's *Redstone Link* is a wireless transmitter–receiver pair tuned by a frequency, which is a natural fit: providers are transmitters, `useContext` consumers are receivers, and the frequency is the context. The todo app doesn't use context, so this waits for the second app.
-
-## 4. Which hooks get machines?
+## 3. Which hooks get machines?
 
 Only `useState` / `useReducer` ([[State Tank]]) in the first version. Candidates for later: `useMemo` (a hopper that refills only when its inputs change), `useRef` (a locked crate), `useEffect` (fires after the [[Display Link]]).
 
-## 5. Slow motion
+## 4. Slow motion
 
 Should there be a mode that queues commits and plays them one at a time, with step controls? See [[Render]] and [[Update Replay]].
 
-## 6. Settled so far
+## 5. Settled so far
 
 Decisions already made while writing these pages, with reasons. Push back on any of them:
 
@@ -44,3 +41,5 @@ Decisions already made while writing these pages, with reasons. Push back on any
 - **The app runs unmodified in an iframe** ([[Screen Rendering]]), and is read with the DevTools hook ([[Probe]]).
 - **One pipe per child, carrying all its props**, rather than one per prop ([[Pipe]]). This keeps the factory readable.
 - **Function props are wires running downward, not pipes** ([[Event Wire]]). They're the only thing that flows the other way.
+- **No server for now.** The first version is a local-only, single-player visualizer. `docs/STACK.md` comes back into play for Electric-synced todos (data entering from below the ground) or multiplayer visits.
+- **Context is wireless** ([[Wireless Access Point]]). Range is the provider's footprint column, which is exactly the set of possible consumers.

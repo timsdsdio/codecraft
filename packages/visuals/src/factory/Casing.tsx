@@ -8,6 +8,7 @@ import { FACTORY } from '../palette';
 import { Label } from '../Label';
 import { Cog } from './Cog';
 import { useClip } from './clip';
+import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
 export function Casing({
@@ -31,6 +32,9 @@ export function Casing({
   dim?: boolean;
 }) {
   const clip = useClip();
+  const metal = useMetal('frame');
+  const frame = { ...metal, emissiveIntensity: metal.emissiveIntensity * (dim ? 0.25 : 1) };
+  const flange = useMetal('accent');
   const [w, h, d] = size;
   const t = 0.035; // frame bar thickness
   const bars = useMemo(() => {
@@ -62,7 +66,7 @@ export function Casing({
       {bars.map((b, i) => (
         <mesh key={i} position={b.p}>
           <boxGeometry args={b.s} />
-          <meshStandardMaterial color={FACTORY.brass} metalness={0.85} roughness={0.35} clippingPlanes={clip} />
+          <meshStandardMaterial {...frame} clippingPlanes={clip} />
         </mesh>
       ))}
       <mesh position={[0, h / 2, 0]}>
@@ -87,7 +91,7 @@ export function Casing({
       {[0.012, h - 0.012].map((y) => (
         <mesh key={y} position={[0, y, 0]}>
           <cylinderGeometry args={[0.07, 0.07, 0.03, 12]} />
-          <meshStandardMaterial color={FACTORY.copper} metalness={0.8} roughness={0.3} clippingPlanes={clip} />
+          <meshStandardMaterial {...flange} clippingPlanes={clip} />
         </mesh>
       ))}
       {label && (

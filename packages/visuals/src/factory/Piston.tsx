@@ -1,11 +1,11 @@
 // Telescoping Piston: what `items.map(...)` becomes. One head per item, strung along a rod that
 // leaves the casing; each head has an outlet on its side that feeds that item. Heads glide to their
 // targets, and a new item's head slides out of the one before it.
-import { useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { FACTORY } from '../palette';
 import { useClip } from './clip';
+import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
 const rodGeo = new THREE.CylinderGeometry(1, 1, 1, 12).rotateX(Math.PI / 2); // axis along z
@@ -17,7 +17,9 @@ export function Piston({ base, heads }: { base: Vec3; heads: { key: string; pos:
   const headRefs = useRef<(THREE.Group | null)[]>([]);
   const rodRefs = useRef<(THREE.Mesh | null)[]>([]);
   const rodR = (i: number) => Math.max(0.025, 0.06 - i * 0.004);
-  const brass = useMemo(() => ({ color: FACTORY.brass, metalness: 0.85, roughness: 0.35 }), []);
+  const brass = useMetal('frame', '#00fff0');
+  const sleeve = useMetal('rail', '#00fff0');
+  const outlet = useMetal('accent', '#00fff0');
 
   useFrame((_, dt) => {
     const cur = current.current;
@@ -46,7 +48,7 @@ export function Piston({ base, heads }: { base: Vec3; heads: { key: string; pos:
     <group>
       {/* the sleeve the rod slides through */}
       <mesh geometry={rodGeo} position={[bx, by, bz]} scale={[0.1, 0.1, 0.22]}>
-        <meshStandardMaterial color={FACTORY.andesite} metalness={0.6} roughness={0.5} clippingPlanes={clip} />
+        <meshStandardMaterial {...sleeve} clippingPlanes={clip} />
       </mesh>
       {heads.slice(0, MAX).map((h, i) => (
         <group key={h.key}>
@@ -60,7 +62,7 @@ export function Piston({ base, heads }: { base: Vec3; heads: { key: string; pos:
             </mesh>
             <mesh position={[0.1, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[0.045, 0.045, 0.06, 10]} />
-              <meshStandardMaterial color={FACTORY.copper} metalness={0.8} roughness={0.3} clippingPlanes={clip} />
+              <meshStandardMaterial {...outlet} clippingPlanes={clip} />
             </mesh>
           </group>
         </group>

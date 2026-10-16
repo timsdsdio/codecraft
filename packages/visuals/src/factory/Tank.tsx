@@ -3,9 +3,10 @@
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { FACTORY, KIND_COLOR } from '../palette';
+import { KIND_COLOR } from '../palette';
 import { Label } from '../Label';
 import { useClip } from './clip';
+import { useMetal } from './look';
 import type { ValueInfo, Vec3 } from './layout';
 
 export function Tank({
@@ -24,6 +25,7 @@ export function Tank({
   label?: boolean;
 }) {
   const clip = useClip();
+  const metal = useMetal('frame', KIND_COLOR[info.kind]);
   const color = useMemo(() => new THREE.Color(KIND_COLOR[info.kind]), [info.kind]);
   const fluid = useRef<THREE.Mesh>(null);
   const level = useRef(fill);
@@ -52,14 +54,14 @@ export function Tank({
         return (
           <mesh key={`post${i}`} position={[Math.cos(a) * (radius + 0.012), height / 2, Math.sin(a) * (radius + 0.012)]}>
             <boxGeometry args={[0.022, height, 0.022]} />
-            <meshStandardMaterial color={FACTORY.brass} metalness={0.85} roughness={0.35} clippingPlanes={clip} />
+            <meshStandardMaterial {...metal} clippingPlanes={clip} />
           </mesh>
         );
       })}
       {[0.02, height / 2, height - 0.02].map((y) => (
         <mesh key={y} position={[0, y, 0]}>
           <cylinderGeometry args={[radius + 0.015, radius + 0.015, 0.035, 20]} />
-          <meshStandardMaterial color={FACTORY.brass} metalness={0.85} roughness={0.35} clippingPlanes={clip} />
+          <meshStandardMaterial {...metal} clippingPlanes={clip} />
         </mesh>
       ))}
       {label && (

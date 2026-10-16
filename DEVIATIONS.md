@@ -2,6 +2,16 @@
 
 Short entries, newest first. Each says what was decided and why.
 
+## 2026-10-16: Tron look by default, local-only, and context as wireless
+
+- **Local-only first.** No server in v1. The stack in `docs/STACK.md` returns for synced todos or
+  multiplayer.
+- **"Create" means the UX, not the art.** The default look is the prototype's Tron (dark bodies,
+  neon edges). Brass is kept as a switchable alternative (`look` prop on `Stage`; a TRON / BRASS
+  toggle in the wiki) so the two can be compared on real scenes before settling.
+- **Context is AE2-style wireless.** A provider is an access point; its range is the provider's
+  footprint column, which is exactly its possible consumers. `useContext` consumers carry receivers.
+
 ## 2026-10-16: New concept. The app is the floor, and a factory beneath it shows how it works
 
 The Socketworld mechanics (blocks wired by hand) are gone. CodeCraft now visualises a running React

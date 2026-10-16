@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { FACTORY } from '../palette';
 import type { Box } from './layout';
+import { useMetal } from './look';
 
 const TILE = 0.12;
 
@@ -28,6 +28,8 @@ function treadTexture() {
 export function Belt({ box, y, offset = 0, drift = 0 }: { box: Box; y: number; offset?: number; drift?: number }) {
   const w = box.x1 - box.x0;
   const len = box.z1 - box.z0;
+  const rail = useMetal('rail', '#00b8c0');
+  const roller = useMetal('frame', '#00fff0');
   const tex = useMemo(treadTexture, []);
   useEffect(() => () => tex.dispose(), [tex]);
   useEffect(() => {
@@ -53,14 +55,14 @@ export function Belt({ box, y, offset = 0, drift = 0 }: { box: Box; y: number; o
       {[box.x0, box.x1].map((x) => (
         <mesh key={x} position={[x, y + 0.04, cz]}>
           <boxGeometry args={[0.03, 0.06, len]} />
-          <meshStandardMaterial color={FACTORY.andesite} metalness={0.5} roughness={0.6} />
+          <meshStandardMaterial {...rail} />
         </mesh>
       ))}
       <group ref={rollers}>
         {[box.z0, box.z1].map((z) => (
           <mesh key={z} position={[cx, y + 0.03, z]} rotation={[0, 0, Math.PI / 2]}>
             <cylinderGeometry args={[0.05, 0.05, w + 0.06, 12]} />
-            <meshStandardMaterial color={FACTORY.brass} metalness={0.85} roughness={0.35} />
+            <meshStandardMaterial {...roller} />
           </mesh>
         ))}
       </group>

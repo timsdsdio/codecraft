@@ -33,6 +33,8 @@ It walks the fiber tree from `root.current` and keeps only **component** fibers 
 
 Function props are traced to where they were made: walk up the ancestors until one doesn't have the same function in its own props; that one created it ([[Event Wire]]).
 
+Context providers are fibers that carry a context object. Each consumer lists the contexts it read in `fiber.dependencies` ([[Wireless Access Point]]).
+
 Scroll areas are DOM elements whose computed `overflow` is `auto` or `scroll` and whose content is taller than their box. Each one's owner is the component that rendered it.
 
 ## Between commits

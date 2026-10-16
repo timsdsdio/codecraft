@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { FACTORY, KIND_COLOR, type ValueKind } from '../palette';
+import { KIND_COLOR, type ValueKind } from '../palette';
 import { useClip } from './clip';
+import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
 const vert = /* glsl */ `
@@ -71,6 +72,7 @@ export function Pipe({
   dim?: boolean;
 }) {
   const clip = useClip();
+  const coupling = useMetal('frame', KIND_COLOR[kind]);
   const key = JSON.stringify(points);
   const geo = useMemo(() => {
     const path = new THREE.CurvePath<THREE.Vector3>();
@@ -135,7 +137,7 @@ export function Pipe({
       {geo.joints.map((p, i) => (
         <mesh key={i} position={p}>
           <sphereGeometry args={[radius * 1.45, 10, 8]} />
-          <meshStandardMaterial color={FACTORY.brass} metalness={0.85} roughness={0.35} clippingPlanes={clip} />
+          <meshStandardMaterial {...coupling} clippingPlanes={clip} />
         </mesh>
       ))}
     </group>

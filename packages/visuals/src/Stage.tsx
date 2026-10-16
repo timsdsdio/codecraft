@@ -7,6 +7,7 @@ import { Environment, Grid, Lightformer, OrbitControls } from '@react-three/drei
 import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import type { Vec3 } from './factory/layout';
+import { LookProvider, type Look } from './factory/look';
 
 export const FOG_COLOR = '#03070f';
 
@@ -60,6 +61,8 @@ export interface StageProps {
   /** 'low' = no bloom, dpr 1 (phones / many embeds) */
   quality?: 'high' | 'low';
   className?: string;
+  /** machine materials: neon edges (tron) or Create-style brass */
+  look?: Look;
 }
 
 export function Stage({
@@ -71,6 +74,7 @@ export function Stage({
   floor = true,
   quality = 'high',
   className,
+  look = 'tron',
 }: StageProps) {
   const [coarse] = useState(isCoarsePointer);
   const bloom = quality === 'high';
@@ -102,7 +106,7 @@ export function Stage({
           position={[0, 0.001, 0]}
         />
       )}
-      {children}
+      <LookProvider look={look}>{children}</LookProvider>
       {/* touch: no drag-to-orbit, so the page still scrolls under a finger */}
       <OrbitControls
         makeDefault

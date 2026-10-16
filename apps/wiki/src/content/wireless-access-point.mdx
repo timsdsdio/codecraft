@@ -1,0 +1,47 @@
+---
+title: Wireless Access Point
+category: Machines
+summary: React context, AE2-style. Providers broadcast; consumers in range receive, skipping every floor in between.
+status: draft
+aliases: [Context, Access Point, Receiver, useContext, Provider]
+infobox:
+  scene: wireless
+  caption: App provides a theme. Only the two receivers react when it changes; the floor in between stays idle.
+  rows:
+    One per: Context.Provider
+    Range: the provider's footprint, up to the screen
+    Receivers: each useContext consumer
+---
+
+React context lets a value skip levels: a provider near the root, a consumer three floors up, and nothing in between passing it along. Pipes can't show that. They always go one floor at a time. So context goes wireless, borrowing from Applied Energistics 2's wireless access points.
+
+## The parts
+
+| Part | Is | Looks like |
+|---|---|---|
+| **Access point** | a `Context.Provider` | a mast with fins and a glowing core, on top of the casing of the component that renders the provider |
+| **Receiver** | a `useContext(Context)` call | a short antenna with a status lamp, on the consuming casing |
+| **Link** | a consumer subscribed to that provider | a faint dashed arc from the access point's core to the receiver |
+| **Channel** | which context it is | a colour hashed from the context's name, so the same context always looks the same |
+
+## Range
+
+In AE2, an access point covers a sphere. Here it covers a **column**: the provider's footprint on the screen, from its floor up to the roof. That isn't an approximation. A provider's value can only reach its descendants, and descendants' boxes sit inside the provider's box. So the column contains exactly the casings that *could* receive. The range is drawn as dotted corner posts, and only while you're [[Inspecting]] the access point, so it doesn't clutter the factory.
+
+Nested providers of the same context work as they do in AE2 with two networks: a receiver links to the nearest access point below it in the tree, and the inner column overrides the outer one.
+
+## When the value changes
+
+1. The provider's casing renders and its access point flares. A ring expands from the core.
+2. A bright dot runs along each link to its receiver.
+3. Each consumer renders, even if every casing between them would have skipped rendering (`memo`). This is the behaviour of context that's hardest to see in code, and here you can watch it skip the floor in between.
+
+A receiver with no provider above it falls back to the context's default value. Its lamp shows red: AE2's "no network".
+
+## How the probe finds it
+
+Provider fibers carry the context object. Each consumer fiber lists the contexts it read in `fiber.dependencies`. The [[Probe]] reports both, and links each consumer to its nearest provider ancestor of the same context.
+
+<Question>
+Should links always be drawn (faint), or only appear when a value changes and while inspecting? Always-on makes the "it skips floors" idea obvious. Pulse-only keeps busy apps calm.
+</Question>

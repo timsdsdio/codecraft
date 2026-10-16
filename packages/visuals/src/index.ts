@@ -15,3 +15,4 @@ export { DisplayLink } from './factory/DisplayLink';
 export { Fold } from './factory/Fold';
 export { Avatar } from './factory/Avatar';
 export { Factory, type FactoryProps } from './factory/Factory';
+export { AccessPoint, Receiver, WirelessLink, WirelessRange } from './factory/Wireless';

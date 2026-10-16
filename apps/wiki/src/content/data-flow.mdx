@@ -25,6 +25,10 @@ Function props, like `onToggle`, aren't data the child draws. They're a way for 
 
 A wire runs to the casing that **created** the function, not just the one that passed it on. `TodoItem`'s `onToggle` goes past `TodoList` down to `App`, because `App` defined `toggle`.
 
+## Sideways: context
+
+Context skips floors, so it doesn't use pipes. It's broadcast from a [[Wireless Access Point]] to receivers on the consuming casings.
+
 ## State
 
 State is the only place data comes from. Each `useState` is a [[State Tank]] bolted to its component's casing. An event fills or empties a tank. A changed tank makes its component render, and the change flows up from there.
