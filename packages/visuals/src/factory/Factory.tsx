@@ -6,7 +6,6 @@ import { Activity, ActivityProvider, useActivity } from './activity';
 import { Duct } from './Duct';
 import { Emitter } from './Emitter';
 import { Splitter } from './Splitter';
-import { Zaps } from './Zaps';
 import { Avatar } from './Avatar';
 import { Belt } from './Belt';
 import { Casing } from './Casing';
@@ -165,7 +164,6 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
             <Emitter pos={e.pos} kind={e.kind} pulseKey={`emit:${e.id}`} inspect={emitterCargo(e)} />
           </ClipRegion>
         ))}
-        {activity && <Zaps />}
         {activity && <ActivityClock />}
         {layout.links.filter((l) => (depthOf.get(l.id) ?? 1) <= top && top >= layout.floors).map((l) => (
           <ClipRegion key={l.id} box={l.clip}>

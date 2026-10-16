@@ -26,6 +26,9 @@ export const KIND_COLOR: Record<ValueKind, string> = {
   nullish: '#7d8796',
 };
 
+/** Calls travelling back down the ducts toward where the function was defined. */
+export const CALL_COLOR = '#ff8a1f';
+
 /** Factory materials (Create-ish: brass, andesite, dark steel) and the logic-casing green. */
 export const FACTORY = {
   brass: '#c8963e',

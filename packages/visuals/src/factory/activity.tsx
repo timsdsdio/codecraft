@@ -1,31 +1,31 @@
-// Live activity on its own clock. The game schedules what happens when (renders, items travelling
-// through ducts, calls zapping through space) and machines read it every frame. The clock can be
-// paused or slowed, so a moment of data flow can be frozen and inspected.
+// Live activity on its own clock. The game schedules what happens when (renders, and items travelling
+// through ducts: values going up, calls coming back down) and machines read it every frame. The clock
+// can be paused or slowed, so a moment of data flow can be frozen and inspected.
 import { createContext, useContext } from 'react';
 import type { ValueKind } from '../palette';
-import type { Vec3 } from './layout';
 
-/** What an item or zap is carrying, for the inspector. */
+/** What an item is carrying, for the inspector. */
 export interface Cargo {
   label: string;
   kind: ValueKind;
   value?: unknown;
+  /** a call travelling back toward the function's definition */
+  call?: boolean;
 }
 
 export interface Shipment extends Cargo {
   /** when the item enters the duct (activity time) */
   t: number;
-}
-
-export interface Zap extends Cargo {
-  from: Vec3;
-  to: Vec3;
-  t: number;
+  /** travels from the duct's end back to its start (calls go down) */
+  reverse?: boolean;
+  /** multiplier on DUCT_SPEED (calls travel faster than data) */
+  speed?: number;
 }
 
 /** Item speed inside ducts, world units per second of activity time. */
 export const DUCT_SPEED = 2.2;
-export const ZAP_TIME = 0.55;
+/** Calls are short signals, so they travel faster than data. */
+export const CALL_SPEED = 2;
 
 export class Activity {
   /** activity time in seconds; advances with real time × speed unless paused */
@@ -34,7 +34,6 @@ export class Activity {
   paused = false;
   private pulses = new Map<string, number>();
   private shipments = new Map<string, Shipment[]>();
-  zaps: Zap[] = [];
 
   now() {
     return this.time;
@@ -67,17 +66,9 @@ export class Activity {
   shipmentsIn(key: string, travel: number, keepFor = 0.2): Shipment[] {
     const list = this.shipments.get(key);
     if (!list) return [];
-    const live = list.filter((s) => this.time - s.t < travel + keepFor || s.t > this.time);
+    const live = list.filter((s) => this.time - s.t < travel / (s.speed ?? 1) + keepFor || s.t > this.time);
     if (live.length !== list.length) this.shipments.set(key, live);
     return live;
-  }
-
-  zap(z: Zap) {
-    this.zaps.push(z);
-  }
-  liveZaps(): Zap[] {
-    this.zaps = this.zaps.filter((z) => this.time - z.t < ZAP_TIME + 0.4 || z.t > this.time);
-    return this.zaps;
   }
 }
 

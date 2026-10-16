@@ -1,10 +1,10 @@
-// Itemduct: a glass tube with frame rings, and discrete items travelling inside it, each one a
-// value being passed (an object, a string, a function card…). Items carry their data in
+// Itemduct: a glass tube with frame rings, and discrete items travelling inside it: values going up
+// (cubes; flat cards for functions) and calls coming back down (orange). Items carry their data in
 // `userData.inspect`, so a raycast can show what's inside. Times come from the Activity clock.
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { KIND_COLOR, type ValueKind } from '../palette';
+import { CALL_COLOR, KIND_COLOR, type ValueKind } from '../palette';
 import { DUCT_SPEED, useActivity, type Cargo, type Shipment } from './activity';
 import { useClip } from './clip';
 import { useMetal } from './look';
@@ -83,19 +83,20 @@ export function Duct({
       const m = items.current[i];
       if (!m) continue;
       const s = list[i];
-      const p = s ? (now - s.t) / travel : -1;
+      const p = s ? ((now - s.t) * (s.speed ?? 1)) / travel : -1;
       if (!s || p < 0 || p > 1) {
         m.visible = false;
         continue;
       }
       m.visible = true;
-      geo.path.getPointAt(Math.min(1, p), tmp);
+      geo.path.getPointAt(Math.min(1, s.reverse ? 1 - p : p), tmp);
       m.position.copy(tmp);
-      const card = s.kind === 'function';
-      const r = radius * 1.25;
+      // values are cubes, function cards are flat, calls are bigger and orange
+      const card = s.kind === 'function' && !s.call;
+      const r = radius * (s.call ? 1.6 : 1.25);
       m.scale.set(card ? r * 1.7 : r, card ? r * 0.35 : r, card ? r * 1.2 : r);
-      (m.material as THREE.MeshBasicMaterial).color.set(KIND_COLOR[s.kind]).multiplyScalar(1.8);
-      m.userData.inspect = { label: s.label, kind: s.kind, value: s.value } satisfies Cargo;
+      (m.material as THREE.MeshBasicMaterial).color.set(s.call ? CALL_COLOR : KIND_COLOR[s.kind]).multiplyScalar(1.8);
+      m.userData.inspect = { label: s.label, kind: s.kind, value: s.value, call: s.call } satisfies Cargo;
     }
   });
 

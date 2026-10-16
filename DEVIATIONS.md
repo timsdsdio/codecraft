@@ -21,9 +21,11 @@ depends on, each with its reason. When one changes, edit its entry.
   that uses it. The emitter's beam paints just that element. The probe's Vite plugin learns which
   element reads what by parsing each component's JSX in dev, and tags the elements with
   `data-cc` attributes.
-- **Calls are lasers, not wires.** When a handler calls a function, a beam fires from the
-  element's emitter to where the function was created, with the arguments riding along it. Calls
-  to a state setter land on that exact state tank.
+- **Calls travel back down the ducts.** When a handler calls a function, an orange item carrying
+  the call and its arguments travels from the element's emitter back down each duct to where the
+  function was defined, renamed on every floor to what that component calls it (`onToggle` in
+  `TodoItem` and `TodoList`, `toggle` in `App`). Calls to a state setter end in that state tank.
+  Calls move at twice the speed of data, since they're a short signal.
 - **Activity runs on its own clock**, which can be paused, slowed to 0.1×, or replayed for the
   last update. The app itself updates instantly; only the factory's animation is affected.
 - **Context is AE2-style wireless.** A provider is an access point. Its range is the provider's
