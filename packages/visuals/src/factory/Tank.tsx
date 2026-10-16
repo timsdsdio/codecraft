@@ -6,7 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import { KIND_COLOR } from '../palette';
 import { Label } from '../Label';
 import { useClip } from './clip';
-import { perfNow, useActivity } from './activity';
+import { useActivity } from './activity';
 import { useMetal } from './look';
 import type { ValueInfo, Vec3 } from './layout';
 
@@ -29,6 +29,7 @@ export function Tank({
   pulseKey?: string;
 }) {
   const clip = useClip();
+  const inspect = { label: `${info.name} (state)`, kind: info.kind, value: info.value ?? info.preview };
   const activity = useActivity();
   const fluidMat = useRef<THREE.MeshBasicMaterial>(null);
   const metal = useMetal('frame', KIND_COLOR[info.kind]);
@@ -38,7 +39,7 @@ export function Tank({
   useFrame((_, dt) => {
     level.current += (fill - level.current) * Math.min(1, dt * 3);
     const live = pulseKey ? activity?.latest(pulseKey) : undefined;
-    const k = live === undefined ? 0 : Math.max(0, 1 - (perfNow() - live) / 0.8);
+    const k = live === undefined ? 0 : Math.max(0, 1 - (activity!.now() - live) / 0.8);
     fluidMat.current?.color.copy(color).multiplyScalar(1.6 + 2.5 * k);
     const m = fluid.current;
     if (m) {
@@ -49,7 +50,7 @@ export function Tank({
   });
   return (
     <group position={pos}>
-      <mesh position={[0, height / 2, 0]}>
+      <mesh position={[0, height / 2, 0]} userData={{ inspect }}>
         <cylinderGeometry args={[radius, radius, height, 20, 1, true]} />
         <meshStandardMaterial color="#5fb8d8" transparent opacity={0.14} metalness={0.3} roughness={0.05} depthWrite={false} side={THREE.DoubleSide} clippingPlanes={clip} />
       </mesh>

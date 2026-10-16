@@ -3,9 +3,10 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'rea
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { CSS3DObject, CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
-import { Factory, PX, SLAB, Stage, TouchControls, floorY, isCoarsePointer, type FactoryLayout, type WalkSpawn } from '@codecraft/visuals';
+import { Factory, KIND_COLOR, PX, SLAB, Stage, TouchControls, floorY, isCoarsePointer, type Cargo, type FactoryLayout, type WalkSpawn } from '@codecraft/visuals';
 import type { GameMessage, Payload } from '@codecraft/probe';
 import { useProbe } from './useProbe';
+import { Inspector } from './Inspector';
 
 /** The app being visualised. It runs its own dev server; see apps/todo. */
 const APP_URL = import.meta.env.VITE_APP_URL ?? `${location.protocol}//${location.hostname}:5320/`;
@@ -13,6 +14,10 @@ const APP_URL = import.meta.env.VITE_APP_URL ?? `${location.protocol}//${locatio
 const VIEWPORT = { w: 400, h: 720 };
 /** How far away (world units) you can press things on the screen. */
 const REACH = 4;
+/** Screen opacities that T (or the HUD button) cycles through. Below 1, the factory shows through. */
+const OPACITIES = [0.7, 0.4, 1];
+/** Replay speeds the speed button cycles through. */
+const SPEEDS = [1, 0.5, 0.25, 0.1];
 
 /** Standing heights: every floor, then the screen on top. */
 function levelsOf(layout: FactoryLayout) {
@@ -27,6 +32,34 @@ export function App() {
   const [level, setLevel] = useState<string>('Screen');
   const camera = useRef<THREE.Camera | null>(null);
   const onScreen = level === 'Screen';
+  const [opacityIndex, setOpacityIndex] = useState(0);
+  const opacity = OPACITIES[opacityIndex];
+  const cycleOpacity = () => setOpacityIndex((i) => (i + 1) % OPACITIES.length);
+  const [inspected, setInspected] = useState<Cargo | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [speedIndex, setSpeedIndex] = useState(0);
+  const togglePause = () =>
+    setPaused((p) => {
+      probe.activity.paused = !p;
+      return !p;
+    });
+  const cycleSpeed = () =>
+    setSpeedIndex((i) => {
+      const n = (i + 1) % SPEEDS.length;
+      probe.activity.speed = SPEEDS[n];
+      return n;
+    });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (e.code === 'KeyT') cycleOpacity();
+      if (e.code === 'KeyP') togglePause();
+      if (e.code === 'KeyR') probe.replay();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const levels = useMemo(() => (layout ? levelsOf(layout) : null), [layout?.floors, layout?.screenY]); // eslint-disable-line react-hooks/exhaustive-deps
   const spawn = useMemo<WalkSpawn | undefined>(() => (layout ? { pos: [0.3, layout.screenY + SLAB, layout.size[1] / 2 - 0.9], yaw: 0 } : undefined), [!!layout]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -58,23 +91,50 @@ export function App() {
         floor={false}
       >
         <CameraRef out={camera} />
-        {layout && <Factory layout={layout} activity={probe.activity} wires />}
+        {layout && <Factory layout={layout} activity={probe.activity} />}
+        {layout && <Inspector onChange={setInspected} />}
         {layout && <ScreenSlab layout={layout} />}
-        <AppScreen layout={layout} frame={probe.frame} visible={onScreen || !layout} />
+        <AppScreen layout={layout} frame={probe.frame} visible={onScreen || !layout} opacity={layout ? opacity : 1} />
         {layout && !coarse && <DesktopInput enabled={onScreen} layout={layout} send={probe.send} />}
       </Stage>
 
       <div className="hud">
         <span className="hud-title">CODECRAFT</span>
         {layout && <span className="hud-level">{level}</span>}
+        {layout && (
+          <button type="button" className="hud-button" onClick={(e) => (cycleOpacity(), e.currentTarget.blur())} title="Screen opacity (T)">
+            screen {Math.round(opacity * 100)}%
+          </button>
+        )}
       </div>
+      {layout && (
+        <div className="hud-time" role="group" aria-label="Time">
+          <button type="button" onClick={(e) => (togglePause(), e.currentTarget.blur())} title="Pause (P)">
+            {paused ? '▶ play' : '❚❚ pause'}
+          </button>
+          <button type="button" onClick={(e) => (cycleSpeed(), e.currentTarget.blur())} title="Replay speed">
+            {SPEEDS[speedIndex]}×
+          </button>
+          <button type="button" onClick={(e) => (probe.replay(), e.currentTarget.blur())} title="Replay the last update (R)">
+            ⟲ replay
+          </button>
+        </div>
+      )}
+      {inspected && (
+        <div className="hud-inspect">
+          <div className="hud-inspect-title" style={{ color: KIND_COLOR[inspected.kind] }}>
+            {inspected.label}
+          </div>
+          {inspected.value !== undefined && <pre>{pretty(inspected.value)}</pre>}
+        </div>
+      )}
       {!layout && <div className="hud-center">Connecting to the app at {APP_URL}…</div>}
       {probe.editing && <div className="hud-center hud-typing">Typing in the app · Esc to stop</div>}
       {layout && !probe.editing && <div className="crosshair" aria-hidden />}
       {layout && !coarse && !probe.editing && (
         <div className="hud-hint">
           Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · click the screen to press · wheel scrolls ·{' '}
-          <kbd>Shift</kbd> down a floor · <kbd>Space</kbd> up
+          <kbd>Shift</kbd> down a floor · <kbd>Space</kbd> up · <kbd>T</kbd> screen · <kbd>P</kbd> pause · <kbd>R</kbd> replay
         </div>
       )}
       {layout && coarse && (
@@ -138,7 +198,17 @@ function DesktopInput({ enabled, layout, send }: { enabled: boolean; layout: Fac
  * CSS3DRenderer (1 CSS px = 0.01 units). The iframe is created once, outside React, so nothing
  * the game re-renders can reload the app.
  */
-function AppScreen({ layout, frame, visible }: { layout: FactoryLayout | null; frame: MutableRefObject<HTMLIFrameElement | null>; visible: boolean }) {
+function AppScreen({
+  layout,
+  frame,
+  visible,
+  opacity,
+}: {
+  layout: FactoryLayout | null;
+  frame: MutableRefObject<HTMLIFrameElement | null>;
+  visible: boolean;
+  opacity: number;
+}) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
@@ -179,6 +249,7 @@ function AppScreen({ layout, frame, visible }: { layout: FactoryLayout | null; f
     if (!c) return;
     c.obj.position.y = (layout?.screenY ?? 0) + SLAB + 0.002;
     c.renderer.domElement.style.visibility = visible ? 'visible' : 'hidden';
+    c.renderer.domElement.style.opacity = String(opacity);
     c.renderer.render(c.scene, camera);
   });
   return null;
@@ -193,4 +264,11 @@ function ScreenSlab({ layout }: { layout: FactoryLayout }) {
       <meshStandardMaterial color="#0a0f16" metalness={0.6} roughness={0.4} />
     </mesh>
   );
+}
+
+/** JSON for the inspector, clipped to a readable length. */
+function pretty(v: unknown): string {
+  const s = typeof v === 'string' ? JSON.stringify(v) : JSON.stringify(v, null, 2);
+  const lines = (s ?? String(v)).split('\n');
+  return lines.length > 18 ? [...lines.slice(0, 18), '  …'].join('\n') : lines.join('\n');
 }

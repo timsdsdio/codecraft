@@ -13,7 +13,6 @@ packages/probe/     reads a running React app (DevTools hook) and talks to the g
 packages/visuals/   factory machines (R3F/drei) + layoutFactory(); shared by the game and the wiki
 docs/STACK.md       the stack and lessons the project follows
 DEVIATIONS.md       decisions in force, with reasons
-CHANGELOG.md        changes to how things work that the wiki doesn't reflect yet
 socketworld-src.tar.gz   Socketworld, an earlier experiment that packages/visuals started from (reference only)
 ```
 

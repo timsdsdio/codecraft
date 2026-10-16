@@ -4,7 +4,8 @@
 // It also carries out the game's requests: clicks and wheel scrolls at viewport coordinates.
 //
 // Fiber internals aren't a public API. This targets React 19.
-import type { CompNode, Rect, ScrollInfo, Snapshot, ValueInfo, ValueKind } from '@codecraft/visuals/2d';
+import type { CompNode, ElementInfo, ReadInfo, Rect, ScrollInfo, Snapshot, ValueInfo, ValueKind } from '@codecraft/visuals/2d';
+import { SOURCE_GLOBAL, type StaticComponent } from './source';
 import { CHANNEL, isGameMessage, type CommitRecord, type Payload, type ProbeMessage } from './protocol';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -80,9 +81,76 @@ function short(v: unknown, depth = 0): string {
   }
 }
 
-function info(name: string, v: unknown): ValueInfo {
+/** A JSON-safe copy for inspecting: limited depth, list length and string length. */
+function copy(v: unknown, depth = 0): unknown {
+  switch (kindOf(v)) {
+    case 'string':
+      return (v as string).length > 200 ? `${(v as string).slice(0, 199)}…` : v;
+    case 'number':
+    case 'boolean':
+      return v;
+    case 'nullish':
+      return v === undefined ? '(undefined)' : null;
+    case 'function':
+      return `ƒ ${(v as { name?: string }).name || 'anonymous'}`;
+    case 'node':
+      return short(v);
+    case 'array': {
+      if (depth >= 3) return `Array(${(v as unknown[]).length})`;
+      const a = (v as unknown[]).slice(0, 20).map((x) => copy(x, depth + 1));
+      if ((v as unknown[]).length > 20) a.push(`… ${(v as unknown[]).length - 20} more`);
+      return a;
+    }
+    case 'object': {
+      if (depth >= 3) return '{…}';
+      const o: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(v as object).slice(0, 20)) o[k] = copy(x, depth + 1);
+      return o;
+    }
+  }
+}
+
+const fnIds = new WeakMap<object, number>();
+let nextFn = 1;
+function fnId(fn: object): number {
+  let id = fnIds.get(fn);
+  if (!id) fnIds.set(fn, (id = nextFn++));
+  return id;
+}
+
+/** Where a function prop came from: the state tank it dispatches to, or the component that created it. */
+function originOf(fn: unknown, f: Fiber): { component: string; tank?: string } | undefined {
+  for (let a = f.return; a; a = a.return) {
+    if (!COMPONENT.has(a.tag)) continue;
+    let i = 0;
+    for (let h = a.memoizedState; h && typeof h === 'object' && 'next' in h; h = h.next) {
+      const q = h.queue;
+      if (q && typeof q.dispatch === 'function' && 'lastRenderedReducer' in q) {
+        if (q.dispatch === fn) return { component: idOf(a), tank: `${idOf(a)}:state${i}` };
+        i++;
+      }
+    }
+    const passedDown = Object.values((a.memoizedProps ?? {}) as object).some((v) => Object.is(v, fn));
+    if (!passedDown) return { component: idOf(a) };
+  }
+  return undefined;
+}
+
+function info(name: string, v: unknown, f?: Fiber): ValueInfo {
   const kind = kindOf(v);
-  return { name, kind, preview: short(v), ...(kind === 'array' ? { size: (v as unknown[]).length } : {}) };
+  const out: ValueInfo = { name, kind, preview: short(v), value: copy(v) };
+  if (kind === 'array') out.size = (v as unknown[]).length;
+  if (kind === 'function') {
+    out.fnId = fnId(v as object);
+    if (f) out.origin = originOf(v, f);
+  }
+  return out;
+}
+
+function readPath(scope: Record<string, unknown>, path: string): unknown {
+  let v: unknown = scope;
+  for (const key of path.split('.')) v = v == null ? undefined : (v as Record<string, unknown>)[key];
+  return v;
 }
 
 // ── hooks ─────────────────────────────────────────────────────────────────
@@ -173,6 +241,62 @@ function paints(el: Element): boolean {
   return false;
 }
 
+const sourceOf = (name: string): StaticComponent | undefined => (globalThis as any)[SOURCE_GLOBAL]?.[name];
+
+/** element → its id in the latest snapshot (so an event can name the element it started on) */
+let elementIds = new WeakMap<Element, string>();
+
+/** Host elements in the component's own JSX that the source analysis says read data or handle events. */
+function elementsOf(f: Fiber, id: string, props: Record<string, unknown>, states: unknown[], ids: WeakMap<Element, string>): ElementInfo[] | undefined {
+  const src = sourceOf(nameOf(f.type));
+  if (!src?.elements.length) return undefined;
+  const scope: Record<string, unknown> = { ...props };
+  src.state.forEach((s, i) => (scope[s.name] = states[i]));
+  const setterTank = new Map(src.state.map((s, i) => [s.setter, `${id}:state${i}`]));
+  const read = (path: string): ReadInfo => ({ path, ...info(path, readPath(scope, path)) });
+
+  const out: ElementInfo[] = [];
+  const counts = new Map<string, number>();
+  const visit = (c: Fiber) => {
+    for (; c; c = c.sibling) {
+      if (COMPONENT.has(c.tag)) continue;
+      if (c.tag === TAG.Host) {
+        const el = c.stateNode as Element;
+        const cc = el.getAttribute('data-cc');
+        const spec = cc ? src.elements.find((e) => e.id === cc) : undefined;
+        if (cc && spec) {
+          const n = counts.get(cc) ?? 0;
+          counts.set(cc, n + 1);
+          const eid = `${id}:${cc}:${n}`;
+          ids.set(el, eid);
+          out.push({
+            id: eid,
+            tag: spec.tag,
+            rect: toRect(el.getBoundingClientRect()),
+            clip: clipOf(el),
+            slots: spec.slots.map((sl) => ({ name: sl.name, reads: sl.reads.map(read) })),
+            handlers: spec.handlers.map((h) => ({
+              event: h.event,
+              calls: h.calls.map((call) => ({
+                fn: call.fn,
+                args: call.args.map(read),
+                target: setterTank.has(call.fn)
+                  ? { component: id, tank: setterTank.get(call.fn) }
+                  : typeof props[call.fn] === 'function'
+                    ? originOf(props[call.fn], f)
+                    : undefined,
+              })),
+            })),
+          });
+        }
+      }
+      visit(c.child);
+    }
+  };
+  visit(f.child);
+  return out;
+}
+
 function fiberOfElement(el: Element): Fiber | undefined {
   const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$'));
   return key ? (el as any)[key] : undefined;
@@ -208,7 +332,7 @@ let root: any = null;
 let commitIndex = 0;
 /** fiber object last seen per id: an identical object means React reused it without rendering */
 let seen = new Map<string, Fiber>();
-let lastCause: { type: string; component: string; at: number } | null = null;
+let lastCause: { type: string; component: string; element?: string; at: number } | null = null;
 
 function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRecord } {
   const nodes: CompNode[] = [];
@@ -216,6 +340,7 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
   const changedProps: Record<string, string[]> = {};
   const changedState: string[] = [];
   const nextSeen = new Map<string, Fiber>();
+  const nextIds = new WeakMap<Element, string>();
 
   const visit = (f: Fiber, parent: string | null) => {
     let here = parent;
@@ -235,8 +360,9 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
         clip: clipOf(hosts[0]),
         props: Object.entries(props)
           .filter(([k, v]) => k !== 'children' || v !== undefined)
-          .map(([k, v]) => info(k, v)),
+          .map(([k, v]) => info(k, v, f)),
         state: states.map((v, i) => info(names[i] ?? `state ${i + 1}`, v)),
+        elements: elementsOf(f, id, props, states, nextIds),
         ...(f.key != null ? { key: String(f.key) } : {}),
         paints: hosts.some(paints),
       });
@@ -250,8 +376,7 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
           if (old && parent) {
             const was = (old.memoizedProps ?? {}) as Record<string, unknown>;
             const keys = new Set([...Object.keys(props), ...Object.keys(was)]);
-            // functions travel down event wires, not up pipes, so they don't count as changed data
-            const diff = [...keys].filter((k) => k !== 'children' && typeof props[k] !== 'function' && !Object.is(props[k], was[k]));
+            const diff = [...keys].filter((k) => k !== 'children' && !Object.is(props[k], was[k]));
             if (diff.length) changedProps[`${parent}>${id}`] = diff;
           }
           if (old) {
@@ -267,6 +392,7 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
   };
   if (root?.current) visit(root.current, null);
 
+  elementIds = nextIds;
   const snap: Snapshot = {
     viewport: { w: window.innerWidth, h: window.innerHeight },
     nodes,
@@ -277,7 +403,7 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
   const mounted = [...nextSeen.keys()].filter((id) => !seen.has(id));
   const unmounted = [...seen.keys()].filter((id) => !nextSeen.has(id));
   seen = nextSeen;
-  const cause = lastCause && performance.now() - lastCause.at < 600 ? { type: lastCause.type, component: lastCause.component } : undefined;
+  const cause = lastCause && performance.now() - lastCause.at < 600 ? { type: lastCause.type, component: lastCause.component, element: lastCause.element } : undefined;
   lastCause = null;
   return { snapshot: snap, commit: { index: commitIndex++, cause, rendered, changedProps, changedState, mounted, unmounted } };
 }
@@ -312,7 +438,8 @@ for (const type of ['click', 'input', 'submit', 'keydown', 'change']) {
     (e) => {
       const target = e.target instanceof Element ? e.target : null;
       const comp = target ? componentAbove(fiberOfElement(target)) : undefined;
-      if (comp) lastCause = { type, component: idOf(comp), at: performance.now() };
+      const tagged = target?.closest('[data-cc]');
+      if (comp) lastCause = { type, component: idOf(comp), element: tagged ? elementIds.get(tagged) : undefined, at: performance.now() };
     },
     true,
   );

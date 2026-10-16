@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { KIND_COLOR, type ValueKind } from '../palette';
 import { useClip } from './clip';
-import { perfNow, useActivity } from './activity';
+import { useActivity } from './activity';
 import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
@@ -130,7 +130,7 @@ export function Pipe({
     const live = pulseKey ? activity?.latest(pulseKey) : undefined;
     if (live !== undefined && live !== lastLive.current) {
       lastLive.current = live;
-      sent.current.push(t - (perfNow() - live));
+      sent.current.push(t - (activity!.now() - live));
     }
     const dur = Math.min(1.6, 0.35 + geo.len * 0.18);
     sent.current = sent.current.filter((s) => t - s < dur).slice(-4);

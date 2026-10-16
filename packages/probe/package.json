@@ -7,9 +7,12 @@
     "./runtime": "./src/runtime.ts",
     "./vite": "./src/vite.ts"
   },
-  "scripts": { "typecheck": "tsc --noEmit -p ." },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
   "dependencies": {
-    "@codecraft/visuals": "workspace:*"
+    "@codecraft/visuals": "workspace:*",
+    "@babel/parser": "8.0.7"
   },
   "devDependencies": {
     "typescript": "7.0.2",

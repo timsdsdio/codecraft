@@ -1,7 +1,12 @@
 // Renders a whole factory from a layout: floors, casings, tanks, pipes, pistons, belts, folds,
 // display links and (optionally) the screen on top.
 import { useMemo } from 'react';
-import { Activity, ActivityProvider } from './activity';
+import { useFrame } from '@react-three/fiber';
+import { Activity, ActivityProvider, useActivity } from './activity';
+import { Duct } from './Duct';
+import { Emitter } from './Emitter';
+import { Splitter } from './Splitter';
+import { Zaps } from './Zaps';
 import { Avatar } from './Avatar';
 import { Belt } from './Belt';
 import { Casing } from './Casing';
@@ -9,7 +14,8 @@ import { ClipRegion } from './clip';
 import { DisplayLink } from './DisplayLink';
 import { Floor } from './Floor';
 import { Fold } from './Fold';
-import { floorY, type FactoryLayout, type TankL, type Vec3 } from './layout';
+import { floorY, type EmitterL, type FactoryLayout, type TankL, type Vec3 } from './layout';
+import type { Cargo } from './activity';
 import { Pipe } from './Pipe';
 import { Piston } from './Piston';
 import { Screen } from './Screen';
@@ -81,7 +87,23 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
 
         {layout.casings.filter((c) => c.depth <= top).map((c) => (
           <ClipRegion key={c.id} box={c.clip}>
-            <Casing pos={c.pos} size={c.size} name={c.name} label={labels} renderEvery={every} renderOffset={at(c.id)} pulseKey={c.id} />
+            <Casing
+              pos={c.pos}
+              size={c.size}
+              name={c.name}
+              label={labels}
+              renderEvery={every}
+              renderOffset={at(c.id)}
+              pulseKey={c.id}
+              inspect={{
+                label: `<${c.name}>`,
+                kind: 'object',
+                value: {
+                  props: Object.fromEntries(c.props.map((p) => [p.name, p.value ?? p.preview])),
+                  state: Object.fromEntries(c.state.map((p) => [p.name, p.value ?? p.preview])),
+                },
+              }}
+            />
           </ClipRegion>
         ))}
         {layout.tanks.filter((t) => showsFloor(t.owner)).map((t, i) => (
@@ -92,21 +114,59 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
           .filter((p) => (wires || !p.wire || chain.includes(p.id)) && showsFloor(p.wire ? p.to : p.from))
           .map((p) => {
             const hot = chain.indexOf(p.id);
+            if (!p.wire)
+              return (
+                <ClipRegion key={p.id} box={p.clip}>
+                  <Duct
+                    points={p.points}
+                    kind={p.kind}
+                    ductKey={p.id}
+                    sendEvery={every}
+                    sendOffset={at(p.from) + 0.1}
+                    demoCargo={{ label: p.props.map((x) => x.name).join(', '), kind: p.kind }}
+                  />
+                </ClipRegion>
+              );
             return (
               <ClipRegion key={p.id} box={p.clip}>
                 <Pipe
                   points={p.points}
                   kind={p.kind}
-                  radius={p.wire ? (hot >= 0 ? 0.024 : 0.016) : 0.035}
-                  sendEvery={p.wire ? (hot >= 0 ? every : undefined) : every}
-                  sendOffset={p.wire ? hot * hop : at(p.from) + 0.1}
-                  dim={p.wire && hot < 0}
+                  radius={hot >= 0 ? 0.024 : 0.016}
+                  sendEvery={hot >= 0 ? every : undefined}
+                  sendOffset={hot * hop}
+                  dim={hot < 0}
                   pulseKey={p.id}
                 />
               </ClipRegion>
             );
           })}
 
+        {layout.splitters.filter((sp) => showsFloor(sp.owner)).map((sp) => (
+          <ClipRegion key={`split:${sp.owner}`} box={sp.clip}>
+            <Splitter pos={sp.pos} pulseKey={`split:${sp.owner}`} />
+          </ClipRegion>
+        ))}
+        {layout.ducts.filter((d) => showsFloor(d.from)).map((d) => (
+          <ClipRegion key={d.id} box={d.clip}>
+            <Duct
+              points={d.points}
+              kind={d.kind}
+              ductKey={d.id}
+              radius={0.03}
+              sendEvery={every}
+              sendOffset={at(d.from) + 0.3}
+              demoCargo={{ label: d.props.map((x) => ('path' in x ? String(x.path) : x.name)).join(', '), kind: d.kind }}
+            />
+          </ClipRegion>
+        ))}
+        {layout.emitters.filter((e) => showsFloor(e.owner)).map((e) => (
+          <ClipRegion key={`emit:${e.id}`} box={e.clip}>
+            <Emitter pos={e.pos} kind={e.kind} pulseKey={`emit:${e.id}`} inspect={emitterCargo(e)} />
+          </ClipRegion>
+        ))}
+        {activity && <Zaps />}
+        {activity && <ActivityClock />}
         {layout.links.filter((l) => (depthOf.get(l.id) ?? 1) <= top && top >= layout.floors).map((l) => (
           <ClipRegion key={l.id} box={l.clip}>
             <DisplayLink from={l.from} rect={l.rect} screenY={layout.screenY} renderEvery={every} renderOffset={at(l.id) + 0.3} pulseKey={`link:${l.id}`} />
@@ -119,3 +179,17 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
   );
 }
 
+/** Advances the activity clock once per frame. */
+function ActivityClock() {
+  const activity = useActivity();
+  useFrame((_, dt) => activity?.advance(Math.min(dt, 0.1)));
+  return null;
+}
+
+/** What the inspector shows for an emitter: each slot's current value and each handler's calls. */
+function emitterCargo(e: EmitterL): Cargo {
+  const el = e.element;
+  const slots = el.slots.map((sl) => [sl.name, sl.reads.length === 1 ? (sl.reads[0].value ?? sl.reads[0].preview) : Object.fromEntries(sl.reads.map((rd) => [rd.path, rd.value ?? rd.preview]))]);
+  const handlers = el.handlers.map((h) => [h.event, h.calls.map((c) => `${c.fn}(${c.args.map((x) => x.path).join(', ')})`).join('; ')]);
+  return { label: `<${el.tag}>`, kind: e.kind === 'value' ? 'object' : 'function', value: Object.fromEntries([...slots, ...handlers]) };
+}

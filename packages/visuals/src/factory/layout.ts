@@ -35,6 +35,39 @@ export interface ValueInfo {
   preview: string;
   /** arrays: their length */
   size?: number;
+  /** a JSON-safe copy of the value (depth- and length-limited), for inspecting */
+  value?: unknown;
+  /** functions: where the function was created, and the state tank when it's a state setter */
+  origin?: { component: string; tank?: string };
+  /** functions: a stable id per function object, so a new closure can be told from the old one */
+  fnId?: number;
+}
+
+/** A value an element reads: `todo.title`. */
+export interface ReadInfo extends ValueInfo {
+  /** the expression path, e.g. `todo.title` */
+  path: string;
+}
+
+/** A call a handler makes: `onToggle(todo.id)`. */
+export interface CallInfo {
+  fn: string;
+  args: ReadInfo[];
+  /** where the call lands: the function's origin, or a state tank for state setters */
+  target?: { component: string; tank?: string };
+}
+
+/** One DOM element in a component's own JSX that reads data or handles events. */
+export interface ElementInfo {
+  /** unique within the snapshot */
+  id: string;
+  tag: string;
+  rect: Rect;
+  clip?: Rect;
+  /** each attribute (or `text`) that's fed by data, and what it reads */
+  slots: { name: string; reads: ReadInfo[] }[];
+  /** each event attribute and the calls its handler makes */
+  handlers: { event: string; calls: CallInfo[] }[];
 }
 
 /** One mounted component instance, as the probe reports it. */
@@ -53,6 +86,8 @@ export interface CompNode {
   key?: string;
   /** false when the component's own JSX paints nothing visible (only lays out children) */
   paints?: boolean;
+  /** elements in its own JSX that read data or handle events (when the source was analysed) */
+  elements?: ElementInfo[];
 }
 
 /** A scrollable element and the component whose JSX renders it. */
@@ -73,6 +108,8 @@ export interface CasingL {
   id: string;
   name: string;
   depth: number;
+  props: ValueInfo[];
+  state: ValueInfo[];
   /** centre of the casing's base */
   pos: Vec3;
   size: Vec3;
@@ -131,6 +168,25 @@ export interface FoldL {
   y1: number;
 }
 
+/** Splits a component's props into the individual values its JSX reads (sits on the casing). */
+export interface SplitterL {
+  owner: string;
+  pos: Vec3;
+  clip?: Box;
+}
+
+/** Hangs under one element on the screen and paints it; `handler` when it only handles events. */
+export interface EmitterL {
+  /** the element's id */
+  id: string;
+  owner: string;
+  element: ElementInfo;
+  /** centre of the emitter */
+  pos: Vec3;
+  kind: 'value' | 'handler';
+  clip?: Box;
+}
+
 export interface FactoryLayout {
   floors: number;
   /** world width (x) and depth (z) of the screen */
@@ -143,7 +199,24 @@ export interface FactoryLayout {
   belts: BeltL[];
   links: LinkL[];
   folds: FoldL[];
+  splitters: SplitterL[];
+  emitters: EmitterL[];
+  /** itemducts from each splitter to its emitters; id `duct:<element id>` */
+  ducts: PipeL[];
 }
+
+/** Length of a polyline. */
+export function pathLength(points: Vec3[]): number {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) {
+    const [a, b] = [points[i - 1], points[i]];
+    len += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  }
+  return len;
+}
+
+export const EMITTER = { w: 0.14, h: 0.1 };
+export const SPLITTER = 0.2;
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -184,7 +257,7 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
       cx = wx(scroll.viewport.x + scroll.viewport.w / 2);
       cz = wz(scroll.viewport.y) + size[2] / 2 + 0.04;
     }
-    casings.set(n.id, { id: n.id, name: n.name, depth: d, pos: [cx, floorY(d) + SLAB, cz], size, clip: n.clip ? toBox(n.clip) : undefined });
+    casings.set(n.id, { id: n.id, name: n.name, depth: d, props: n.props, state: n.state, pos: [cx, floorY(d) + SLAB, cz], size, clip: n.clip ? toBox(n.clip) : undefined });
   }
 
   // ── state tanks: in a row beside the casing (−x side) ──
@@ -278,10 +351,43 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
     }
   }
 
-  // ── display links: a beam from each painting casing up to its patch of screen ──
+  // ── inside a component's JSX: splitter on the casing, an emitter under each element, ducts between ──
+  const splitters: SplitterL[] = [];
+  const emitters: EmitterL[] = [];
+  const ducts: PipeL[] = [];
   const links: LinkL[] = [];
   for (const n of snap.nodes) {
-    if (n.paints === false) continue;
+    if (!n.elements?.length) continue;
+    const c = casings.get(n.id)!;
+    const top = c.pos[1] + c.size[1];
+    const sp: Vec3 = [c.pos[0], top, c.pos[2]];
+    splitters.push({ owner: n.id, pos: sp, clip: c.clip });
+    const ceiling = floorY(depth(n) + 1);
+    n.elements.forEach((el, i) => {
+      const box = toBox(el.rect);
+      const ex = (box.x0 + box.x1) / 2;
+      const ez = (box.z0 + box.z1) / 2;
+      const ey = ceiling - 0.06 - EMITTER.h / 2;
+      const clip = el.clip ? toBox(el.clip) : c.clip;
+      const kind = el.slots.length ? 'value' : 'handler';
+      emitters.push({ id: el.id, owner: n.id, element: el, pos: [ex, ey, ez], kind, clip });
+      const lane = ey - 0.22 - i * 0.035;
+      ducts.push({
+        id: `duct:${el.id}`,
+        from: n.id,
+        to: el.id,
+        points: [[sp[0], top + SPLITTER * 0.8, sp[2]], [sp[0], lane, sp[2]], [ex, lane, sp[2]], [ex, lane, ez], [ex, ey - EMITTER.h / 2, ez]],
+        kind: el.slots[0]?.reads[0]?.kind ?? 'function',
+        props: el.slots.flatMap((s) => s.reads),
+        clip,
+      });
+      links.push({ id: el.id, from: [ex, ey + EMITTER.h / 2, ez], rect: box, clip });
+    });
+  }
+
+  // ── display links: a beam from each painting casing up to its patch of screen ──
+  for (const n of snap.nodes) {
+    if (n.paints === false || n.elements?.length) continue;
     const c = casings.get(n.id)!;
     links.push({ id: n.id, from: [c.pos[0], c.pos[1] + c.size[1], c.pos[2]], rect: toBox(n.rect), clip: c.clip });
   }
@@ -297,6 +403,9 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
     belts,
     links,
     folds,
+    splitters,
+    emitters,
+    ducts,
   };
 }
 

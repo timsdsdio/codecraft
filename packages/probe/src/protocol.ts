@@ -7,11 +7,11 @@ export const CHANNEL = 'codecraft';
 /** What happened in one React commit. Ids are component ids from the snapshot. */
 export interface CommitRecord {
   index: number;
-  /** the user event that most likely caused this commit */
-  cause?: { type: string; component: string };
+  /** the user event that most likely caused this commit, and the tagged element it started on */
+  cause?: { type: string; component: string; element?: string };
   /** components that ran their render function */
   rendered: string[];
-  /** pipe id (`parent>child`) → names of the data (non-function) props whose values changed */
+  /** pipe id (`parent>child`) → names of the props whose values changed */
   changedProps: Record<string, string[]>;
   /** tank ids (`component:stateN`) whose value changed */
   changedState: string[];

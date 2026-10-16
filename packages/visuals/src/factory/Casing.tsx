@@ -8,7 +8,7 @@ import { FACTORY } from '../palette';
 import { Label } from '../Label';
 import { Cog } from './Cog';
 import { useClip } from './clip';
-import { perfNow, useActivity } from './activity';
+import { useActivity, type Cargo } from './activity';
 import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
@@ -19,6 +19,7 @@ export function Casing({
   renderEvery,
   renderOffset = 0,
   pulseKey,
+  inspect,
   label = true,
   dim = false,
 }: {
@@ -32,6 +33,8 @@ export function Casing({
   renderOffset?: number;
   /** live: read render pulses for this key from the Activity store */
   pulseKey?: string;
+  /** what the inspector shows when this casing is aimed at */
+  inspect?: Cargo;
   label?: boolean;
   dim?: boolean;
 }) {
@@ -60,9 +63,9 @@ export function Casing({
     const now = clock.elapsedTime - renderOffset;
     if (renderEvery && now > 0 && now - last.current > renderEvery) last.current = now;
     const live = pulseKey ? activity?.latest(pulseKey) : undefined;
-    const kLive = live === undefined ? 0 : Math.max(0, 1 - (perfNow() - live) / 0.9);
+    const kLive = live === undefined ? 0 : Math.max(0, 1 - (activity!.now() - live) / 0.9);
     const k = Math.max(kLive, 1 - (now - last.current) / 0.9, 0); // 1 right after a render, fading out
-    spin.current += dt * (0.25 + 7 * k);
+    spin.current += dt * (activity ? activity.rate() : 1) * (0.25 + 7 * k);
     if (cog.current) cog.current.rotation.z = spin.current;
     if (glass.current) glass.current.emissiveIntensity = (dim ? 0.04 : 0.1) + 0.55 * k;
   });
@@ -76,7 +79,7 @@ export function Casing({
           <meshStandardMaterial {...frame} clippingPlanes={clip} />
         </mesh>
       ))}
-      <mesh position={[0, h / 2, 0]}>
+      <mesh position={[0, h / 2, 0]} userData={{ inspect }}>
         <boxGeometry args={[w - t, h - t, d - t]} />
         <meshStandardMaterial
           ref={glass}

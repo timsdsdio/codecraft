@@ -22,7 +22,7 @@ export function useMetal(role: MetalRole, tint: string = FACTORY.casing) {
       return {
         color: '#03060a',
         emissive: tint,
-        emissiveIntensity: role === 'rail' ? 0.55 : 1.7,
+        emissiveIntensity: role === 'rail' ? 0.35 : 1.7,
         metalness: 0.5,
         roughness: 0.4,
       };

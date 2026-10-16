@@ -49,6 +49,18 @@ body,
   padding: 1px 10px;
   background: rgba(2, 8, 16, 0.7);
 }
+.hud-button {
+  pointer-events: auto;
+  min-height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  color: #d6f7ff;
+  background: rgba(2, 8, 16, 0.75);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
 .hud-center {
   position: absolute;
   z-index: 20;
@@ -104,4 +116,50 @@ body,
   border-radius: 3px;
   padding: 0 4px;
   margin: 0 1px;
+}
+
+.hud-time {
+  position: absolute;
+  z-index: 20;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  top: calc(10px + var(--sa-t));
+  display: flex;
+  gap: 6px;
+}
+.hud-time button {
+  min-height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  color: #d6f7ff;
+  background: rgba(2, 8, 16, 0.75);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.hud-inspect {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: calc(52px + var(--sa-t));
+  transform: translateX(-50%);
+  max-width: min(420px, calc(100% - 24px));
+  max-height: 45vh;
+  overflow: hidden;
+  padding: 8px 12px;
+  background: rgba(2, 8, 16, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  pointer-events: none;
+}
+.hud-inspect-title {
+  font-weight: 700;
+  text-shadow: 0 0 6px currentColor;
+}
+.hud-inspect pre {
+  margin: 4px 0 0;
+  font: 12px/1.45 'JetBrains Mono', ui-monospace, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #c9e9f2;
 }

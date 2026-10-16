@@ -13,8 +13,19 @@ depends on, each with its reason. When one changes, edit its entry.
 - **Scrolling is clipping.** A scroll area is a conveyor belt on its owner's floor. Its content is
   clipped by four planes forming a prism up to the screen (a "fold"), so no special scroll physics
   is needed.
-- **One pipe per child, carrying all its data props; function props are downward event wires.**
-  This keeps the factory readable.
+- **Props travel as items in itemducts**, one duct per child. Each item is one changed prop and
+  carries a copy of its value, so it can be inspected in flight. Function props are items too
+  (red cards), and they travel whenever the parent creates a new closure.
+- **Inside a component, a splitter does the JSX's property access.** It sits on the casing and
+  sends each value the JSX reads (`todo.title`, `todo.done`) to an emitter hung under the element
+  that uses it. The emitter's beam paints just that element. The probe's Vite plugin learns which
+  element reads what by parsing each component's JSX in dev, and tags the elements with
+  `data-cc` attributes.
+- **Calls are lasers, not wires.** When a handler calls a function, a beam fires from the
+  element's emitter to where the function was created, with the arguments riding along it. Calls
+  to a state setter land on that exact state tank.
+- **Activity runs on its own clock**, which can be paused, slowed to 0.1×, or replayed for the
+  last update. The app itself updates instantly; only the factory's animation is affected.
 - **Context is AE2-style wireless.** A provider is an access point. Its range is the provider's
   footprint column, which contains exactly its possible consumers.
 - **Activity is replayed; structure is live.** Commits are animated after the fact, and merged
