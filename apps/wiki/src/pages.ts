@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import type { MDXComponents } from 'mdx/types';
 import { slugify, WIKILINK_RE } from '../remark-wikilinks.ts';
 
-export type Status = 'prototype' | 'draft' | 'open' | 'settled';
+export type Status = 'draft' | 'open' | 'settled';
 
 export interface Frontmatter {
   title: string;

@@ -1,5 +1,5 @@
-// Two looks for the same machines. "tron": dark bodies with glowing neon edges, as in the Socketworld
-// prototype. "brass": Create-style brass, copper and andesite. Pieces ask for material props by role.
+// Two looks for the same machines. "tron": dark bodies with glowing neon edges. "brass": Create-style
+// brass, copper and andesite. Pieces ask for material props by role.
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { FACTORY } from '../palette';
 

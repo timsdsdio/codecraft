@@ -98,7 +98,6 @@ export function ComponentTable() {
 }
 
 const STATUS_TEXT: Record<Status, { label: string; body: string }> = {
-  prototype: { label: 'Prototype', body: 'This describes how the Socketworld prototype works. It is a starting point, not a decision.' },
   draft: { label: 'Draft', body: 'This is a proposed design that has not been agreed yet.' },
   open: { label: 'Open question', body: 'This page collects options for something that has not been decided.' },
   settled: { label: 'Settled', body: 'This design has been agreed. Changes should be recorded in DEVIATIONS.md.' },

@@ -14,7 +14,7 @@ apps/wiki/          the design wiki (Vite + React + MDX, 3D embeds)
 packages/visuals/   factory machines (R3F/drei) + layoutFactory(); shared by the wiki and the future game
 docs/STACK.md       the stack and lessons the real app will follow
 DEVIATIONS.md       decisions and departures from the plan, with reasons
-socketworld-src.tar.gz   the original prototype (unpacked copy in reference/, git-ignored)
+socketworld-src.tar.gz   Socketworld, an earlier experiment that packages/visuals started from (reference only)
 ```
 
 ```bash

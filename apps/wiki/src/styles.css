@@ -1,4 +1,4 @@
-/* CodeCraft wiki. Socketworld's Tron look (near-black, neon cyan, glass panels) in a wiki layout. */
+/* CodeCraft wiki: near-black, neon cyan and glass panels, in a wiki layout. */
 :root {
   --bg: #02040a;
   --panel: rgba(6, 14, 26, 0.78);
@@ -411,9 +411,6 @@ pre code {
 }
 .cc-banner strong {
   color: var(--c);
-}
-.cc-status-prototype {
-  --c: var(--blue);
 }
 .cc-status-draft {
   --c: var(--amber);
