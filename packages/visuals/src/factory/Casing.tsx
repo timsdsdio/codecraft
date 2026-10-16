@@ -8,6 +8,7 @@ import { FACTORY } from '../palette';
 import { Label } from '../Label';
 import { Cog } from './Cog';
 import { useClip } from './clip';
+import { perfNow, useActivity } from './activity';
 import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
@@ -17,6 +18,7 @@ export function Casing({
   name,
   renderEvery,
   renderOffset = 0,
+  pulseKey,
   label = true,
   dim = false,
 }: {
@@ -28,10 +30,13 @@ export function Casing({
   renderEvery?: number;
   /** demo: delay before the first render, in seconds */
   renderOffset?: number;
+  /** live: read render pulses for this key from the Activity store */
+  pulseKey?: string;
   label?: boolean;
   dim?: boolean;
 }) {
   const clip = useClip();
+  const activity = useActivity();
   const metal = useMetal('frame');
   const frame = { ...metal, emissiveIntensity: metal.emissiveIntensity * (dim ? 0.25 : 1) };
   const flange = useMetal('accent');
@@ -54,7 +59,9 @@ export function Casing({
   useFrame(({ clock }, dt) => {
     const now = clock.elapsedTime - renderOffset;
     if (renderEvery && now > 0 && now - last.current > renderEvery) last.current = now;
-    const k = Math.max(0, 1 - (now - last.current) / 0.9); // 1 right after a render, fading out
+    const live = pulseKey ? activity?.latest(pulseKey) : undefined;
+    const kLive = live === undefined ? 0 : Math.max(0, 1 - (perfNow() - live) / 0.9);
+    const k = Math.max(kLive, 1 - (now - last.current) / 0.9, 0); // 1 right after a render, fading out
     spin.current += dt * (0.25 + 7 * k);
     if (cog.current) cog.current.rotation.z = spin.current;
     if (glass.current) glass.current.emissiveIntensity = (dim ? 0.04 : 0.1) + 0.55 * k;

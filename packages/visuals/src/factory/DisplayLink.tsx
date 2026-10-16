@@ -5,10 +5,26 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { FACTORY } from '../palette';
 import { useClip } from './clip';
+import { perfNow, useActivity } from './activity';
 import type { Box, Vec3 } from './layout';
 
-export function DisplayLink({ from, rect, screenY, renderEvery, renderOffset = 0 }: { from: Vec3; rect: Box; screenY: number; renderEvery?: number; renderOffset?: number }) {
+export function DisplayLink({
+  from,
+  rect,
+  screenY,
+  renderEvery,
+  renderOffset = 0,
+  pulseKey,
+}: {
+  from: Vec3;
+  rect: Box;
+  screenY: number;
+  renderEvery?: number;
+  renderOffset?: number;
+  pulseKey?: string;
+}) {
   const clip = useClip();
+  const activity = useActivity();
   const top = screenY - 0.004;
   const cx = (rect.x0 + rect.x1) / 2;
   const cz = (rect.z0 + rect.z1) / 2;
@@ -20,7 +36,9 @@ export function DisplayLink({ from, rect, screenY, renderEvery, renderOffset = 0
   useFrame(({ clock }) => {
     const t = clock.elapsedTime - renderOffset;
     if (renderEvery && t > 0 && t - last.current > renderEvery) last.current = t;
-    const k = Math.max(0, 1 - (t - last.current) / 0.7);
+    const live = pulseKey ? activity?.latest(pulseKey) : undefined;
+    const kLive = live === undefined ? 0 : Math.max(0, 1 - (perfNow() - live) / 0.7);
+    const k = Math.max(kLive, 1 - (t - last.current) / 0.7, 0);
     beam.current?.color.copy(base).multiplyScalar(0.25 + 2.2 * k);
     edge.current?.color.copy(base).multiplyScalar(0.5 + 2.5 * k);
   });

@@ -1,6 +1,7 @@
 // Renders a whole factory from a layout: floors, casings, tanks, pipes, pistons, belts, folds,
 // display links and (optionally) the screen on top.
 import { useMemo } from 'react';
+import { Activity, ActivityProvider } from './activity';
 import { Avatar } from './Avatar';
 import { Belt } from './Belt';
 import { Casing } from './Casing';
@@ -32,9 +33,11 @@ export interface FactoryProps {
   scroll?: Record<string, number>;
   /** demo: an event fires in this component; its signal runs down the wires before the render wave */
   event?: string;
+  /** live: machines pulse when this store says so (keys: component id, tank id, pipe id, `link:<id>`) */
+  activity?: Activity;
 }
 
-export function Factory({ layout, screen, maxFloor, wires = false, demo = false, labels = true, avatar, tankFill, scroll, event }: FactoryProps) {
+export function Factory({ layout, screen, maxFloor, wires = false, demo = false, labels = true, avatar, tankFill, scroll, event, activity }: FactoryProps) {
   const top = maxFloor ?? layout.floors;
   const depthOf = useMemo(() => new Map(layout.casings.map((c) => [c.id, c.depth])), [layout]);
   const showsFloor = (id: string) => (depthOf.get(id) ?? 1) <= top;
@@ -57,59 +60,62 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
   const at = (id: string) => lead + ((depthOf.get(id) ?? 1) - 1) * beat;
 
   return (
-    <group>
-      {Array.from({ length: Math.min(top, layout.floors) }, (_, i) => (
-        <Floor key={i} level={i + 1} y={floorY(i + 1)} size={layout.size} label={labels} />
-      ))}
-      {screen && top >= layout.floors && <Screen size={layout.size} y={layout.screenY} draw={screen.draw} opacity={screen.opacity} />}
+    <ActivityProvider value={activity ?? null}>
+      <group>
+        {Array.from({ length: Math.min(top, layout.floors) }, (_, i) => (
+          <Floor key={i} level={i + 1} y={floorY(i + 1)} size={layout.size} label={labels} />
+        ))}
+        {screen && top >= layout.floors && <Screen size={layout.size} y={layout.screenY} draw={screen.draw} opacity={screen.opacity} />}
 
-      {layout.folds.filter((f) => showsFloor(f.owner)).map((f) => (
-        <Fold key={f.owner} box={f.box} y0={f.y0} y1={top >= layout.floors ? f.y1 : floorY(top + 1)} />
-      ))}
-      {layout.belts.filter((b) => showsFloor(b.owner)).map((b) => (
-        <Belt key={b.owner} box={b.box} y={b.y} offset={scroll?.[b.owner] ?? b.offset} />
-      ))}
-      {layout.pistons.filter((p) => showsFloor(p.owner)).map((p) => (
-        <ClipRegion key={p.owner} box={p.clip}>
-          <Piston base={p.base} heads={p.heads} />
-        </ClipRegion>
-      ))}
+        {layout.folds.filter((f) => showsFloor(f.owner)).map((f) => (
+          <Fold key={f.owner} box={f.box} y0={f.y0} y1={top >= layout.floors ? f.y1 : floorY(top + 1)} />
+        ))}
+        {layout.belts.filter((b) => showsFloor(b.owner)).map((b) => (
+          <Belt key={b.owner} box={b.box} y={b.y} offset={scroll?.[b.owner] ?? b.offset} />
+        ))}
+        {layout.pistons.filter((p) => showsFloor(p.owner)).map((p) => (
+          <ClipRegion key={p.owner} box={p.clip}>
+            <Piston base={p.base} heads={p.heads} />
+          </ClipRegion>
+        ))}
 
-      {layout.casings.filter((c) => c.depth <= top).map((c) => (
-        <ClipRegion key={c.id} box={c.clip}>
-          <Casing pos={c.pos} size={c.size} name={c.name} label={labels} renderEvery={every} renderOffset={at(c.id)} />
-        </ClipRegion>
-      ))}
-      {layout.tanks.filter((t) => showsFloor(t.owner)).map((t, i) => (
-        <Tank key={t.id} pos={t.pos} radius={t.radius} height={t.height} info={t.info} fill={tankFill?.(t) ?? 0.45 + ((i * 0.23) % 0.5)} label={labels} />
-      ))}
+        {layout.casings.filter((c) => c.depth <= top).map((c) => (
+          <ClipRegion key={c.id} box={c.clip}>
+            <Casing pos={c.pos} size={c.size} name={c.name} label={labels} renderEvery={every} renderOffset={at(c.id)} pulseKey={c.id} />
+          </ClipRegion>
+        ))}
+        {layout.tanks.filter((t) => showsFloor(t.owner)).map((t, i) => (
+          <Tank key={t.id} pos={t.pos} radius={t.radius} height={t.height} info={t.info} fill={tankFill?.(t) ?? (t.info.size !== undefined ? Math.min(1, 0.12 + t.info.size / 14) : 0.45 + ((i * 0.23) % 0.5))} label={labels} pulseKey={t.id} />
+        ))}
 
-      {layout.pipes
-        .filter((p) => (wires || !p.wire || chain.includes(p.id)) && showsFloor(p.wire ? p.to : p.from))
-        .map((p) => {
-          const hot = chain.indexOf(p.id);
-          return (
-            <ClipRegion key={p.id} box={p.clip}>
-              <Pipe
-                points={p.points}
-                kind={p.kind}
-                radius={p.wire ? (hot >= 0 ? 0.024 : 0.016) : 0.035}
-                sendEvery={p.wire ? (hot >= 0 ? every : undefined) : every}
-                sendOffset={p.wire ? hot * hop : at(p.from) + 0.1}
-                dim={p.wire && hot < 0}
-              />
-            </ClipRegion>
-          );
-        })}
+        {layout.pipes
+          .filter((p) => (wires || !p.wire || chain.includes(p.id)) && showsFloor(p.wire ? p.to : p.from))
+          .map((p) => {
+            const hot = chain.indexOf(p.id);
+            return (
+              <ClipRegion key={p.id} box={p.clip}>
+                <Pipe
+                  points={p.points}
+                  kind={p.kind}
+                  radius={p.wire ? (hot >= 0 ? 0.024 : 0.016) : 0.035}
+                  sendEvery={p.wire ? (hot >= 0 ? every : undefined) : every}
+                  sendOffset={p.wire ? hot * hop : at(p.from) + 0.1}
+                  dim={p.wire && hot < 0}
+                  pulseKey={p.id}
+                />
+              </ClipRegion>
+            );
+          })}
 
-      {layout.links.filter((l) => (depthOf.get(l.id) ?? 1) <= top && top >= layout.floors).map((l) => (
-        <ClipRegion key={l.id} box={l.clip}>
-          <DisplayLink from={l.from} rect={l.rect} screenY={layout.screenY} renderEvery={every} renderOffset={at(l.id) + 0.3} />
-        </ClipRegion>
-      ))}
+        {layout.links.filter((l) => (depthOf.get(l.id) ?? 1) <= top && top >= layout.floors).map((l) => (
+          <ClipRegion key={l.id} box={l.clip}>
+            <DisplayLink from={l.from} rect={l.rect} screenY={layout.screenY} renderEvery={every} renderOffset={at(l.id) + 0.3} pulseKey={`link:${l.id}`} />
+          </ClipRegion>
+        ))}
 
-      {avatar && <Avatar pos={avatar.pos} yaw={avatar.yaw} />}
-    </group>
+        {avatar && <Avatar pos={avatar.pos} yaw={avatar.yaw} />}
+      </group>
+    </ActivityProvider>
   );
 }
 

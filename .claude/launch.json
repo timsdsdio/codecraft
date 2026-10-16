@@ -1,11 +1,8 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "wiki",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/wiki", "dev"],
-      "port": 5310
-    }
+    { "name": "wiki", "runtimeExecutable": "pnpm", "runtimeArgs": ["--dir", "apps/wiki", "dev"], "port": 5310 },
+    { "name": "todo", "runtimeExecutable": "pnpm", "runtimeArgs": ["--dir", "apps/todo", "dev"], "port": 5320 },
+    { "name": "game", "runtimeExecutable": "pnpm", "runtimeArgs": ["--dir", "apps/game", "dev"], "port": 5330 }
   ]
 }

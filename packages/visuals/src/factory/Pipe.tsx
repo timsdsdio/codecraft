@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { KIND_COLOR, type ValueKind } from '../palette';
 import { useClip } from './clip';
+import { perfNow, useActivity } from './activity';
 import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
@@ -60,6 +61,7 @@ export function Pipe({
   sendOffset = 0,
   reverse = false,
   dim = false,
+  pulseKey,
 }: {
   points: Vec3[];
   kind: ValueKind;
@@ -70,8 +72,12 @@ export function Pipe({
   /** slugs travel from the last point to the first (event wires) */
   reverse?: boolean;
   dim?: boolean;
+  /** live: send a slug whenever the Activity store pulses this key */
+  pulseKey?: string;
 }) {
   const clip = useClip();
+  const activity = useActivity();
+  const lastLive = useRef<number | undefined>(undefined);
   const coupling = useMetal('frame', KIND_COLOR[kind]);
   const key = JSON.stringify(points);
   const geo = useMemo(() => {
@@ -120,6 +126,11 @@ export function Pipe({
     if (sendEvery && t - sendOffset - lastSend.current > sendEvery && t > sendOffset) {
       lastSend.current = t - sendOffset;
       sent.current.push(t);
+    }
+    const live = pulseKey ? activity?.latest(pulseKey) : undefined;
+    if (live !== undefined && live !== lastLive.current) {
+      lastLive.current = live;
+      sent.current.push(t - (perfNow() - live));
     }
     const dur = Math.min(1.6, 0.35 + geo.len * 0.18);
     sent.current = sent.current.filter((s) => t - s < dur).slice(-4);

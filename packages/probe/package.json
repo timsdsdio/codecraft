@@ -1,0 +1,19 @@
+{
+  "name": "@codecraft/probe",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/protocol.ts",
+    "./runtime": "./src/runtime.ts",
+    "./vite": "./src/vite.ts"
+  },
+  "scripts": { "typecheck": "tsc --noEmit -p ." },
+  "dependencies": {
+    "@codecraft/visuals": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "@types/node": "^24.0.0"
+  }
+}

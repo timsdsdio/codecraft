@@ -33,6 +33,8 @@ export interface ValueInfo {
   kind: ValueKind;
   /** short printable preview, e.g. `"Buy milk"` or `Array(10)` */
   preview: string;
+  /** arrays: their length */
+  size?: number;
 }
 
 /** One mounted component instance, as the probe reports it. */

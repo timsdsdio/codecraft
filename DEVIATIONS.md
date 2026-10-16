@@ -27,9 +27,16 @@ depends on, each with its reason. When one changes, edit its entry.
 
 - **No server in the first version.** A single-player visualizer needs none. `docs/STACK.md`
   applies once todos sync through Electric or players can visit each other's apps.
-- **The app runs unmodified** in a same-origin iframe laid flat with CSS3D. It's read through the
-  React DevTools global hook, which a Vite plugin injects as a script tag in dev. Fiber internals
-  aren't a public API, so the React major version is pinned and covered by a test.
+- **The app runs unmodified, in an iframe on its own origin.** Its dev server adds the probe
+  (`@codecraft/probe/vite`): a DevTools hook stub inlined ahead of React, then the probe runtime.
+  All interaction goes through `postMessage` in both directions. Clicks and wheel scrolls are
+  carried out by the probe inside the page, so the game never needs same-origin access. Fiber
+  internals aren't a public API, so the React major version is pinned.
+- **The screen is placed with three.js's `CSS3DRenderer`, not drei's `<Html>`.** `<Html>` hit
+  React 19's "synchronously unmount a root" race and lost its contents. The iframe is created
+  once, outside React, so no re-render can reload the app.
+- **The game asks for a snapshot until it gets one** (`sync`). The probe's first message can
+  arrive before the game is listening.
 - **`layoutFactory()` is a pure function in `packages/visuals`.** The wiki's diagrams run the
   reference app's mock snapshot through it, so the docs and the game share one layout.
 - **Visual components are props-driven**, with no stores, so the same components can be driven by
@@ -47,5 +54,5 @@ depends on, each with its reason. When one changes, edit its entry.
   browsers' WebGL context limits while letting each embed keep its bloom post-processing, which
   drei `<View>` (one shared canvas) wouldn't. Inline embeds don't orbit on touch screens, so the
   page still scrolls; the fullscreen explorer does.
-- **The dev server listens on the local network** (`vite --host`) so the wiki can be opened on a
-  phone.
+- **Dev servers listen on the local network** (`vite --host`) so the wiki and the game can be
+  opened on a phone.

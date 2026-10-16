@@ -1,0 +1,107 @@
+:root {
+  --cyan: #00fff0;
+  --line: rgba(0, 255, 240, 0.38);
+  --sa-t: env(safe-area-inset-top, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
+  --sa-l: env(safe-area-inset-left, 0px);
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #03070f;
+  color: #d6f7ff;
+  font: 13px/1.5 'JetBrains Mono', ui-monospace, monospace;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+}
+.game {
+  position: fixed;
+  inset: 0;
+  touch-action: none;
+}
+.hud {
+  position: absolute;
+  z-index: 20;
+  top: calc(10px + var(--sa-t));
+  left: calc(12px + var(--sa-l));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.hud-title {
+  font: 700 14px 'Orbitron', sans-serif;
+  letter-spacing: 0.16em;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 255, 240, 0.6), 0 0 2px #000;
+}
+.hud-level {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 10px;
+  background: rgba(2, 8, 16, 0.7);
+}
+.hud-center {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  text-align: center;
+  background: rgba(2, 8, 16, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  pointer-events: none;
+}
+.hud-typing {
+  top: auto;
+  bottom: calc(24px + var(--sa-b));
+  transform: translateX(-50%);
+}
+.crosshair {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--cyan), var(--cyan)) center / 2px 14px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) center / 14px 2px no-repeat;
+  filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 3px var(--cyan));
+}
+.hud-hint {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(14px + var(--sa-b));
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 6px 12px;
+  font-size: 12px;
+  text-align: center;
+  background: rgba(2, 8, 16, 0.8);
+  border: 1px solid rgba(0, 255, 240, 0.16);
+  border-radius: 8px;
+  pointer-events: none;
+}
+.hud-hint kbd {
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin: 0 1px;
+}

@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import { KIND_COLOR } from '../palette';
 import { Label } from '../Label';
 import { useClip } from './clip';
+import { perfNow, useActivity } from './activity';
 import { useMetal } from './look';
 import type { ValueInfo, Vec3 } from './layout';
 
@@ -16,6 +17,7 @@ export function Tank({
   info,
   fill = 0.7,
   label = true,
+  pulseKey,
 }: {
   pos: Vec3;
   radius?: number;
@@ -23,14 +25,21 @@ export function Tank({
   info: ValueInfo;
   fill?: number;
   label?: boolean;
+  /** live: slosh when the Activity store pulses this key */
+  pulseKey?: string;
 }) {
   const clip = useClip();
+  const activity = useActivity();
+  const fluidMat = useRef<THREE.MeshBasicMaterial>(null);
   const metal = useMetal('frame', KIND_COLOR[info.kind]);
   const color = useMemo(() => new THREE.Color(KIND_COLOR[info.kind]), [info.kind]);
   const fluid = useRef<THREE.Mesh>(null);
   const level = useRef(fill);
   useFrame((_, dt) => {
     level.current += (fill - level.current) * Math.min(1, dt * 3);
+    const live = pulseKey ? activity?.latest(pulseKey) : undefined;
+    const k = live === undefined ? 0 : Math.max(0, 1 - (perfNow() - live) / 0.8);
+    fluidMat.current?.color.copy(color).multiplyScalar(1.6 + 2.5 * k);
     const m = fluid.current;
     if (m) {
       const fh = Math.max(0.02, (height - 0.08) * level.current);
@@ -46,7 +55,7 @@ export function Tank({
       </mesh>
       <mesh ref={fluid}>
         <cylinderGeometry args={[radius * 0.86, radius * 0.86, 1, 18]} />
-        <meshBasicMaterial color={color.clone().multiplyScalar(1.6)} toneMapped={false} clippingPlanes={clip} />
+        <meshBasicMaterial ref={fluidMat} color={color.clone().multiplyScalar(1.6)} toneMapped={false} clippingPlanes={clip} />
       </mesh>
       {/* frame posts, so the glass reads as a vessel */}
       {[0, 1, 2, 3].map((i) => {
