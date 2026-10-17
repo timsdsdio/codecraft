@@ -10,7 +10,8 @@ const mdxPlugin = mdx({ remarkPlugins: [remarkFrontmatter, remarkMdxFrontmatter,
 type TransformFn = Extract<Plugin['transform'], (...args: never[]) => unknown>;
 const mdxTransform = mdxPlugin.transform as TransformFn;
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/wiki/' : '/',
   // quick Cloudflare tunnels (`cloudflared tunnel --url …`) for sharing a running build
   server: { allowedHosts: ['.trycloudflare.com'] },
   plugins: [
@@ -25,4 +26,4 @@ export default defineConfig({
     react({ include: /\.(mdx|tsx?)$/ }),
   ],
   build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
-});
+}));

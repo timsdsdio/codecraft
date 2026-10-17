@@ -1,6 +1,7 @@
 // Components available inside every .mdx page without importing them.
 import type { ReactNode } from 'react';
 import type { MDXComponents } from 'mdx/types';
+import { Link } from 'wouter';
 import { Figure } from '../embeds/Embed';
 import type { SceneName } from '../embeds/spec';
 import { TODO_SOURCE } from '../data/todoApp';
@@ -26,6 +27,8 @@ export const mdxComponents: MDXComponents = {
   ),
   /** Keyboard key cap */
   Key: ({ children }: { children: ReactNode }) => <kbd className="cc-key">{children}</kbd>,
+  /** links to wiki paths go through the router, so they work under any base path */
+  a: ({ href, ...p }) => (href?.startsWith('/') ? <Link href={href} {...p} /> : <a href={href} {...p} />),
   table: (p) => (
     <div className="cc-table-wrap">
       <table className="cc-table" {...p} />

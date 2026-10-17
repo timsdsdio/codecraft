@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @codecraft/todo --filter @codecraft/game dev",
     "wiki": "pnpm --filter @codecraft/wiki dev",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @codecraft/todo --filter @codecraft/game --filter @codecraft/wiki build",
+    "start": "node server/serve.mjs",
     "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

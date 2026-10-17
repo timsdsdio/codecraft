@@ -1,16 +1,16 @@
-// Vite plugin for the app being visualised. In dev it adds the hook stub and the probe runtime to
-// index.html, ahead of the app's own scripts, and analyses each component's JSX (see analyze.ts).
-// Production builds are untouched.
+// Vite plugin for the app being visualised. It adds the hook stub and the probe runtime to
+// index.html, ahead of the app's own scripts, and instruments each component (see analyze.ts).
+// It runs in dev only, unless `{ build: true }` asks for it in production builds as well.
 import type { Plugin } from 'vite';
 import { HOOK_STUB } from './hook.ts';
 import { analyse } from './analyze.ts';
 
 const VIRTUAL = '/@codecraft-probe';
 
-export function codecraftProbe(): Plugin {
+export function codecraftProbe({ build = false }: { build?: boolean } = {}): Plugin {
   return {
     name: 'codecraft-probe',
-    apply: 'serve',
+    apply: build ? undefined : 'serve',
     // before the React plugin compiles JSX away
     enforce: 'pre',
     transform(code, id) {
@@ -24,11 +24,13 @@ export function codecraftProbe(): Plugin {
     load(id) {
       return id === '\0codecraft-probe' ? `import '@codecraft/probe/runtime';` : null;
     },
-    transformIndexHtml() {
-      return [
+    // 'pre', so production builds bundle the probe script like any other entry
+    transformIndexHtml: {
+      order: 'pre',
+      handler: () => [
         { tag: 'script', children: HOOK_STUB, injectTo: 'head-prepend' },
         { tag: 'script', attrs: { type: 'module', src: VIRTUAL }, injectTo: 'head' },
-      ];
+      ],
     },
   };
 }

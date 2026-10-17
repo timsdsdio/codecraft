@@ -8,8 +8,8 @@ import type { GameMessage, Payload } from '@codecraft/probe';
 import { useProbe } from './useProbe';
 import { Inspector } from './Inspector';
 
-/** The app being visualised runs its own dev server (apps/todo), which serves two versions of it. */
-const APP_BASE = import.meta.env.VITE_APP_URL ?? `${location.protocol}//${location.hostname}:5320/`;
+/** The app being visualised (apps/todo, two versions of it): its own dev server in development, /app/ in production. */
+const APP_BASE = import.meta.env.VITE_APP_URL ?? (import.meta.env.DEV ? `${location.protocol}//${location.hostname}:5320/` : '/app/');
 const APPS = [
   { id: 'plain', label: 'plain', path: '' },
   { id: 'memo', label: 'memoized', path: 'memo.html' },

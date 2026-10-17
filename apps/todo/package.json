@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host --port 5320 --strictPort",
-    "build": "tsc --noEmit -p . && vite build",
+    "build": "tsc --noEmit -p . && NODE_ENV=development vite build --mode development",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
