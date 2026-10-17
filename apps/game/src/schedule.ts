@@ -4,7 +4,8 @@
 //      floor to what that component calls it
 //   2. the state tanks it changed slosh
 //   3. renders climb floor by floor; changed props ride up the ducts as items
-//   4. inside each component, the values its JSX reads ride from the splitter to each element
+//   4. inside each component, the values its JSX reads ride from the splitter to each element,
+//      but only the ones that changed, since only those change what's on screen
 import type { CommitRecord } from '@codecraft/probe';
 import {
   CALL_SPEED,
@@ -112,13 +113,9 @@ export function scheduleCommit(activity: Activity, commit: CommitRecord, prev: F
         .flatMap((s) => s.reads)
         .filter((r, i, all) => all.findIndex((x) => x.path === r.path) === i)
         .filter((r) => !old || JSON.stringify(oldReads.get(r.path)?.value) !== JSON.stringify(r.value));
-      // a handler's functions are new closures when their fnId changed
-      const prevProps = new Map((prevNodes.get(id)?.props ?? []).map((p) => [p.name, p]));
-      const cards = el.handlers
-        .flatMap((h) => h.calls)
-        .map((c) => node.props.find((p) => p.name === c.fn))
-        .filter((p): p is ValueInfo => !!p && p.kind === 'function' && (!old || prevProps.get(p.name)?.fnId !== p.fnId));
-      const cargo = [...changed.map((r) => cargoOf(r, r.path)), ...cards.map((c) => cargoOf(c))];
+      // only values that paint go to the screen: a new handler is React's internal business and
+      // changes nothing visible, so function cards stop at the component (see the prop ducts)
+      const cargo = changed.map((r) => cargoOf(r, r.path));
       if (!cargo.length) continue;
       const duct = layout.ducts.find((d) => d.id === `duct:${el.id}`);
       const travel = duct ? pathLength(duct.points) / DUCT_SPEED : 0.5;
