@@ -15,6 +15,7 @@ export function DisplayLink({
   renderEvery,
   renderOffset = 0,
   pulseKey,
+  showBeam = true,
 }: {
   from: Vec3;
   rect: Box;
@@ -22,6 +23,8 @@ export function DisplayLink({
   renderEvery?: number;
   renderOffset?: number;
   pulseKey?: string;
+  /** false: only the outline on the screen (something else connects to it) */
+  showBeam?: boolean;
 }) {
   const clip = useClip();
   const activity = useActivity();
@@ -47,7 +50,7 @@ export function DisplayLink({
   const ed = rect.z1 - rect.z0;
   return (
     <group>
-      <mesh position={[from[0], from[1] + h / 2, from[2]]} raycast={seeThrough}>
+      <mesh position={[from[0], from[1] + h / 2, from[2]]} raycast={seeThrough} visible={showBeam}>
         <cylinderGeometry args={[0.012, 0.012, h, 6]} />
         <meshBasicMaterial ref={beam} color={base} toneMapped={false} transparent opacity={0.7} depthWrite={false} blending={THREE.AdditiveBlending} clippingPlanes={clip} />
       </mesh>

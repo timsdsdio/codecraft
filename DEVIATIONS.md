@@ -16,9 +16,11 @@ depends on, each with its reason. When one changes, edit its entry.
 - **Props travel as items in itemducts**, one duct per child. Each item is one changed prop and
   carries a copy of its value, so it can be inspected in flight. Function props are items too
   (red cards), and they travel whenever the parent creates a new closure.
-- **Inside a component, a splitter evaluates the JSX's expressions.** It sits on the casing and
-  sends each changed expression value to an emitter hung under the element that uses it. The
-  emitter's beam paints just that element.
+- **Inside a component, re-rendering and updating the DOM are drawn separately.** A splitter on
+  the casing sends every expression value the JSX evaluated along the floor to an emitter in front
+  of the casing, one per element: that's the re-render. Only values that changed continue up a
+  riser from the emitter to the element on the screen, where its outline flashes: that's the
+  actual DOM update. A row that re-ran without changing anything fills its emitters and stops.
 - **What elements show, and what handlers call, is recorded, not inferred.** The probe's Vite
   plugin instruments the app's code in dev. It tags every host element (`data-cc`) and records
   each expression attribute's and expression child's *source text*; the probe reads the *values*

@@ -150,6 +150,8 @@ export interface LinkL {
   from: Vec3;
   rect: Box;
   clip?: Box;
+  /** false: only outline the rect (a riser duct carries the connection instead) */
+  beam?: boolean;
 }
 
 export interface FoldL {
@@ -167,7 +169,7 @@ export interface SplitterL {
   clip?: Box;
 }
 
-/** Hangs under one element on the screen and paints it; `handler` when it only handles events. */
+/** Stands on the floor in front of its component's casing, below one element on the screen; `handler` when that element only handles events. */
 export interface EmitterL {
   /** the element's id */
   id: string;
@@ -193,8 +195,10 @@ export interface FactoryLayout {
   folds: FoldL[];
   splitters: SplitterL[];
   emitters: EmitterL[];
-  /** itemducts from each splitter to its emitters; id `duct:<element id>` */
+  /** itemducts along the floor from each splitter to its emitters; id `duct:<element id>` */
   ducts: PipeL[];
+  /** vertical itemducts from each emitter up to its element on the screen; id `riser:<element id>` */
+  risers: PipeL[];
 }
 
 /** Length of a polyline. */
@@ -248,6 +252,10 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
       // a scroll owner sits at the near edge of its scroll area; its list rod runs through it
       cx = wx(scroll.viewport.x + scroll.viewport.w / 2);
       cz = wz(scroll.viewport.y) + size[2] / 2 + 0.04;
+    } else if (n.elements?.length) {
+      // its emitters stand in a row along the front of the footprint, so the casing moves to the back
+      size[2] = Math.max(0.2, Math.min(size[2], n.rect.h / PX - EMITTER.w - 0.12));
+      cz = wz(n.rect.y) + size[2] / 2 + 0.02;
     }
     casings.set(n.id, { id: n.id, name: n.name, depth: d, props: n.props, state: n.state, pos: [cx, floorY(d) + SLAB, cz], size, clip: n.clip ? toBox(n.clip) : undefined });
   }
@@ -343,10 +351,12 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
     }
   }
 
-  // ── inside a component's JSX: splitter on the casing, an emitter under each element, ducts between ──
+  // ── inside a component's JSX: splitter on the casing, an emitter on the floor in front of it for
+  //    each element, a duct between them, and a riser from each emitter up to its element ──
   const splitters: SplitterL[] = [];
   const emitters: EmitterL[] = [];
   const ducts: PipeL[] = [];
+  const risers: PipeL[] = [];
   const links: LinkL[] = [];
   for (const n of snap.nodes) {
     if (!n.elements?.length) continue;
@@ -354,27 +364,35 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
     const top = c.pos[1] + c.size[1];
     const sp: Vec3 = [c.pos[0], top, c.pos[2]];
     splitters.push({ owner: n.id, pos: sp, clip: c.clip });
-    const ceiling = floorY(depth(n) + 1);
-    n.elements.forEach((el, i) => {
+    const floor = floorY(depth(n)) + SLAB;
+    const ey = floor + EMITTER.h / 2;
+    const ez = wz(n.rect.y + n.rect.h) - EMITTER.w / 2 - 0.04;
+    // under each element's centre, nudged apart where they'd overlap
+    const order = n.elements.map((el, i) => ({ el, i, x: (toBox(el.rect).x0 + toBox(el.rect).x1) / 2 })).sort((a, b) => a.x - b.x);
+    for (let k = 1; k < order.length; k++) order[k].x = Math.max(order[k].x, order[k - 1].x + EMITTER.w + 0.06);
+    for (const { el, i, x: ex } of order) {
       const box = toBox(el.rect);
-      const ex = (box.x0 + box.x1) / 2;
-      const ez = (box.z0 + box.z1) / 2;
-      const ey = ceiling - 0.06 - EMITTER.h / 2;
       const clip = el.clip ? toBox(el.clip) : c.clip;
       const kind = el.slots.length ? 'value' : 'handler';
       emitters.push({ id: el.id, owner: n.id, element: el, pos: [ex, ey, ez], kind, clip });
-      const lane = ey - 0.22 - i * 0.035;
+      // over the casing, across, then down into the emitter's back face
+      const lane = top + 0.18 + i * 0.035;
+      const back = ez - EMITTER.w / 2;
+      const reads = el.slots.flatMap((s) => s.reads);
       ducts.push({
         id: `duct:${el.id}`,
         from: n.id,
         to: el.id,
-        points: [[sp[0], top + SPLITTER * 0.8, sp[2]], [sp[0], lane, sp[2]], [ex, lane, sp[2]], [ex, lane, ez], [ex, ey - EMITTER.h / 2, ez]],
-        kind: el.slots[0]?.reads[0]?.kind ?? 'function',
-        props: el.slots.flatMap((s) => s.reads),
+        points: [[sp[0], top + SPLITTER * 0.8, sp[2]], [sp[0], lane, sp[2]], [ex, lane, sp[2]], [ex, lane, back - 0.06], [ex, ey, back - 0.06], [ex, ey, back]],
+        kind: reads[0]?.kind ?? 'function',
+        props: reads,
         clip,
       });
-      links.push({ id: el.id, from: [ex, ey + EMITTER.h / 2, ez], rect: box, clip });
-    });
+      // the riser carries only what actually changes the DOM
+      if (reads.length)
+        risers.push({ id: `riser:${el.id}`, from: el.id, to: el.id, points: [[ex, ey + EMITTER.h / 2 + 0.02, ez], [ex, screenY - 0.005, ez]], kind: reads[0].kind, props: reads, clip });
+      links.push({ id: el.id, from: [ex, ey + EMITTER.h / 2, ez], rect: box, clip, beam: false });
+    }
   }
 
   // ── display links: a beam from each painting casing up to its patch of screen ──
@@ -398,6 +416,7 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
     splitters,
     emitters,
     ducts,
+    risers,
   };
 }
 

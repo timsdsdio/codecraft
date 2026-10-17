@@ -4,8 +4,8 @@
 //      on each floor to what that component calls it, ending in the state tank they set
 //   2. the state tanks it changed slosh
 //   3. renders climb floor by floor; changed props ride up the ducts as items
-//   4. inside each component, the values its JSX reads ride from the splitter to each element,
-//      but only the ones that changed, since only those change what's on screen
+//   4. inside each component, every value its JSX evaluated rides along the floor to its element's
+//      emitter; only the values that changed (an actual DOM update) rise from there to the screen
 import type { CallRecord, CommitRecord } from '@codecraft/probe';
 import {
   CALL_SPEED,
@@ -73,7 +73,9 @@ export function scheduleCommit(activity: Activity, commit: CommitRecord, prev: F
     });
   }
 
-  // 4. inside each rendered component: reads whose values changed go from the splitter to their element
+  // 4. inside each rendered component: every expression its JSX evaluated goes from the splitter
+  //    along the floor to its element's emitter; only values that changed (an actual DOM update)
+  //    continue up the riser to the screen
   for (const id of commit.rendered) {
     const node = nodes.get(id);
     if (!node?.elements?.length) continue;
@@ -83,20 +85,20 @@ export function scheduleCommit(activity: Activity, commit: CommitRecord, prev: F
     for (const el of node.elements) {
       const old = before.get(el.id);
       const oldReads = new Map((old?.slots ?? []).flatMap((s) => s.reads).map((r) => [r.path, r]));
-      const changed = el.slots
-        .flatMap((s) => s.reads)
-        .filter((r, i, all) => all.findIndex((x) => x.path === r.path) === i)
-        .filter((r) => !old || JSON.stringify(oldReads.get(r.path)?.value) !== JSON.stringify(r.value));
-      // only values that paint go to the screen: a new handler is React's internal business and
-      // changes nothing visible, so function cards stop at the component (see the prop ducts)
-      const cargo = changed.map((r) => cargoOf(r, r.path));
-      if (!cargo.length) continue;
+      const reads = el.slots.flatMap((s) => s.reads).filter((r, i, all) => all.findIndex((x) => x.path === r.path) === i);
+      if (!reads.length) continue;
+      const changed = reads.filter((r) => !old || JSON.stringify(oldReads.get(r.path)?.value) !== JSON.stringify(r.value));
+
       const duct = layout.ducts.find((d) => d.id === `duct:${el.id}`);
-      const travel = duct ? pathLength(duct.points) / DUCT_SPEED : 0.5;
-      cargo.forEach((c, i) => activity.ship(`duct:${el.id}`, { t: start + i * STAGGER, ...c }));
-      const arrive = start + (cargo.length - 1) * STAGGER + travel;
-      activity.schedule(`emit:${el.id}`, arrive);
-      activity.schedule(`link:${el.id}`, arrive + 0.05);
+      reads.forEach((r, i) => activity.ship(`duct:${el.id}`, { t: start + i * STAGGER, ...cargoOf(r, r.path) }));
+      const atEmitter = start + (reads.length - 1) * STAGGER + (duct ? pathLength(duct.points) : 0.5) / DUCT_SPEED;
+      activity.schedule(`emit:${el.id}`, atEmitter);
+      if (!changed.length) continue;
+
+      const riser = layout.risers.find((d) => d.id === `riser:${el.id}`);
+      changed.forEach((r, i) => activity.ship(`riser:${el.id}`, { t: atEmitter + 0.05 + i * STAGGER, ...cargoOf(r, r.path) }));
+      const atScreen = atEmitter + 0.05 + (changed.length - 1) * STAGGER + (riser ? pathLength(riser.points) : 1) / DUCT_SPEED;
+      activity.schedule(`link:${el.id}`, atScreen);
     }
   }
 }

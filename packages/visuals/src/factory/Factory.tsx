@@ -159,6 +159,11 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
             />
           </ClipRegion>
         ))}
+        {layout.risers.filter((d) => showsFloor(layout.emitters.find((e) => e.id === d.from)?.owner ?? '')).map((d) => (
+          <ClipRegion key={d.id} box={d.clip}>
+            <Duct points={d.points} kind={d.kind} ductKey={d.id} radius={0.024} sendEvery={every} sendOffset={0.8} demoCargo={{ label: d.props.map((x) => ('path' in x ? String(x.path) : x.name)).join(', '), kind: d.kind }} />
+          </ClipRegion>
+        ))}
         {layout.emitters.filter((e) => showsFloor(e.owner)).map((e) => (
           <ClipRegion key={`emit:${e.id}`} box={e.clip}>
             <Emitter pos={e.pos} kind={e.kind} pulseKey={`emit:${e.id}`} inspect={emitterCargo(e)} />
@@ -167,7 +172,7 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
         {activity && <ActivityClock />}
         {layout.links.filter((l) => (depthOf.get(l.id) ?? 1) <= top && top >= layout.floors).map((l) => (
           <ClipRegion key={l.id} box={l.clip}>
-            <DisplayLink from={l.from} rect={l.rect} screenY={layout.screenY} renderEvery={every} renderOffset={at(l.id) + 0.3} pulseKey={`link:${l.id}`} />
+            <DisplayLink from={l.from} rect={l.rect} screenY={layout.screenY} renderEvery={every} renderOffset={at(l.id) + 0.3} pulseKey={`link:${l.id}`} showBeam={l.beam !== false} />
           </ClipRegion>
         ))}
 
