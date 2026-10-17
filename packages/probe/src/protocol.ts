@@ -4,11 +4,32 @@ import type { Snapshot } from '@codecraft/visuals/2d';
 
 export const CHANNEL = 'codecraft';
 
+/** One function call made while an event was being handled. */
+export interface CallRecord {
+  /** the callee as written at the call site: `onToggle`, `todos.map` */
+  label: string;
+  /** JSON-safe copies of the arguments */
+  args: unknown[];
+  /** nesting: calls made from inside an earlier call have a larger depth */
+  depth: number;
+  /** a state setter, a prop of the component whose handler ran, or anything else */
+  kind: 'setter' | 'prop' | 'other';
+  /** kind 'prop': the prop's name in the handling component */
+  prop?: string;
+  /** setter: the component holding the state; prop: the component that created the function */
+  origin?: string;
+  /** setter: the state tank's id */
+  tank?: string;
+  /** the function's own name, when it has one */
+  defined?: string;
+}
+
 /** What happened in one React commit. Ids are component ids from the snapshot. */
 export interface CommitRecord {
   index: number;
-  /** the user event that most likely caused this commit, and the tagged element it started on */
-  cause?: { type: string; component: string; element?: string };
+  /** the user event that caused this commit: the component and element whose handler ran, and the
+   *  calls that handler made, in order */
+  cause?: { type: string; component: string; element?: string; calls: CallRecord[] };
   /** components that ran their render function */
   rendered: string[];
   /** pipe id (`parent>child`) → names of the props whose values changed */

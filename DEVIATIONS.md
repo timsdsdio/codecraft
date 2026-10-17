@@ -16,11 +16,18 @@ depends on, each with its reason. When one changes, edit its entry.
 - **Props travel as items in itemducts**, one duct per child. Each item is one changed prop and
   carries a copy of its value, so it can be inspected in flight. Function props are items too
   (red cards), and they travel whenever the parent creates a new closure.
-- **Inside a component, a splitter does the JSX's property access.** It sits on the casing and
-  sends each value the JSX reads (`todo.title`, `todo.done`) to an emitter hung under the element
-  that uses it. The emitter's beam paints just that element. The probe's Vite plugin learns which
-  element reads what by parsing each component's JSX in dev, and tags the elements with
-  `data-cc` attributes.
+- **Inside a component, a splitter evaluates the JSX's expressions.** It sits on the casing and
+  sends each changed expression value to an emitter hung under the element that uses it. The
+  emitter's beam paints just that element.
+- **What elements show, and what handlers call, is recorded, not inferred.** The probe's Vite
+  plugin instruments the app's code in dev. It tags every host element (`data-cc`) and records
+  each expression attribute's and expression child's *source text*; the probe reads the *values*
+  React actually rendered from the host fiber's props. It also rewrites every call into a recorded
+  call (`f(a)` → `__cc.c("f", f, a)`), which only records while an event is being handled. Each
+  recorded function is identified at call time, by identity: a state setter (which tank), a prop
+  of the handling component (and where it was created), or neither. Nothing depends on recognising
+  particular code shapes. The debugger protocol was rejected: it can't run inside the page or on
+  phones, and pausing per call is far too slow.
 - **Calls travel back down the ducts.** When a handler calls a function, an orange item carrying
   the call and its arguments travels from the element's emitter back down each duct to where the
   function was defined, renamed on every floor to what that component calls it (`onToggle` in

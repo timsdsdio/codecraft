@@ -6,7 +6,7 @@
 // Fiber internals aren't a public API. This targets React 19.
 import type { CompNode, ElementInfo, ReadInfo, Rect, ScrollInfo, Snapshot, ValueInfo, ValueKind } from '@codecraft/visuals/2d';
 import { SOURCE_GLOBAL, type StaticComponent } from './source';
-import { CHANNEL, isGameMessage, type CommitRecord, type Payload, type ProbeMessage } from './protocol';
+import { CHANNEL, isGameMessage, type CallRecord, type CommitRecord, type Payload, type ProbeMessage } from './protocol';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fiber = any;
@@ -130,7 +130,8 @@ function originOf(fn: unknown, f: Fiber): { component: string; tank?: string } |
         i++;
       }
     }
-    const passedDown = Object.values((a.memoizedProps ?? {}) as object).some((v) => Object.is(v, fn));
+    // check both of React's copies of the fiber: either may be the one holding the latest props
+    const passedDown = [a, a.alternate].some((x) => x && Object.values((x.memoizedProps ?? {}) as object).some((v) => Object.is(v, fn)));
     if (!passedDown) return { component: idOf(a) };
   }
   return undefined;
@@ -145,12 +146,6 @@ function info(name: string, v: unknown, f?: Fiber): ValueInfo {
     if (f) out.origin = originOf(v, f);
   }
   return out;
-}
-
-function readPath(scope: Record<string, unknown>, path: string): unknown {
-  let v: unknown = scope;
-  for (const key of path.split('.')) v = v == null ? undefined : (v as Record<string, unknown>)[key];
-  return v;
 }
 
 // ── hooks ─────────────────────────────────────────────────────────────────
@@ -246,15 +241,17 @@ const sourceOf = (name: string): StaticComponent | undefined => (globalThis as a
 /** element → its id in the latest snapshot (so an event can name the element it started on) */
 let elementIds = new WeakMap<Element, string>();
 
-/** Host elements in the component's own JSX that the source analysis says read data or handle events. */
-function elementsOf(f: Fiber, id: string, props: Record<string, unknown>, states: unknown[], ids: WeakMap<Element, string>): ElementInfo[] | undefined {
+/** `props.children[i]`, where React passes a single child as-is rather than in an array. */
+const childAt = (children: unknown, i: number) => (Array.isArray(children) ? children[i] : i === 0 ? children : undefined);
+
+/**
+ * Host elements in the component's own JSX that have expression attributes, expression children or
+ * event handlers. The source text comes from the build-time instrumentation; the values are what
+ * React actually rendered (the host fiber's props), so any expression works.
+ */
+function elementsOf(f: Fiber, id: string, ids: WeakMap<Element, string>): ElementInfo[] | undefined {
   const src = sourceOf(nameOf(f.type));
   if (!src?.elements.length) return undefined;
-  const scope: Record<string, unknown> = { ...props };
-  src.state.forEach((s, i) => (scope[s.name] = states[i]));
-  const setterTank = new Map(src.state.map((s, i) => [s.setter, `${id}:state${i}`]));
-  const read = (path: string): ReadInfo => ({ path, ...info(path, readPath(scope, path)) });
-
   const out: ElementInfo[] = [];
   const counts = new Map<string, number>();
   const visit = (c: Fiber) => {
@@ -269,24 +266,17 @@ function elementsOf(f: Fiber, id: string, props: Record<string, unknown>, states
           counts.set(cc, n + 1);
           const eid = `${id}:${cc}:${n}`;
           ids.set(el, eid);
+          const props = (c.memoizedProps ?? {}) as Record<string, unknown>;
+          const read = (path: string, v: unknown): ReadInfo => ({ path, ...info(path, v) });
+          const slots = spec.attrs.map((a) => ({ name: a.name, reads: [read(a.src, props[a.name])] }));
+          if (spec.children.length) slots.push({ name: 'text', reads: spec.children.map((ch) => read(ch.src, childAt(props.children, ch.index))) });
           out.push({
             id: eid,
             tag: spec.tag,
             rect: toRect(el.getBoundingClientRect()),
             clip: clipOf(el),
-            slots: spec.slots.map((sl) => ({ name: sl.name, reads: sl.reads.map(read) })),
-            handlers: spec.handlers.map((h) => ({
-              event: h.event,
-              calls: h.calls.map((call) => ({
-                fn: call.fn,
-                args: call.args.map(read),
-                target: setterTank.has(call.fn)
-                  ? { component: id, tank: setterTank.get(call.fn) }
-                  : typeof props[call.fn] === 'function'
-                    ? originOf(props[call.fn], f)
-                    : undefined,
-              })),
-            })),
+            slots,
+            handlers: spec.handlers.map((event) => ({ event })),
           });
         }
       }
@@ -332,7 +322,6 @@ let root: any = null;
 let commitIndex = 0;
 /** fiber object last seen per id: an identical object means React reused it without rendering */
 let seen = new Map<string, Fiber>();
-let lastCause: { type: string; component: string; element?: string; at: number } | null = null;
 
 function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRecord } {
   const nodes: CompNode[] = [];
@@ -362,7 +351,7 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
           .filter(([k, v]) => k !== 'children' || v !== undefined)
           .map(([k, v]) => info(k, v, f)),
         state: states.map((v, i) => info(names[i] ?? `state ${i + 1}`, v)),
-        elements: elementsOf(f, id, props, states, nextIds),
+        elements: elementsOf(f, id, nextIds),
         ...(f.key != null ? { key: String(f.key) } : {}),
         paints: hosts.some(paints),
       });
@@ -403,8 +392,7 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
   const mounted = [...nextSeen.keys()].filter((id) => !seen.has(id));
   const unmounted = [...seen.keys()].filter((id) => !nextSeen.has(id));
   seen = nextSeen;
-  const cause = lastCause && performance.now() - lastCause.at < 600 ? { type: lastCause.type, component: lastCause.component, element: lastCause.element } : undefined;
-  lastCause = null;
+  const cause = takeCause();
   return { snapshot: snap, commit: { index: commitIndex++, cause, rendered, changedProps, changedState, mounted, unmounted } };
 }
 
@@ -431,19 +419,143 @@ function postLayout() {
   });
 }
 
-// events in the app: remember where they started, so the next commit can name its cause
-for (const type of ['click', 'input', 'submit', 'keydown', 'change']) {
-  document.addEventListener(
-    type,
-    (e) => {
-      const target = e.target instanceof Element ? e.target : null;
-      const comp = target ? componentAbove(fiberOfElement(target)) : undefined;
-      const tagged = target?.closest('[data-cc]');
-      if (comp) lastCause = { type, component: idOf(comp), element: tagged ? elementIds.get(tagged) : undefined, at: performance.now() };
-    },
-    true,
-  );
+// ── events and the calls their handlers make ─────────────────────────────
+
+const EVENTS = ['click', 'input', 'submit', 'keydown', 'change'];
+/** React prop names that can handle each native event (checkboxes fire onChange from a click) */
+const HANDLERS: Record<string, string[]> = {
+  click: ['onClick', 'onChange'],
+  input: ['onChange', 'onInput'],
+  change: ['onChange'],
+  submit: ['onSubmit'],
+  keydown: ['onKeyDown'],
+};
+
+interface EventInFlight {
+  type: string;
+  /** the element whose handler ran, and its component, as they were when the event started */
+  element?: string;
+  component?: string;
+  /** both of React's copies of the handling component's fiber: a DOM node may point at either */
+  handlers: Fiber[];
+  /** state setter function → its tank, scanned from the tree on the first recorded call */
+  setters?: Map<unknown, { component: string; tank: string }>;
+  calls: CallRecord[];
+  depth: number;
+  at: number;
 }
+/** the event being dispatched right now, and the calls its handlers have made so far */
+let active: EventInFlight | null = null;
+/** a finished event, kept briefly in case its commit comes after it */
+let finished: EventInFlight | null = null;
+
+function startEvent(e: Event) {
+  if (active) return; // an event dispatched from inside a handler belongs to the outer one
+  // identify the handler now: by the time the commit arrives, a deleted row's fibers are gone
+  const target = e.target instanceof Element ? e.target : null;
+  const el = handlerElement(target, e.type);
+  const handler = el ? componentAbove(fiberOfElement(el)) : target ? componentAbove(fiberOfElement(target)) : undefined;
+  active = {
+    type: e.type,
+    element: el ? elementIds.get(el) : undefined,
+    component: handler ? idOf(handler) : undefined,
+    handlers: handler ? [handler, handler.alternate].filter(Boolean) : [],
+    calls: [],
+    depth: 0,
+    at: performance.now(),
+  };
+  setTimeout(endEvent, 0); // in case propagation was stopped before the window saw it
+}
+function endEvent() {
+  if (!active) return;
+  if (active.calls.length || !finished || performance.now() - finished.at > 50) finished = active;
+  active = null;
+}
+for (const type of EVENTS) {
+  document.addEventListener(type, startEvent, true);
+  window.addEventListener(type, endEvent);
+}
+
+function scanSetters(): Map<unknown, { component: string; tank: string }> {
+  const setters = new Map<unknown, { component: string; tank: string }>();
+  const scan = (f: Fiber) => {
+    for (; f; f = f.sibling) {
+      if (COMPONENT.has(f.tag) && f.tag !== TAG.Class) {
+        let i = 0;
+        for (let h = f.memoizedState; h && typeof h === 'object' && 'next' in h; h = h.next) {
+          const q = h.queue;
+          if (q && typeof q.dispatch === 'function' && 'lastRenderedReducer' in q) setters.set(q.dispatch, { component: idOf(f), tank: `${idOf(f)}:state${i++}` });
+        }
+      }
+      scan(f.child);
+    }
+  };
+  if (root?.current) scan(root.current);
+  return setters;
+}
+
+/** Records a call made during an event, identifying the function while the tree is still as it was. */
+function record<T>(label: string, fn: unknown, args: unknown[], run: () => T): T {
+  if (!active || typeof fn !== 'function') return run();
+  const a = active;
+  a.setters ??= scanSetters();
+  const base = { label, args: args.map((x) => copy(x)), depth: a.depth, defined: (fn as { name?: string }).name || undefined };
+  const setter = a.setters.get(fn);
+  let prop: string | undefined;
+  let holder: Fiber | undefined;
+  if (!setter)
+    for (const h of a.handlers) {
+      const props = (h.memoizedProps ?? {}) as Record<string, unknown>;
+      prop = Object.keys(props).find((k) => Object.is(props[k], fn));
+      if (prop) {
+        holder = h;
+        break;
+      }
+    }
+  a.calls.push(
+    setter
+      ? { ...base, kind: 'setter', origin: setter.component, tank: setter.tank }
+      : prop && holder
+        ? { ...base, kind: 'prop', prop, origin: originOf(fn, holder)?.component }
+        : { ...base, kind: 'other' },
+  );
+  a.depth++;
+  try {
+    return run();
+  } finally {
+    a.depth--;
+  }
+}
+
+/** The recorder the build-time instrumentation calls into. */
+(globalThis as any).__cc = {
+  c: (label: string, fn: (...a: unknown[]) => unknown, ...args: unknown[]) => record(label, fn, args, () => fn(...args)),
+  m: (label: string, obj: any, key: PropertyKey, ...args: unknown[]) => {
+    const fn = obj[key];
+    return record(label, fn, args, () => fn.apply(obj, args));
+  },
+};
+
+/** The element whose handler ran: the nearest element at or above the target with a matching prop. */
+function handlerElement(target: Element | null, type: string): Element | undefined {
+  for (let el = target; el; el = el.parentElement) {
+    const f = fiberOfElement(el);
+    const props = (f?.memoizedProps ?? {}) as Record<string, unknown>;
+    if ((HANDLERS[type] ?? []).some((name) => typeof props[name] === 'function')) return el;
+  }
+  return undefined;
+}
+
+/** The cause of the commit happening now: the event in flight, or one that just finished. */
+function takeCause(): CommitRecord['cause'] {
+  const e = active ?? (finished && performance.now() - finished.at < 600 ? finished : null);
+  if (!e?.component) return undefined;
+  if (e === finished) finished = null;
+  const calls = e.calls;
+  if (e === active) e.calls = []; // a second commit in the same event shouldn't replay the same calls
+  return { type: e.type, component: e.component, element: e.element, calls };
+}
+
 document.addEventListener('scroll', postLayout, true);
 window.addEventListener('resize', postLayout);
 

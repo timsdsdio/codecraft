@@ -49,25 +49,17 @@ export interface ReadInfo extends ValueInfo {
   path: string;
 }
 
-/** A call a handler makes: `onToggle(todo.id)`. */
-export interface CallInfo {
-  fn: string;
-  args: ReadInfo[];
-  /** where the call lands: the function's origin, or a state tank for state setters */
-  target?: { component: string; tank?: string };
-}
-
-/** One DOM element in a component's own JSX that reads data or handles events. */
+/** One DOM element in a component's own JSX with expression attributes, expression children or handlers. */
 export interface ElementInfo {
   /** unique within the snapshot */
   id: string;
   tag: string;
   rect: Rect;
   clip?: Rect;
-  /** each attribute (or `text`) that's fed by data, and what it reads */
+  /** each attribute (or `text`) set by an expression: the expression's source and the value React rendered */
   slots: { name: string; reads: ReadInfo[] }[];
-  /** each event attribute and the calls its handler makes */
-  handlers: { event: string; calls: CallInfo[] }[];
+  /** event attributes (`onClick`, …); the calls they make are recorded when they run */
+  handlers: { event: string }[];
 }
 
 /** One mounted component instance, as the probe reports it. */

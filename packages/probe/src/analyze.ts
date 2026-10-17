@@ -1,8 +1,15 @@
-// Build-time JSX analysis (dev only). For each component it finds the host elements in its JSX and
-// records which props/state paths feed each attribute and which prop functions or state setters
-// each event handler calls. It tags every host element with `data-cc="Component#n"` so the runtime
-// can match DOM nodes back to this analysis, and appends a registration of the results.
-// The app's source files are never changed on disk.
+// Build-time instrumentation (dev only). Two jobs, both done on the code as it's served; files on
+// disk are never changed:
+//
+//   1. Tag every host element in each component's JSX with `data-cc="Component#n"` and register,
+//      per element, the source text of each expression attribute and expression child. The probe
+//      reads the matching *values* from React's own host fiber props at runtime, so any expression
+//      works: nothing here needs to understand what the expression means.
+//
+//   2. Rewrite every function call in the file into a recorded call: `f(a)` → `__cc.c("f", f, a)`,
+//      `o.m(a)` → `__cc.m("o.m", o, "m", a)`. The runtime only records while an event is being
+//      handled (otherwise it just calls through), which is how the game learns exactly which
+//      functions an event handler called, with which arguments, through any number of helpers.
 import { parse } from '@babel/parser';
 import { SOURCE_GLOBAL, type StaticComponent, type StaticElement } from './source.ts';
 
@@ -22,9 +29,11 @@ function children(n: Node): Node[] {
   return out;
 }
 
-function walk(n: Node, visit: (n: Node) => boolean | void) {
-  if (visit(n) === false) return;
-  for (const c of children(n)) walk(c, visit);
+function walk(n: Node, visit: (n: Node, parents: Node[]) => boolean | void, parents: Node[] = []) {
+  if (visit(n, parents) === false) return;
+  parents.push(n);
+  for (const c of children(n)) walk(c, visit, parents);
+  parents.pop();
 }
 
 const isFn = (n: Node) => n && /^(ArrowFunctionExpression|FunctionExpression|FunctionDeclaration)$/.test(n.type);
@@ -53,117 +62,37 @@ function components(program: Node): { name: string; fn: Node }[] {
   return out;
 }
 
-function analyseComponent(name: string, fn: Node, inserts: { at: number; text: string }[]): StaticComponent {
-  // props: a destructured first parameter, or a `props` identifier
-  const props = new Set<string>();
-  let propsIdent: string | null = null;
-  const p0 = fn.params[0];
-  if (p0?.type === 'ObjectPattern') for (const prop of p0.properties) if (prop.type === 'ObjectProperty' && prop.key.type === 'Identifier') props.add(prop.key.name);
-  if (p0?.type === 'Identifier') propsIdent = p0.name;
-
-  // state: const [x, setX] = useState(...)
-  const state: { name: string; setter: string }[] = [];
-  const localFns = new Map<string, Node>();
-  walk(fn.body, (n) => {
-    if (n !== fn.body && isFn(n) && n.type === 'FunctionDeclaration') {
-      if (n.id) localFns.set(n.id.name, n);
-      return false;
-    }
-    if (n.type === 'VariableDeclarator') {
-      const callee = n.init?.type === 'CallExpression' ? n.init.callee : null;
-      const hook = callee?.type === 'Identifier' ? callee.name : callee?.type === 'MemberExpression' ? callee.property?.name : null;
-      if (n.id.type === 'ArrayPattern' && /^use(State|Reducer)$/.test(hook ?? '')) {
-        const [a, b] = n.id.elements;
-        if (a?.type === 'Identifier') state.push({ name: a.name, setter: b?.type === 'Identifier' ? b.name : '' });
-      }
-      if (n.id.type === 'Identifier' && isFn(n.init)) localFns.set(n.id.name, n.init);
-    }
+/** React's rule for JSX text children: trim around line breaks, drop lines that end up empty. */
+function cleanJsxText(text: string): string {
+  const lines = text.split(/\r\n|\n|\r/);
+  let out = '';
+  lines.forEach((line, i) => {
+    let s = line.replace(/\t/g, ' ');
+    if (i !== 0) s = s.replace(/^[ ]+/, '');
+    if (i !== lines.length - 1) s = s.replace(/[ ]+$/, '');
+    if (s) out += (out ? ' ' : '') + s;
   });
-  const stateNames = new Set(state.map((s) => s.name));
-  const setters = new Set(state.map((s) => s.setter).filter(Boolean));
-  const known = (root: string) => props.has(root) || stateNames.has(root);
+  return out;
+}
 
-  /** `todo.title` for a non-computed member chain rooted at a prop or state name. */
-  const chain = (n: Node): string | null => {
-    if (n.type === 'Identifier') return n.name;
-    if ((n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') && !n.computed && n.property.type === 'Identifier') {
-      const left = chain(n.object);
-      return left ? `${left}.${n.property.name}` : null;
-    }
-    return null;
-  };
-  const normalise = (path: string | null): string | null => {
-    if (!path) return null;
-    if (propsIdent && path.startsWith(`${propsIdent}.`)) path = path.slice(propsIdent.length + 1);
-    return known(path.split('.')[0]) ? path : null;
-  };
+const makesJsx = (e: Node) => {
+  let found = false;
+  walk(e, (m) => {
+    if (m.type === 'JSXElement' || m.type === 'JSXFragment') found = true;
+    return !found;
+  });
+  return found;
+};
 
-  const readsOf = (expr: Node): string[] => {
-    const out = new Set<string>();
-    const visit = (n: Node) => {
-      if (!isNode(n)) return;
-      if (isFn(n)) return; // reads inside nested functions run later, not during render
-      if (n.type === 'CallExpression' || n.type === 'OptionalCallExpression') {
-        // `title.trim()`: the read is `title`
-        const c = n.callee;
-        if (c.type === 'MemberExpression' || c.type === 'OptionalMemberExpression') {
-          const p = normalise(chain(c.object));
-          if (p) out.add(p);
-          else visit(c.object);
-        }
-        n.arguments.forEach(visit);
-        return;
-      }
-      if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression' || n.type === 'Identifier') {
-        const p = normalise(chain(n));
-        if (p) {
-          out.add(p);
-          return;
-        }
-      }
-      children(n).forEach(visit);
-    };
-    visit(expr);
-    return [...out];
-  };
+interface Edit {
+  start: number;
+  end: number;
+  text: string;
+  /** nesting depth: at equal positions, inner edits apply first so outer text ends up in front */
+  depth: number;
+}
 
-  const callsOf = (expr: Node, seen = new Set<Node>()): { fn: string; args: string[] }[] => {
-    const out: { fn: string; args: string[] }[] = [];
-    const target = (callee: Node): string | null => {
-      if (callee.type === 'Identifier' && (props.has(callee.name) || setters.has(callee.name))) return callee.name;
-      if (propsIdent && callee.type === 'MemberExpression' && callee.object.type === 'Identifier' && callee.object.name === propsIdent) return callee.property.name;
-      return null;
-    };
-    // a handler passed directly: onChange={onToggle} / onClick={submit}
-    if (expr.type === 'Identifier') {
-      const direct = target(expr);
-      if (direct) return [{ fn: direct, args: [] }];
-      const local = localFns.get(expr.name);
-      return local && !seen.has(local) ? (seen.add(local), callsOf(local.body, seen)) : [];
-    }
-    walk(expr, (n) => {
-      if (n.type !== 'CallExpression') return;
-      const fnName = target(n.callee);
-      if (fnName) out.push({ fn: fnName, args: n.arguments.flatMap((a: Node) => readsOfLoose(a)) });
-      else if (n.callee.type === 'Identifier' && localFns.has(n.callee.name) && !seen.has(localFns.get(n.callee.name))) {
-        const local = localFns.get(n.callee.name);
-        seen.add(local);
-        out.push(...callsOf(local.body, seen));
-      }
-    });
-    return out;
-  };
-  // inside handlers, arguments may read props/state even within the handler's own function
-  const readsOfLoose = (a: Node): string[] => {
-    const p = normalise(chain(a));
-    if (p) return [p];
-    if (a.type === 'CallExpression' && (a.callee.type === 'MemberExpression' || a.callee.type === 'OptionalMemberExpression')) {
-      const q = normalise(chain(a.callee.object));
-      if (q) return [q];
-    }
-    return [];
-  };
-
+function tagElements(name: string, fn: Node, code: string, edits: Edit[]): StaticComponent {
   const elements: StaticElement[] = [];
   let index = 0;
   walk(fn.body, (n) => {
@@ -171,40 +100,72 @@ function analyseComponent(name: string, fn: Node, inserts: { at: number; text: s
     const open = n.openingElement;
     if (open.name.type !== 'JSXIdentifier' || capital(open.name.name)) return; // components get their own casings
     const id = `${name}#${index++}`;
-    inserts.push({ at: open.name.end, text: ` data-cc=${JSON.stringify(id)}` });
-    const el: StaticElement = { id, tag: open.name.name, slots: [], handlers: [] };
+    edits.push({ start: open.name.end, end: open.name.end, text: ` data-cc=${JSON.stringify(id)}`, depth: 0 });
+    const el: StaticElement = { id, tag: open.name.name, attrs: [], children: [], handlers: [] };
     for (const attr of open.attributes) {
       if (attr.type !== 'JSXAttribute' || attr.value?.type !== 'JSXExpressionContainer') continue;
       const attrName = attr.name.type === 'JSXIdentifier' ? attr.name.name : `${attr.name.namespace.name}:${attr.name.name.name}`;
       const expr = attr.value.expression;
-      if (/^on[A-Z]/.test(attrName)) {
-        const calls = callsOf(expr);
-        if (calls.length) el.handlers.push({ event: attrName, calls });
-      } else {
-        const reads = readsOf(expr);
-        if (reads.length) el.slots.push({ name: attrName, reads });
-      }
+      if (/^on[A-Z]/.test(attrName)) el.handlers.push(attrName);
+      else if (attrName !== 'key' && attrName !== 'ref') el.attrs.push({ name: attrName, src: code.slice(expr.start, expr.end) });
     }
-    // expressions that produce JSX (a `.map` into components) are the piston's job, not a data slot
-    const makesJsx = (e: Node) => {
-      let found = false;
-      walk(e, (m) => {
-        if (m.type === 'JSXElement' || m.type === 'JSXFragment') found = true;
-        return !found;
-      });
-      return found;
-    };
-    const text = n.children
-      .filter((c: Node) => c.type === 'JSXExpressionContainer' && !makesJsx(c.expression))
-      .flatMap((c: Node) => readsOf(c.expression));
-    if (text.length) el.slots.push({ name: 'text', reads: [...new Set<string>(text)] });
-    if (el.slots.length || el.handlers.length) elements.push(el);
+    // children, numbered the way React numbers them in props.children
+    let child = 0;
+    for (const c of n.children) {
+      if (c.type === 'JSXText') {
+        if (cleanJsxText(c.value)) child++;
+      } else if (c.type === 'JSXExpressionContainer') {
+        if (c.expression.type === 'JSXEmptyExpression') continue;
+        // an expression that produces JSX (a `.map` into components) is the piston's job, not a slot
+        if (!makesJsx(c.expression)) el.children.push({ index: child, src: code.slice(c.expression.start, c.expression.end) });
+        child++;
+      } else child++;
+    }
+    if (el.attrs.length || el.children.length || el.handlers.length) elements.push(el);
   });
-
-  return { name, state, elements };
+  return { name, elements };
 }
 
-/** Returns the transformed code, or null when the file has no components. */
+/** Every call outside of hooks, `require`, `super` and optional chains becomes a recorded call. */
+function instrumentCalls(program: Node, code: string, edits: Edit[]) {
+  walk(program, (n, parents) => {
+    if (n.type !== 'CallExpression' || n.optional) return;
+    const c = n.callee;
+    const depth = parents.filter((p) => p.type === 'CallExpression').length + 1;
+    const typeEnd = (n.typeArguments ?? n.typeParameters)?.end ?? c.end;
+    const paren = code.indexOf('(', typeEnd);
+    if (paren < 0) return;
+    const hasArgs = n.arguments.length > 0;
+    if (c.type === 'Identifier') {
+      if (/^use[A-Z0-9]/.test(c.name) || c.name === 'require' || c.name === '__cc') return;
+      const start = Math.min(c.start, c.extra?.parenStart ?? c.start);
+      edits.push({ start, end: start, text: `__cc.c(${JSON.stringify(c.name)}, `, depth });
+      edits.push({ start: paren, end: paren + 1, text: hasArgs ? ', ' : '', depth });
+    } else if (c.type === 'MemberExpression' && !c.optional && c.object.type !== 'Super') {
+      const objectSrc = code.slice(c.object.start, c.object.end).replace(/\s+/g, ' ');
+      const prop = c.computed ? `[${code.slice(c.property.start, c.property.end)}]` : `.${c.property.name}`;
+      const label = (objectSrc.length > 24 ? '…' : objectSrc) + prop;
+      if (/^React\.use[A-Z]/.test(label)) return;
+      // node ranges exclude parentheses: `(xs as const).map(…)` must keep its `)`
+      const start = Math.min(c.start, c.object.extra?.parenStart ?? c.start);
+      edits.push({ start, end: start, text: `__cc.m(${JSON.stringify(label)}, `, depth });
+      if (c.computed) {
+        // obj[key]( → obj, key,
+        const open = code.lastIndexOf('[', c.property.start);
+        const close = code.indexOf(']', c.property.end);
+        edits.push({ start: open, end: open + 1, text: ', ', depth });
+        edits.push({ start: close, end: paren + 1, text: hasArgs ? ', ' : '', depth });
+      } else {
+        // obj.method( → obj, "method",
+        const dot = code.lastIndexOf('.', c.property.start);
+        edits.push({ start: dot, end: c.property.end, text: `, ${JSON.stringify(c.property.name)}`, depth });
+        edits.push({ start: paren, end: paren + 1, text: hasArgs ? ', ' : '', depth });
+      }
+    }
+  });
+}
+
+/** Returns the transformed code, or null when there's nothing to do. */
 export function analyse(code: string): string | null {
   let ast: Node;
   try {
@@ -212,11 +173,14 @@ export function analyse(code: string): string | null {
   } catch {
     return null;
   }
-  const inserts: { at: number; text: string }[] = [];
-  const found = components(ast.program).map((c) => analyseComponent(c.name, c.fn, inserts));
-  if (!found.length || !inserts.length) return null;
+  const edits: Edit[] = [];
+  const found = components(ast.program).map((c) => tagElements(c.name, c.fn, code, edits));
+  instrumentCalls(ast.program, code, edits);
+  if (!edits.length) return null;
+  edits.sort((a, b) => b.start - a.start || b.depth - a.depth);
   let out = code;
-  for (const ins of inserts.sort((a, b) => b.at - a.at)) out = out.slice(0, ins.at) + ins.text + out.slice(ins.at);
+  for (const e of edits) out = out.slice(0, e.start) + e.text + out.slice(e.end);
+  if (!found.length) return out;
   const registry = found.map((c) => `S[${JSON.stringify(c.name)}] = ${JSON.stringify(c)};`).join('\n');
   return `${out}\n;{ const S = (globalThis.${SOURCE_GLOBAL} ||= {});\n${registry}\n}\n`;
 }

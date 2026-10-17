@@ -1,18 +1,17 @@
 // Turns a React commit into a replay on the Activity clock:
-//   1. the call: an item travels back down the ducts from the element that handled the event to the
-//      component that defined the function (or into the state tank, for setters), renamed on each
-//      floor to what that component calls it
+//   1. the calls the event's handler made (recorded by the probe as they happened) travel back down
+//      the ducts from the element that handled the event to where each function was created, renamed
+//      on each floor to what that component calls it, ending in the state tank they set
 //   2. the state tanks it changed slosh
 //   3. renders climb floor by floor; changed props ride up the ducts as items
 //   4. inside each component, the values its JSX reads ride from the splitter to each element,
 //      but only the ones that changed, since only those change what's on screen
-import type { CommitRecord } from '@codecraft/probe';
+import type { CallRecord, CommitRecord } from '@codecraft/probe';
 import {
   CALL_SPEED,
   DUCT_SPEED,
   pathLength,
   type Activity,
-  type CallInfo,
   type CompNode,
   type ElementInfo,
   type FactoryLayout,
@@ -28,46 +27,21 @@ export interface Frame {
   layout: FactoryLayout;
 }
 
-/** Which handler an event of `type` ran (checkboxes fire onChange from a click, and so on). */
-function handlerFor(el: ElementInfo, type: string) {
-  const prefer: Record<string, string[]> = {
-    click: ['onClick', 'onChange'],
-    change: ['onChange'],
-    input: ['onChange', 'onInput'],
-    submit: ['onSubmit'],
-    keydown: ['onKeyDown'],
-  };
-  for (const name of prefer[type] ?? []) {
-    const h = el.handlers.find((x) => x.event === name);
-    if (h) return h;
-  }
-  return el.handlers.length === 1 ? el.handlers[0] : undefined;
-}
-
-/** A submit starts on the button but runs the form's handler: look up the tree of elements too. */
-function causeElement(frame: Frame, id: string, type: string) {
-  const owner = frame.snapshot.nodes.find((n) => n.elements?.some((e) => e.id === id));
-  const el = owner?.elements?.find((e) => e.id === id);
-  if (el && handlerFor(el, type)) return el;
-  if (type === 'click') return owner?.elements?.find((e) => e.handlers.some((h) => h.event === 'onSubmit'));
-  return el;
-}
-
 const cargoOf = (v: ValueInfo, label = v.name) => ({ label, kind: v.kind, value: v.value ?? v.preview });
 
 export function scheduleCommit(activity: Activity, commit: CommitRecord, prev: Frame | null, next: Frame) {
   const now = activity.now();
   let t0 = now;
 
-  // 1. the call(s) the event's handler made, travelling back down the ducts as they were when clicked
-  if (commit.cause?.element && prev) {
-    const el = causeElement(prev, commit.cause.element, commit.cause.type);
-    const handler = el && handlerFor(el, commit.cause.type);
-    if (el && handler) {
-      activity.schedule(`emit:${el.id}`, now);
+  // 1. the calls the event's handler made, travelling back down the ducts as they were when clicked
+  const cause = commit.cause;
+  if (cause && prev) {
+    const routes = routesOf(cause.calls);
+    if (routes.length) {
+      if (cause.element) activity.schedule(`emit:${cause.element}`, now);
       let end = now;
-      handler.calls.forEach((call, i) => {
-        end = Math.max(end, routeCall(activity, call, el, prev, now + i * STAGGER));
+      routes.forEach((route, i) => {
+        end = Math.max(end, routeCall(activity, route, cause.component, cause.element, prev, now + i * STAGGER));
       });
       t0 = end + 0.1;
     }
@@ -127,33 +101,68 @@ export function scheduleCommit(activity: Activity, commit: CommitRecord, prev: F
   }
 }
 
-/** `onToggle("t3")` */
-const callLabel = (name: string, call: CallInfo) => `${name}(${call.args.map((a) => JSON.stringify(a.value ?? a.preview)).join(', ')})`;
-
-/** The name a function was defined with (`toggle`), from its preview `ƒ toggle`. */
-const definedAs = (v: ValueInfo | undefined) => v?.preview.replace(/^ƒ\s*/, '').replace(/^bound /, '') || undefined;
+interface Route {
+  /** what the handling component calls the function (`onToggle`, `setTitle`) */
+  name: string;
+  args: unknown[];
+  /** the component that created the function (or holds the state, for setters) */
+  origin?: string;
+  /** the state tank the call ends up setting, if any */
+  tank?: string;
+  /** the function's own name, when it has one */
+  defined?: string;
+}
 
 /**
- * Sends one call from element `el` back to where its function was defined: down the element's duct
- * to its component, then down each parent's duct while the function was passed in as a prop.
- * Returns the time it arrives.
+ * Which recorded calls to draw. A route starts at every prop function or state setter the handler
+ * called that isn't nested inside another prop call: what a prop function does happens in the
+ * component that defined it, so its first state setter becomes the route's destination instead.
  */
-function routeCall(activity: Activity, call: CallInfo, el: ElementInfo, frame: Frame, start: number): number {
+function routesOf(calls: CallRecord[]): Route[] {
+  const routes: Route[] = [];
+  calls.forEach((call, i) => {
+    if (call.kind === 'other') return;
+    // inside an earlier prop call? (walk back through this call's ancestors)
+    let depth = call.depth;
+    for (let j = i - 1; j >= 0 && depth > 0; j--) {
+      if (calls[j].depth >= depth) continue;
+      depth = calls[j].depth;
+      if (calls[j].kind === 'prop') return;
+    }
+    let tank = call.tank;
+    if (call.kind === 'prop')
+      for (let j = i + 1; j < calls.length && calls[j].depth > call.depth; j++)
+        if (calls[j].kind === 'setter') {
+          tank = calls[j].tank;
+          break;
+        }
+    const name = call.prop ?? call.label.replace(/^props\./, '');
+    routes.push({ name, args: call.args, origin: call.origin, tank, defined: call.kind === 'setter' ? undefined : call.defined });
+  });
+  return routes;
+}
+
+/** `onToggle("t3")` */
+const callLabel = (name: string, args: unknown[]) => `${name}(${args.map((a) => JSON.stringify(a)).join(', ')})`;
+
+/**
+ * Sends one call from the handling element back to where its function was created: down the
+ * element's duct to its component, then down each parent's duct while the function was passed in
+ * as a prop, renaming it on each floor. Returns the time it arrives.
+ */
+function routeCall(activity: Activity, route: Route, component: string, elementId: string | undefined, frame: Frame, start: number): number {
   const { layout, snapshot } = frame;
   const nodes = new Map(snapshot.nodes.map((n) => [n.id, n]));
-  const owner = snapshot.nodes.find((n) => n.elements?.some((e) => e.id === el.id));
+  const owner = nodes.get(component);
   if (!owner) return start;
-  const target = call.target;
-  const args = call.args.map((a) => a.value ?? a.preview);
-  const fnValue = owner.props.find((p) => p.name === call.fn);
-  const tankName = target?.tank ? layout.tanks.find((t) => t.id === target.tank)?.info.name : undefined;
-  const finalName = tankName ? `set${tankName[0].toUpperCase()}${tankName.slice(1)}` : (definedAs(fnValue) ?? call.fn);
-  const value = (name: string, at: CompNode) => ({
-    call: name,
-    args,
-    from: `<${owner.name}> ${el.tag} handler`,
+  const tankName = route.tank ? layout.tanks.find((t) => t.id === route.tank)?.info.name : undefined;
+  const finalName = route.defined ?? (tankName ? `set${tankName[0].toUpperCase()}${tankName.slice(1)}` : route.name);
+  const value = (label: string, at: CompNode) => ({
+    call: label,
+    args: route.args,
+    from: `<${owner.name}>`,
     here: `<${at.name}>`,
-    definedIn: target ? `<${nodes.get(target.component)?.name ?? '?'}>${tankName ? ` (${tankName} state)` : ''}` : undefined,
+    definedIn: route.origin ? `<${nodes.get(route.origin)?.name ?? '?'}>${tankName ? ` (${tankName} state)` : ''}` : undefined,
   });
 
   let t = start;
@@ -161,28 +170,28 @@ function routeCall(activity: Activity, call: CallInfo, el: ElementInfo, frame: F
     activity.ship(ductId, { t, label, kind: 'function', call: true, reverse: true, speed: CALL_SPEED, value: value(label, at) });
     t += (points ? pathLength(points as [number, number, number][]) : 0.6) / (DUCT_SPEED * CALL_SPEED);
   };
+  const named = (name: string, arriving: boolean) => (arriving && finalName !== name ? `${name} → ${callLabel(finalName, route.args)}` : callLabel(name, route.args));
 
   // down the element's own duct: emitter → splitter → its component
-  const duct = layout.ducts.find((d) => d.id === `duct:${el.id}`);
-  const ownLabel = target?.component === owner.id ? callLabel(finalName, call) : callLabel(call.fn, call);
-  send(`duct:${el.id}`, duct?.points, ownLabel, owner);
+  if (elementId) {
+    const duct = layout.ducts.find((d) => d.id === `duct:${elementId}`);
+    send(`duct:${elementId}`, duct?.points, named(route.name, route.origin === owner.id), owner);
+  }
 
   // then down through each parent that passed the function on as a prop
   let cur: CompNode = owner;
-  let name = call.fn;
-  for (let guard = 0; target && cur.id !== target.component && cur.parent && guard < 32; guard++) {
+  let name = route.name;
+  for (let guard = 0; route.origin && cur.id !== route.origin && cur.parent && guard < 32; guard++) {
     const parent = nodes.get(cur.parent);
     if (!parent) break;
     const pipe = layout.pipes.find((p) => p.id === `${parent.id}>${cur.id}`);
-    const arriving = parent.id === target.component;
     const fnId = cur.props.find((p) => p.name === name)?.fnId;
     const parentName = parent.props.find((p) => p.kind === 'function' && p.fnId === fnId)?.name;
-    const label = arriving && finalName !== name ? `${name} → ${callLabel(finalName, call)}` : callLabel(name, call);
-    send(`${parent.id}>${cur.id}`, pipe?.points, label, parent);
+    send(`${parent.id}>${cur.id}`, pipe?.points, named(name, parent.id === route.origin), parent);
     if (parentName) name = parentName;
     cur = parent;
   }
-  if (target?.tank) activity.schedule(target.tank, t);
+  if (route.tank) activity.schedule(route.tank, t);
   activity.schedule(`split:${cur.id}`, t);
   return t;
 }
