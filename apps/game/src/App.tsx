@@ -8,8 +8,14 @@ import type { GameMessage, Payload } from '@codecraft/probe';
 import { useProbe } from './useProbe';
 import { Inspector } from './Inspector';
 
-/** The app being visualised. It runs its own dev server; see apps/todo. */
-const APP_URL = import.meta.env.VITE_APP_URL ?? `${location.protocol}//${location.hostname}:5320/`;
+/** The app being visualised runs its own dev server (apps/todo), which serves two versions of it. */
+const APP_BASE = import.meta.env.VITE_APP_URL ?? `${location.protocol}//${location.hostname}:5320/`;
+const APPS = [
+  { id: 'plain', label: 'plain', path: '' },
+  { id: 'memo', label: 'memoized', path: 'memo.html' },
+] as const;
+type AppId = (typeof APPS)[number]['id'];
+const appUrl = (id: AppId) => APP_BASE + (APPS.find((a) => a.id === id)?.path ?? '');
 /** The iframe's size is the app's viewport. */
 const VIEWPORT = { w: 400, h: 720 };
 /** How far away (world units) you can press things on the screen. */
@@ -25,6 +31,15 @@ function levelsOf(layout: FactoryLayout) {
 
 export function App() {
   const probe = useProbe();
+  const [appId, setAppId] = useState<AppId>(() => (new URLSearchParams(location.search).get('app') === 'memo' ? 'memo' : 'plain'));
+  const switchApp = () => {
+    const next: AppId = appId === 'plain' ? 'memo' : 'plain';
+    const url = new URL(location.href);
+    url.searchParams.set('app', next);
+    history.replaceState(null, '', url);
+    probe.reset();
+    setAppId(next);
+  };
   const { layout } = probe;
   const [coarse] = useState(isCoarsePointer);
   const [level, setLevel] = useState<string>('Screen');
@@ -89,13 +104,16 @@ export function App() {
         {layout && <Factory layout={layout} activity={probe.activity} />}
         {layout && <Inspector onChange={setInspected} />}
         {layout && <ScreenWindow layout={layout} />}
-        <AppScreen layout={layout} frame={probe.frame} />
+        <AppScreen layout={layout} frame={probe.frame} url={appUrl(appId)} onLoad={() => probe.send({ type: 'sync' })} />
         {layout && !coarse && <DesktopInput enabled={onScreen} layout={layout} send={probe.send} />}
       </Stage>
 
       <div className="hud">
         <span className="hud-title">CODECRAFT</span>
         {layout && <span className="hud-level">{level}</span>}
+        <button type="button" className="hud-app" onClick={(e) => (switchApp(), e.currentTarget.blur())} title="Switch between the plain and memoized versions of the app">
+          app: <b>{APPS.find((a) => a.id === appId)?.label}</b>
+        </button>
       </div>
       {layout && (
         <div className="hud-time" role="group" aria-label="Time">
@@ -118,7 +136,7 @@ export function App() {
           {inspected.value !== undefined && <pre>{pretty(inspected.value)}</pre>}
         </div>
       )}
-      {!layout && <div className="hud-center">Connecting to the app at {APP_URL}…</div>}
+      {!layout && <div className="hud-center">Connecting to the app at {appUrl(appId)}…</div>}
       {probe.editing && <div className="hud-center hud-typing">Typing in the app · Esc to stop</div>}
       {layout && !probe.editing && <div className="crosshair" aria-hidden />}
       {layout && !coarse && !probe.editing && (
@@ -192,7 +210,17 @@ function DesktopInput({ enabled, layout, send }: { enabled: boolean; layout: Fac
  * (see ScreenWindow). So anything in front of the screen draws over it, and from below you see the
  * page's back face: the app, mirrored, as if through glass.
  */
-function AppScreen({ layout, frame }: { layout: FactoryLayout | null; frame: MutableRefObject<HTMLIFrameElement | null> }) {
+function AppScreen({
+  layout,
+  frame,
+  url,
+  onLoad,
+}: {
+  layout: FactoryLayout | null;
+  frame: MutableRefObject<HTMLIFrameElement | null>;
+  url: string;
+  onLoad: () => void;
+}) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
@@ -205,7 +233,6 @@ function AppScreen({ layout, frame }: { layout: FactoryLayout | null; frame: Mut
     Object.assign(renderer.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '-1' });
     host.appendChild(renderer.domElement);
     const iframe = document.createElement('iframe');
-    iframe.src = APP_URL;
     iframe.title = 'The app';
     iframe.width = String(VIEWPORT.w);
     iframe.height = String(VIEWPORT.h);
@@ -227,6 +254,18 @@ function AppScreen({ layout, frame }: { layout: FactoryLayout | null; frame: Mut
   useEffect(() => {
     css.current?.renderer.setSize(size.width, size.height);
   }, [size.width, size.height]);
+
+  // load (or switch) the app; ask the probe for a snapshot whenever a page finishes loading
+  const loaded = useRef(onLoad);
+  loaded.current = onLoad;
+  useEffect(() => {
+    const iframe = frame.current;
+    if (!iframe) return;
+    const onLoadEvent = () => loaded.current();
+    iframe.addEventListener('load', onLoadEvent);
+    if (iframe.src !== url) iframe.src = url;
+    return () => iframe.removeEventListener('load', onLoadEvent);
+  }, [url, frame]);
 
   useFrame(() => {
     const c = css.current;

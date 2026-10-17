@@ -46,11 +46,17 @@ export function useProbe() {
     return () => window.clearInterval(id);
   }, [connected, send]);
 
+  /** Forget the previous app's frames (after loading a different app into the iframe). */
+  const reset = useCallback(() => {
+    latest.current = null;
+    last.current = null;
+  }, []);
+
   /** Play the most recent commit again from now. */
   const replay = useCallback(() => {
     const l = last.current;
     if (l) scheduleCommit(activity, l.commit, l.prev, l.next);
   }, [activity]);
 
-  return { frame, snapshot: current?.snapshot ?? null, layout: current?.layout ?? null, activity, editing, send, replay };
+  return { frame, snapshot: current?.snapshot ?? null, layout: current?.layout ?? null, activity, editing, send, replay, reset };
 }

@@ -6,7 +6,7 @@ up to the screen, telescoping pistons for lists, and conveyor belts for scrollin
 
 ```
 apps/game/          the game: walk on a running app and through the factory beneath it
-apps/todo/          the reference app the game visualises (plain React + the probe's Vite plugin)
+apps/todo/          the reference app the game visualises, in two versions: plain (/) and memoized (/memo.html)
 apps/wiki/          the design wiki (Vite + React + MDX, 3D embeds)
   src/content/      one .mdx file per page
 packages/probe/     reads a running React app (DevTools hook) and talks to the game

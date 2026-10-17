@@ -151,3 +151,18 @@ body,
   word-break: break-word;
   color: #c9e9f2;
 }
+.hud-app {
+  pointer-events: auto;
+  min-height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  color: #d6f7ff;
+  background: rgba(2, 8, 16, 0.75);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.hud-app b {
+  color: var(--cyan);
+}

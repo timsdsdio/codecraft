@@ -180,7 +180,7 @@ function routeCall(activity: Activity, call: CallInfo, el: ElementInfo, frame: F
     const arriving = parent.id === target.component;
     const fnId = cur.props.find((p) => p.name === name)?.fnId;
     const parentName = parent.props.find((p) => p.kind === 'function' && p.fnId === fnId)?.name;
-    const label = arriving ? `${name} → ${callLabel(finalName, call)}` : callLabel(name, call);
+    const label = arriving && finalName !== name ? `${name} → ${callLabel(finalName, call)}` : callLabel(name, call);
     send(`${parent.id}>${cur.id}`, pipe?.points, label, parent);
     if (parentName) name = parentName;
     cur = parent;

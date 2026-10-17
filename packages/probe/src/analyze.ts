@@ -30,14 +30,25 @@ function walk(n: Node, visit: (n: Node) => boolean | void) {
 const isFn = (n: Node) => n && /^(ArrowFunctionExpression|FunctionExpression|FunctionDeclaration)$/.test(n.type);
 const capital = (s: string) => /^[A-Z]/.test(s);
 
-/** Top-level component functions: `function Foo()`, `const Foo = () => …`, exported or not. */
+/** `memo(fn)`, `React.memo(fn)`, `forwardRef(fn)`: the function inside, or the node itself. */
+function unwrap(n: Node): Node {
+  if (n?.type !== 'CallExpression') return n;
+  const c = n.callee;
+  const name = c.type === 'Identifier' ? c.name : c.type === 'MemberExpression' ? c.property?.name : null;
+  return name === 'memo' || name === 'forwardRef' ? unwrap(n.arguments[0]) : n;
+}
+
+/** Top-level component functions: `function Foo()`, `const Foo = () => …`, `const Foo = memo(…)`, exported or not. */
 function components(program: Node): { name: string; fn: Node }[] {
   const out: { name: string; fn: Node }[] = [];
   for (let stmt of program.body) {
     if ((stmt.type === 'ExportNamedDeclaration' || stmt.type === 'ExportDefaultDeclaration') && stmt.declaration) stmt = stmt.declaration;
     if (stmt.type === 'FunctionDeclaration' && stmt.id && capital(stmt.id.name)) out.push({ name: stmt.id.name, fn: stmt });
     if (stmt.type === 'VariableDeclaration')
-      for (const d of stmt.declarations) if (d.id?.type === 'Identifier' && capital(d.id.name) && isFn(d.init)) out.push({ name: d.id.name, fn: d.init });
+      for (const d of stmt.declarations) {
+        const fn = unwrap(d.init);
+        if (d.id?.type === 'Identifier' && capital(d.id.name) && isFn(fn)) out.push({ name: fn.id?.name ?? d.id.name, fn });
+      }
   }
   return out;
 }
