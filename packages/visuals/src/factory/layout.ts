@@ -55,6 +55,7 @@ export interface ElementInfo {
   id: string;
   tag: string;
   rect: Rect;
+  clip?: Rect;
   /** each attribute (or `text`) set by an expression: the expression's source and the value React rendered */
   slots: { name: string; reads: ReadInfo[] }[];
   /** event attributes (`onClick`, …); the calls they make are recorded when they run */
@@ -68,6 +69,8 @@ export interface CompNode {
   parent: string | null;
   /** border box of the component's DOM output, in viewport px (after scrolling) */
   rect: Rect;
+  /** visible area after every scrolling ancestor clips it (absent = not clipped) */
+  clip?: Rect;
   props: ValueInfo[];
   /** useState hooks, in call order */
   state: ValueInfo[];
@@ -102,6 +105,7 @@ export interface CasingL {
   /** centre of the casing's base */
   pos: Vec3;
   size: Vec3;
+  clip?: Box;
 }
 
 export interface TankL {
@@ -122,6 +126,7 @@ export interface PipeL {
   /** function-valued props: events travel down these, from child to owner */
   wire?: boolean;
   props: ValueInfo[];
+  clip?: Box;
 }
 
 export interface PistonL {
@@ -129,6 +134,7 @@ export interface PistonL {
   /** where the rod leaves the casing */
   base: Vec3;
   heads: { key: string; child: string; pos: Vec3 }[];
+  clip?: Box;
 }
 
 export interface BeltL {
@@ -143,12 +149,22 @@ export interface LinkL {
   id: string;
   from: Vec3;
   rect: Box;
+  clip?: Box;
 }
 
-/** Evaluates a component's JSX expressions and sends each value to its element (sits on the casing). */
+export interface FoldL {
+  owner: string;
+  box: Box;
+  /** floors the fold spans: from the owner's floor to the screen */
+  y0: number;
+  y1: number;
+}
+
+/** Splits a component's props into the individual values its JSX reads (sits on the casing). */
 export interface SplitterL {
   owner: string;
   pos: Vec3;
+  clip?: Box;
 }
 
 /** Hangs under one element on the screen and paints it; `handler` when it only handles events. */
@@ -160,6 +176,7 @@ export interface EmitterL {
   /** centre of the emitter */
   pos: Vec3;
   kind: 'value' | 'handler';
+  clip?: Box;
 }
 
 export interface FactoryLayout {
@@ -173,6 +190,7 @@ export interface FactoryLayout {
   pistons: PistonL[];
   belts: BeltL[];
   links: LinkL[];
+  folds: FoldL[];
   splitters: SplitterL[];
   emitters: EmitterL[];
   /** itemducts from each splitter to its emitters; id `duct:<element id>` */
@@ -231,7 +249,7 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
       cx = wx(scroll.viewport.x + scroll.viewport.w / 2);
       cz = wz(scroll.viewport.y) + size[2] / 2 + 0.04;
     }
-    casings.set(n.id, { id: n.id, name: n.name, depth: d, props: n.props, state: n.state, pos: [cx, floorY(d) + SLAB, cz], size });
+    casings.set(n.id, { id: n.id, name: n.name, depth: d, props: n.props, state: n.state, pos: [cx, floorY(d) + SLAB, cz], size, clip: n.clip ? toBox(n.clip) : undefined });
   }
 
   // ── state tanks: in a row beside the casing (−x side) ──
@@ -255,6 +273,7 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
   const pipes: PipeL[] = [];
   const pistons: PistonL[] = [];
   const belts: BeltL[] = [];
+  const folds: FoldL[] = [];
   const kids = new Map<string, CompNode[]>();
   for (const n of snap.nodes) if (n.parent) kids.set(n.parent, [...(kids.get(n.parent) ?? []), n]);
 
@@ -281,14 +300,14 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
         [cc.pos[0] + dx, lane, cc.pos[2]],
         [cc.pos[0] + dx, childY, cc.pos[2]],
       ];
-      pipes.push({ id: `${parent.id}>${child.id}`, from: parent.id, to: child.id, points: route(0), kind: bundleKind(data), props: data });
+      pipes.push({ id: `${parent.id}>${child.id}`, from: parent.id, to: child.id, points: route(0), kind: bundleKind(data), props: data, clip: cc.clip });
       if (fns.length)
-        pipes.push({ id: `${child.id}~>${parent.id}`, from: child.id, to: parent.id, points: route(0.07).reverse(), kind: 'function', wire: true, props: fns });
+        pipes.push({ id: `${child.id}~>${parent.id}`, from: child.id, to: parent.id, points: route(0.07).reverse(), kind: 'function', wire: true, props: fns, clip: cc.clip });
     });
 
     if (keyed.length) {
       const scroll = scrollOf.get(parent.id);
-      const viewport = scroll ? toBox(scroll.viewport) : undefined;
+      const fold = scroll ? toBox(scroll.viewport) : undefined;
       const rodY = floorY(depth(parent)) + SLAB + 0.2;
       const rodX = pc.pos[0];
       const base: Vec3 = [rodX, rodY, pc.pos[2] + pc.size[2] / 2];
@@ -296,7 +315,7 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
         const cc = casings.get(child.id)!;
         return { key: child.key!, child: child.id, pos: [rodX, rodY, cc.pos[2]] as Vec3 };
       });
-      pistons.push({ owner: parent.id, base, heads });
+      pistons.push({ owner: parent.id, base, heads, clip: fold });
       // each head feeds its item through a pipe that leaves the side, rises, and comes back over
       keyed.forEach((child, i) => {
         const cc = casings.get(child.id)!;
@@ -312,13 +331,14 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
           [cc.pos[0] + dx, lane - dx, h[2] + dz],
           [cc.pos[0] + dx, childY, cc.pos[2] + dz],
         ];
-        pipes.push({ id: `${parent.id}>${child.id}`, from: parent.id, to: child.id, points: route(0, 0), kind: bundleKind(data), props: data });
+        pipes.push({ id: `${parent.id}>${child.id}`, from: parent.id, to: child.id, points: route(0, 0), kind: bundleKind(data), props: data, clip: cc.clip ?? fold });
         if (fns.length)
-          pipes.push({ id: `${child.id}~>${parent.id}`, from: child.id, to: parent.id, points: route(0.07, 0.06).reverse(), kind: 'function', wire: true, props: fns });
+          pipes.push({ id: `${child.id}~>${parent.id}`, from: child.id, to: parent.id, points: route(0.07, 0.06).reverse(), kind: 'function', wire: true, props: fns, clip: cc.clip ?? fold });
       });
-      if (scroll && viewport) {
+      if (scroll && fold) {
         const bw = 0.5;
-        belts.push({ owner: parent.id, box: { x0: rodX - bw / 2, x1: rodX + bw / 2, z0: viewport.z0, z1: viewport.z1 }, y: floorY(depth(parent)) + SLAB, offset: scroll.scrollTop / PX });
+        belts.push({ owner: parent.id, box: { x0: rodX - bw / 2, x1: rodX + bw / 2, z0: fold.z0, z1: fold.z1 }, y: floorY(depth(parent)) + SLAB, offset: scroll.scrollTop / PX });
+        folds.push({ owner: parent.id, box: fold, y0: floorY(depth(parent)), y1: screenY });
       }
     }
   }
@@ -333,15 +353,16 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
     const c = casings.get(n.id)!;
     const top = c.pos[1] + c.size[1];
     const sp: Vec3 = [c.pos[0], top, c.pos[2]];
-    splitters.push({ owner: n.id, pos: sp });
+    splitters.push({ owner: n.id, pos: sp, clip: c.clip });
     const ceiling = floorY(depth(n) + 1);
     n.elements.forEach((el, i) => {
       const box = toBox(el.rect);
       const ex = (box.x0 + box.x1) / 2;
       const ez = (box.z0 + box.z1) / 2;
       const ey = ceiling - 0.06 - EMITTER.h / 2;
+      const clip = el.clip ? toBox(el.clip) : c.clip;
       const kind = el.slots.length ? 'value' : 'handler';
-      emitters.push({ id: el.id, owner: n.id, element: el, pos: [ex, ey, ez], kind });
+      emitters.push({ id: el.id, owner: n.id, element: el, pos: [ex, ey, ez], kind, clip });
       const lane = ey - 0.22 - i * 0.035;
       ducts.push({
         id: `duct:${el.id}`,
@@ -350,8 +371,9 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
         points: [[sp[0], top + SPLITTER * 0.8, sp[2]], [sp[0], lane, sp[2]], [ex, lane, sp[2]], [ex, lane, ez], [ex, ey - EMITTER.h / 2, ez]],
         kind: el.slots[0]?.reads[0]?.kind ?? 'function',
         props: el.slots.flatMap((s) => s.reads),
+        clip,
       });
-      links.push({ id: el.id, from: [ex, ey + EMITTER.h / 2, ez], rect: box });
+      links.push({ id: el.id, from: [ex, ey + EMITTER.h / 2, ez], rect: box, clip });
     });
   }
 
@@ -359,7 +381,7 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
   for (const n of snap.nodes) {
     if (n.paints === false || n.elements?.length) continue;
     const c = casings.get(n.id)!;
-    links.push({ id: n.id, from: [c.pos[0], c.pos[1] + c.size[1], c.pos[2]], rect: toBox(n.rect) });
+    links.push({ id: n.id, from: [c.pos[0], c.pos[1] + c.size[1], c.pos[2]], rect: toBox(n.rect), clip: c.clip });
   }
 
   return {
@@ -372,6 +394,7 @@ export function layoutFactory(snap: Snapshot): FactoryLayout {
     pistons,
     belts,
     links,
+    folds,
     splitters,
     emitters,
     ducts,

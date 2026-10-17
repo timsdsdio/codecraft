@@ -4,11 +4,13 @@
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import { useClip } from './clip';
 import { useMetal } from './look';
 import type { Box, Vec3 } from './layout';
 
 /** Mast + fins + glowing core, standing on a casing's top. `pos` = base of the mast. */
 export function AccessPoint({ pos, channel, pulseEvery, pulseOffset = 0 }: { pos: Vec3; channel: string; pulseEvery?: number; pulseOffset?: number }) {
+  const clip = useClip();
   const metal = useMetal('frame', channel);
   const coreColor = useMemo(() => new THREE.Color(channel), [channel]);
   const core = useRef<THREE.MeshBasicMaterial>(null);
@@ -30,21 +32,21 @@ export function AccessPoint({ pos, channel, pulseEvery, pulseOffset = 0 }: { pos
     <group position={pos}>
       <mesh position={[0, 0.03, 0]}>
         <boxGeometry args={[0.22, 0.06, 0.22]} />
-        <meshStandardMaterial {...metal} />
+        <meshStandardMaterial {...metal} clippingPlanes={clip} />
       </mesh>
       <mesh position={[0, 0.2, 0]}>
         <cylinderGeometry args={[0.018, 0.022, 0.3, 8]} />
-        <meshStandardMaterial {...metal} />
+        <meshStandardMaterial {...metal} clippingPlanes={clip} />
       </mesh>
       {[0.12, 0.2, 0.28].map((y, i) => (
         <mesh key={y} position={[0, y, 0]} rotation={[0, (i * Math.PI) / 4, 0]}>
           <boxGeometry args={[0.16 - i * 0.03, 0.012, 0.03]} />
-          <meshStandardMaterial {...metal} />
+          <meshStandardMaterial {...metal} clippingPlanes={clip} />
         </mesh>
       ))}
       <mesh position={[0, 0.39, 0]}>
         <icosahedronGeometry args={[0.05, 0]} />
-        <meshBasicMaterial ref={core} color={coreColor} toneMapped={false} />
+        <meshBasicMaterial ref={core} color={coreColor} toneMapped={false} clippingPlanes={clip} />
       </mesh>
       <mesh ref={ring} position={[0, 0.39, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.9, 1, 32]} />
@@ -56,17 +58,18 @@ export function AccessPoint({ pos, channel, pulseEvery, pulseOffset = 0 }: { pos
 
 /** A small antenna and status lamp on a consuming casing. `pos` = base. */
 export function Receiver({ pos, channel, linked = true }: { pos: Vec3; channel: string; linked?: boolean }) {
+  const clip = useClip();
   const metal = useMetal('rail', channel);
   const lamp = useMemo(() => new THREE.Color(linked ? channel : '#ff2050').multiplyScalar(2.2), [channel, linked]);
   return (
     <group position={pos}>
       <mesh position={[0, 0.09, 0]}>
         <cylinderGeometry args={[0.01, 0.014, 0.18, 6]} />
-        <meshStandardMaterial {...metal} />
+        <meshStandardMaterial {...metal} clippingPlanes={clip} />
       </mesh>
       <mesh position={[0, 0.2, 0]}>
         <sphereGeometry args={[0.03, 10, 8]} />
-        <meshBasicMaterial color={lamp} toneMapped={false} />
+        <meshBasicMaterial color={lamp} toneMapped={false} clippingPlanes={clip} />
       </mesh>
     </group>
   );

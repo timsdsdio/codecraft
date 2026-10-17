@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { CALL_COLOR, KIND_COLOR, type ValueKind } from '../palette';
 import { DUCT_SPEED, useActivity, type Cargo, type Shipment } from './activity';
+import { useClip } from './clip';
 import { useMetal } from './look';
 import { seeThrough, type Vec3 } from './layout';
 
@@ -32,6 +33,7 @@ export function Duct({
   sendOffset?: number;
   demoCargo?: Cargo;
 }) {
+  const clip = useClip();
   const activity = useActivity();
   const frame = useMetal('rail', KIND_COLOR[kind]);
   const key = JSON.stringify(points);
@@ -101,16 +103,16 @@ export function Duct({
   return (
     <group>
       <mesh geometry={geo.tube} raycast={seeThrough}>
-        <meshStandardMaterial color={glass} emissive={glass} emissiveIntensity={0.6} transparent opacity={0.22} depthWrite={false} metalness={0.1} roughness={0.05} />
+        <meshStandardMaterial color={glass} emissive={glass} emissiveIntensity={0.6} transparent opacity={0.22} depthWrite={false} metalness={0.1} roughness={0.05} clippingPlanes={clip} />
       </mesh>
       {geo.rings.map((rg, i) => (
         <mesh key={i} geometry={ringGeo} position={rg.pos} quaternion={rg.quat} scale={radius * 1.08} raycast={seeThrough}>
-          <meshStandardMaterial {...frame} />
+          <meshStandardMaterial {...frame} clippingPlanes={clip} />
         </mesh>
       ))}
       {Array.from({ length: POOL }, (_, i) => (
         <mesh key={i} ref={(m) => void (items.current[i] = m)} geometry={boxGeo} visible={false}>
-          <meshBasicMaterial toneMapped={false} />
+          <meshBasicMaterial toneMapped={false} clippingPlanes={clip} />
         </mesh>
       ))}
     </group>

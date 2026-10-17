@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { KIND_COLOR, type ValueKind } from '../palette';
+import { useClip } from './clip';
 import { useActivity } from './activity';
 import { useMetal } from './look';
 import { seeThrough, type Vec3 } from './layout';
 
 const vert = /* glsl */ `
   #include <common>
+  #include <clipping_planes_pars_vertex>
   varying vec2 vUv;
   varying vec3 vN;
   varying vec3 vView;
@@ -19,10 +21,12 @@ const vert = /* glsl */ `
     vN = normalize(normalMatrix * normal);
     vView = normalize(-mvPosition.xyz);
     gl_Position = projectionMatrix * mvPosition;
+    #include <clipping_planes_vertex>
   }
 `;
 const frag = /* glsl */ `
   #include <common>
+  #include <clipping_planes_pars_fragment>
   uniform vec3 uColor;
   uniform float uTime;
   uniform float uLen;
@@ -38,6 +42,7 @@ const frag = /* glsl */ `
     return exp(-d * d);
   }
   void main() {
+    #include <clipping_planes_fragment>
     float s = fract(vUv.x * uLen / 0.4 - uTime * uFlow);
     float wave = 0.5 + 0.5 * sin(s * 6.2831);
     float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 1.5);
@@ -70,6 +75,7 @@ export function Pipe({
   /** live: send a slug whenever the Activity store pulses this key */
   pulseKey?: string;
 }) {
+  const clip = useClip();
   const activity = useActivity();
   const lastLive = useRef<number | undefined>(undefined);
   const coupling = useMetal('frame', KIND_COLOR[kind]);
@@ -92,6 +98,7 @@ export function Pipe({
         vertexShader: vert,
         fragmentShader: frag,
         toneMapped: false,
+        clipping: true,
         uniforms: {
           uColor: { value: new THREE.Color(color) },
           uTime: { value: 0 },
@@ -104,6 +111,9 @@ export function Pipe({
     [color],
   );
   useEffect(() => () => mat.dispose(), [mat]);
+  useEffect(() => {
+    mat.clippingPlanes = clip;
+  }, [mat, clip]);
 
   const sent = useRef<number[]>([]);
   const lastSend = useRef(-Infinity);
@@ -138,7 +148,7 @@ export function Pipe({
       {geo.joints.map((p, i) => (
         <mesh key={i} position={p}>
           <sphereGeometry args={[radius * 1.45, 10, 8]} />
-          <meshStandardMaterial {...coupling} />
+          <meshStandardMaterial {...coupling} clippingPlanes={clip} />
         </mesh>
       ))}
     </group>

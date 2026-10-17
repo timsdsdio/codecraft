@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { KIND_COLOR } from '../palette';
 import { Label } from '../Label';
+import { useClip } from './clip';
 import { useActivity } from './activity';
 import { useMetal } from './look';
 import type { ValueInfo, Vec3 } from './layout';
@@ -27,6 +28,7 @@ export function Tank({
   /** live: slosh when the Activity store pulses this key */
   pulseKey?: string;
 }) {
+  const clip = useClip();
   const inspect = { label: `${info.name} (state)`, kind: info.kind, value: info.value ?? info.preview };
   const activity = useActivity();
   const fluidMat = useRef<THREE.MeshBasicMaterial>(null);
@@ -50,11 +52,11 @@ export function Tank({
     <group position={pos}>
       <mesh position={[0, height / 2, 0]} userData={{ inspect }}>
         <cylinderGeometry args={[radius, radius, height, 20, 1, true]} />
-        <meshStandardMaterial color="#5fb8d8" transparent opacity={0.14} metalness={0.3} roughness={0.05} depthWrite={false} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#5fb8d8" transparent opacity={0.14} metalness={0.3} roughness={0.05} depthWrite={false} side={THREE.DoubleSide} clippingPlanes={clip} />
       </mesh>
       <mesh ref={fluid}>
         <cylinderGeometry args={[radius * 0.86, radius * 0.86, 1, 18]} />
-        <meshBasicMaterial ref={fluidMat} color={color.clone().multiplyScalar(1.6)} toneMapped={false} />
+        <meshBasicMaterial ref={fluidMat} color={color.clone().multiplyScalar(1.6)} toneMapped={false} clippingPlanes={clip} />
       </mesh>
       {/* frame posts, so the glass reads as a vessel */}
       {[0, 1, 2, 3].map((i) => {
@@ -62,14 +64,14 @@ export function Tank({
         return (
           <mesh key={`post${i}`} position={[Math.cos(a) * (radius + 0.012), height / 2, Math.sin(a) * (radius + 0.012)]}>
             <boxGeometry args={[0.022, height, 0.022]} />
-            <meshStandardMaterial {...metal} />
+            <meshStandardMaterial {...metal} clippingPlanes={clip} />
           </mesh>
         );
       })}
       {[0.02, height / 2, height - 0.02].map((y) => (
         <mesh key={y} position={[0, y, 0]}>
           <cylinderGeometry args={[radius + 0.015, radius + 0.015, 0.035, 20]} />
-          <meshStandardMaterial {...metal} />
+          <meshStandardMaterial {...metal} clippingPlanes={clip} />
         </mesh>
       ))}
       {label && (

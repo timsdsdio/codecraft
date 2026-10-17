@@ -5,9 +5,11 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Edges } from '@react-three/drei';
 import { useActivity } from './activity';
+import { useClip } from './clip';
 import { SPLITTER, type Vec3 } from './layout';
 
 export function Splitter({ pos, pulseKey }: { pos: Vec3; pulseKey?: string }) {
+  const clip = useClip();
   const activity = useActivity();
   const comb = useRef<THREE.Group>(null);
   const edge = useRef<THREE.Color>(new THREE.Color('#b18cff'));
@@ -23,16 +25,16 @@ export function Splitter({ pos, pulseKey }: { pos: Vec3; pulseKey?: string }) {
     <group position={pos}>
       <mesh position={[0, s * 0.4, 0]}>
         <boxGeometry args={[s, s * 0.8, s]} />
-        <meshStandardMaterial color="#0a0614" metalness={0.5} roughness={0.4} transparent opacity={0.85} />
+        <meshStandardMaterial color="#0a0614" metalness={0.5} roughness={0.4} transparent opacity={0.85} clippingPlanes={clip} />
         <Edges>
-          <lineBasicMaterial ref={mat} color={edge.current} toneMapped={false} />
+          <lineBasicMaterial ref={mat} color={edge.current} toneMapped={false} clippingPlanes={clip} />
         </Edges>
       </mesh>
       <group ref={comb} position={[0, s * 0.4, 0]}>
         {[0, 1, 2].map((i) => (
           <mesh key={i} rotation={[0, (i * Math.PI) / 3, 0]}>
             <boxGeometry args={[s * 0.75, s * 0.06, s * 0.08]} />
-            <meshBasicMaterial color={new THREE.Color('#b18cff').multiplyScalar(1.6)} toneMapped={false} />
+            <meshBasicMaterial color={new THREE.Color('#b18cff').multiplyScalar(1.6)} toneMapped={false} clippingPlanes={clip} />
           </mesh>
         ))}
       </group>

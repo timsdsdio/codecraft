@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { ThreeElements } from '@react-three/fiber';
 import * as THREE from 'three';
 import { FACTORY } from '../palette';
+import { useClip } from './clip';
 import { useLook } from './look';
 
 const cache = new Map<number, THREE.ExtrudeGeometry>();
@@ -34,11 +35,12 @@ export function cogGeometry(teeth = 8): THREE.ExtrudeGeometry {
 }
 
 export function Cog({ radius = 0.2, thickness = 0.06, teeth = 8, glow = 0, ...rest }: { radius?: number; thickness?: number; teeth?: number; glow?: number } & ThreeElements['mesh']) {
+  const clip = useClip();
   const tron = useLook() === 'tron';
   const emissive = useMemo(() => new THREE.Color(tron ? FACTORY.casing : FACTORY.brass), [tron]);
   return (
     <mesh geometry={cogGeometry(teeth)} scale={[radius, radius, thickness]} {...rest}>
-      <meshStandardMaterial color={tron ? '#04120a' : FACTORY.brass} metalness={0.85} roughness={0.35} emissive={emissive} emissiveIntensity={(tron ? 0.9 : 0.08) + glow} />
+      <meshStandardMaterial color={tron ? '#04120a' : FACTORY.brass} metalness={0.85} roughness={0.35} emissive={emissive} emissiveIntensity={(tron ? 0.9 : 0.08) + glow} clippingPlanes={clip} />
     </mesh>
   );
 }

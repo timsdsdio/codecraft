@@ -9,8 +9,10 @@ import { Splitter } from './Splitter';
 import { Avatar } from './Avatar';
 import { Belt } from './Belt';
 import { Casing } from './Casing';
+import { ClipRegion } from './clip';
 import { DisplayLink } from './DisplayLink';
 import { Floor } from './Floor';
+import { Fold } from './Fold';
 import { floorY, type EmitterL, type FactoryLayout, type TankL, type Vec3 } from './layout';
 import type { Cargo } from './activity';
 import { Pipe } from './Pipe';
@@ -69,17 +71,21 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
           <Floor key={i} level={i + 1} y={floorY(i + 1)} size={layout.size} label={labels} />
         ))}
         {screen && top >= layout.floors && <Screen size={layout.size} y={layout.screenY} draw={screen.draw} opacity={screen.opacity} />}
+
+        {layout.folds.filter((f) => showsFloor(f.owner)).map((f) => (
+          <Fold key={f.owner} box={f.box} y0={f.y0} y1={top >= layout.floors ? f.y1 : floorY(top + 1)} />
+        ))}
         {layout.belts.filter((b) => showsFloor(b.owner)).map((b) => (
           <Belt key={b.owner} box={b.box} y={b.y} offset={scroll?.[b.owner] ?? b.offset} />
         ))}
         {layout.pistons.filter((p) => showsFloor(p.owner)).map((p) => (
-          <group key={p.owner}>
+          <ClipRegion key={p.owner} box={p.clip}>
             <Piston base={p.base} heads={p.heads} />
-          </group>
+          </ClipRegion>
         ))}
 
         {layout.casings.filter((c) => c.depth <= top).map((c) => (
-          <group key={c.id}>
+          <ClipRegion key={c.id} box={c.clip}>
             <Casing
               pos={c.pos}
               size={c.size}
@@ -97,7 +103,7 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
                 },
               }}
             />
-          </group>
+          </ClipRegion>
         ))}
         {layout.tanks.filter((t) => showsFloor(t.owner)).map((t, i) => (
           <Tank key={t.id} pos={t.pos} radius={t.radius} height={t.height} info={t.info} fill={tankFill?.(t) ?? (t.info.size !== undefined ? Math.min(1, 0.12 + t.info.size / 14) : 0.45 + ((i * 0.23) % 0.5))} label={labels} pulseKey={t.id} />
@@ -109,7 +115,7 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
             const hot = chain.indexOf(p.id);
             if (!p.wire)
               return (
-                <group key={p.id}>
+                <ClipRegion key={p.id} box={p.clip}>
                   <Duct
                     points={p.points}
                     kind={p.kind}
@@ -118,10 +124,10 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
                     sendOffset={at(p.from) + 0.1}
                     demoCargo={{ label: p.props.map((x) => x.name).join(', '), kind: p.kind }}
                   />
-                </group>
+                </ClipRegion>
               );
             return (
-              <group key={p.id}>
+              <ClipRegion key={p.id} box={p.clip}>
                 <Pipe
                   points={p.points}
                   kind={p.kind}
@@ -131,17 +137,17 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
                   dim={hot < 0}
                   pulseKey={p.id}
                 />
-              </group>
+              </ClipRegion>
             );
           })}
 
         {layout.splitters.filter((sp) => showsFloor(sp.owner)).map((sp) => (
-          <group key={`split:${sp.owner}`}>
+          <ClipRegion key={`split:${sp.owner}`} box={sp.clip}>
             <Splitter pos={sp.pos} pulseKey={`split:${sp.owner}`} />
-          </group>
+          </ClipRegion>
         ))}
         {layout.ducts.filter((d) => showsFloor(d.from)).map((d) => (
-          <group key={d.id}>
+          <ClipRegion key={d.id} box={d.clip}>
             <Duct
               points={d.points}
               kind={d.kind}
@@ -151,18 +157,18 @@ export function Factory({ layout, screen, maxFloor, wires = false, demo = false,
               sendOffset={at(d.from) + 0.3}
               demoCargo={{ label: d.props.map((x) => ('path' in x ? String(x.path) : x.name)).join(', '), kind: d.kind }}
             />
-          </group>
+          </ClipRegion>
         ))}
         {layout.emitters.filter((e) => showsFloor(e.owner)).map((e) => (
-          <group key={`emit:${e.id}`}>
+          <ClipRegion key={`emit:${e.id}`} box={e.clip}>
             <Emitter pos={e.pos} kind={e.kind} pulseKey={`emit:${e.id}`} inspect={emitterCargo(e)} />
-          </group>
+          </ClipRegion>
         ))}
         {activity && <ActivityClock />}
         {layout.links.filter((l) => (depthOf.get(l.id) ?? 1) <= top && top >= layout.floors).map((l) => (
-          <group key={l.id}>
+          <ClipRegion key={l.id} box={l.clip}>
             <DisplayLink from={l.from} rect={l.rect} screenY={layout.screenY} renderEvery={every} renderOffset={at(l.id) + 0.3} pulseKey={`link:${l.id}`} />
-          </group>
+          </ClipRegion>
         ))}
 
         {avatar && <Avatar pos={avatar.pos} yaw={avatar.yaw} />}

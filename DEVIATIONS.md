@@ -10,10 +10,9 @@ depends on, each with its reason. When one changes, edit its entry.
   so nothing overlaps. Data rises toward the screen; events sink toward the state.
 - **Jump moves one floor at a time.** This keeps you oriented in deep trees. A separate key
   (Home, or long-press on touch) goes straight to the screen.
-- **If it's in the tree, it's drawn.** Content scrolled out of view keeps its machines, at the
-  positions React's layout gives it, outside the scroll area's footprint. Only the component tree
-  decides what exists, so a virtualised list shows exactly the rows it has mounted. A scroll area
-  is a conveyor belt on its owner's floor, whose surface moves with the scroll offset.
+- **Scrolling is clipping.** A scroll area is a conveyor belt on its owner's floor. Its content is
+  clipped by four planes forming a prism up to the screen (a "fold"), so no special scroll physics
+  is needed.
 - **Props travel as items in itemducts**, one duct per child. Each item is one changed prop and
   carries a copy of its value, so it can be inspected in flight. Function props are items too
   (red cards), and they travel whenever the parent creates a new closure.
