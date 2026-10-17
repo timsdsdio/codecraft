@@ -14,7 +14,6 @@ packages/visuals/   factory machines (R3F/drei) + layoutFactory(); shared by the
 server/serve.mjs    the production server: static files for all three apps on one port
 docs/STACK.md       the stack and lessons the project follows
 DEVIATIONS.md       decisions in force, with reasons
-socketworld-src.tar.gz   Socketworld, an earlier experiment that packages/visuals started from (reference only)
 ```
 
 ```bash
