@@ -65,7 +65,6 @@ export function todoSnapshot({ items = 10, scrollTop = 40 }: { items?: number; s
         parent: 'list',
         key: `t${i}`,
         rect: { x: LIST.x, y: LIST.y + i * ROW - scrollTop + 2, w: LIST.w, h: ROW - 4 },
-        clip: LIST,
         props: [{ name: 'todo', kind: 'object', preview: `{ title: "${TITLES[i]}" }` }, fn('onToggle'), fn('onRemove')],
         state: [],
       }),

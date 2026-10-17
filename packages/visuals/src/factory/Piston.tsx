@@ -4,7 +4,6 @@
 import { useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { useClip } from './clip';
 import { useMetal } from './look';
 import type { Vec3 } from './layout';
 
@@ -12,7 +11,6 @@ const rodGeo = new THREE.CylinderGeometry(1, 1, 1, 12).rotateX(Math.PI / 2); // 
 const MAX = 64;
 
 export function Piston({ base, heads }: { base: Vec3; heads: { key: string; pos: Vec3 }[] }) {
-  const clip = useClip();
   const current = useRef(new Map<string, number>());
   const headRefs = useRef<(THREE.Group | null)[]>([]);
   const rodRefs = useRef<(THREE.Mesh | null)[]>([]);
@@ -48,21 +46,21 @@ export function Piston({ base, heads }: { base: Vec3; heads: { key: string; pos:
     <group>
       {/* the sleeve the rod slides through */}
       <mesh geometry={rodGeo} position={[bx, by, bz]} scale={[0.1, 0.1, 0.22]}>
-        <meshStandardMaterial {...sleeve} clippingPlanes={clip} />
+        <meshStandardMaterial {...sleeve} />
       </mesh>
       {heads.slice(0, MAX).map((h, i) => (
         <group key={h.key}>
           <mesh ref={(m) => void (rodRefs.current[i] = m)} geometry={rodGeo} position={[bx, by, bz]} scale={[rodR(i), rodR(i), 0.001]}>
-            <meshStandardMaterial color={i % 2 ? '#8a9096' : '#a9b0b6'} metalness={0.9} roughness={0.25} clippingPlanes={clip} />
+            <meshStandardMaterial color={i % 2 ? '#8a9096' : '#a9b0b6'} metalness={0.9} roughness={0.25} />
           </mesh>
           <group ref={(g) => void (headRefs.current[i] = g)} position={[bx, by, bz]}>
             <mesh>
               <boxGeometry args={[0.2, 0.2, 0.16]} />
-              <meshStandardMaterial {...brass} clippingPlanes={clip} />
+              <meshStandardMaterial {...brass} />
             </mesh>
             <mesh position={[0.1, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[0.045, 0.045, 0.06, 10]} />
-              <meshStandardMaterial {...outlet} clippingPlanes={clip} />
+              <meshStandardMaterial {...outlet} />
             </mesh>
           </group>
         </group>

@@ -4,7 +4,6 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { FACTORY } from '../palette';
-import { useClip } from './clip';
 import { useActivity } from './activity';
 import { seeThrough, type Box, type Vec3 } from './layout';
 
@@ -23,7 +22,6 @@ export function DisplayLink({
   renderOffset?: number;
   pulseKey?: string;
 }) {
-  const clip = useClip();
   const activity = useActivity();
   const top = screenY - 0.004;
   const cx = (rect.x0 + rect.x1) / 2;
@@ -49,7 +47,7 @@ export function DisplayLink({
     <group>
       <mesh position={[from[0], from[1] + h / 2, from[2]]} raycast={seeThrough}>
         <cylinderGeometry args={[0.012, 0.012, h, 6]} />
-        <meshBasicMaterial ref={beam} color={base} toneMapped={false} transparent opacity={0.7} depthWrite={false} blending={THREE.AdditiveBlending} clippingPlanes={clip} />
+        <meshBasicMaterial ref={beam} color={base} toneMapped={false} transparent opacity={0.7} depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
       <group position={[cx, top, cz]}>
         {[
@@ -60,7 +58,7 @@ export function DisplayLink({
         ].map(([x, z, sx, sz], i) => (
           <mesh key={i} position={[x, 0, z]} raycast={seeThrough}>
             <boxGeometry args={[sx, 0.006, sz]} />
-            <meshBasicMaterial ref={i === 0 ? edge : undefined} color={base} toneMapped={false} clippingPlanes={clip} />
+            <meshBasicMaterial ref={i === 0 ? edge : undefined} color={base} toneMapped={false} />
           </mesh>
         ))}
       </group>

@@ -207,24 +207,6 @@ function union(rs: DOMRect[]): Rect {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
-const clips = (el: Element) => {
-  const s = getComputedStyle(el);
-  return s.overflowX !== 'visible' || s.overflowY !== 'visible';
-};
-
-/** Intersection of every clipping ancestor's box (absent when nothing clips). */
-function clipOf(el: Element | undefined): Rect | undefined {
-  let r: { x0: number; y0: number; x1: number; y1: number } | null = null;
-  for (let a = el?.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
-    if (!clips(a)) continue;
-    const b = a.getBoundingClientRect();
-    r = r
-      ? { x0: Math.max(r.x0, b.left), y0: Math.max(r.y0, b.top), x1: Math.min(r.x1, b.right), y1: Math.min(r.y1, b.bottom) }
-      : { x0: b.left, y0: b.top, x1: b.right, y1: b.bottom };
-  }
-  return r ? { x: r.x0, y: r.y0, w: Math.max(0, r.x1 - r.x0), h: Math.max(0, r.y1 - r.y0) } : undefined;
-}
-
 /** Does this element draw anything itself (background, border, text, or a form control)? */
 function paints(el: Element): boolean {
   if (/^(INPUT|BUTTON|IMG|SVG|CANVAS|VIDEO|TEXTAREA|SELECT)$/i.test(el.tagName)) return true;
@@ -274,7 +256,6 @@ function elementsOf(f: Fiber, id: string, ids: WeakMap<Element, string>): Elemen
             id: eid,
             tag: spec.tag,
             rect: toRect(el.getBoundingClientRect()),
-            clip: clipOf(el),
             slots,
             handlers: spec.handlers.map((event) => ({ event })),
           });
@@ -346,7 +327,6 @@ function snapshot(withCommit: boolean): { snapshot: Snapshot; commit?: CommitRec
         name: nameOf(f.type),
         parent,
         rect: union(hosts.map((h) => h.getBoundingClientRect())),
-        clip: clipOf(hosts[0]),
         props: Object.entries(props)
           .filter(([k, v]) => k !== 'children' || v !== undefined)
           .map(([k, v]) => info(k, v, f)),

@@ -14,15 +14,6 @@ import { isCoarsePointer } from './input';
 export const FOG_COLOR = '#03070f';
 
 
-/** Scroll folds need per-material clipping planes. */
-function LocalClipping() {
-  const gl = useThree((s) => s.gl);
-  useEffect(() => {
-    gl.localClippingEnabled = true;
-  }, [gl]);
-  return null;
-}
-
 /** Counts frames and writes "NN fps" into a DOM element twice a second (no React re-renders). */
 function FpsMeter({ out }: { out: RefObject<HTMLDivElement | null> }) {
   const acc = useRef({ frames: 0, since: performance.now() });
@@ -174,7 +165,6 @@ export function Stage({
             maxPolarAngle={Math.PI / 2 - 0.06}
           />
         )}
-        <LocalClipping />
         <ToneMappingSwitch post={bloom} />
         {bloom && (
           <EffectComposer multisampling={coarse ? 0 : 4} enableNormalPass={false}>

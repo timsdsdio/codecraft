@@ -7,7 +7,6 @@ import { useFrame } from '@react-three/fiber';
 import { FACTORY } from '../palette';
 import { Label } from '../Label';
 import { Cog } from './Cog';
-import { useClip } from './clip';
 import { useActivity, type Cargo } from './activity';
 import { useMetal } from './look';
 import type { Vec3 } from './layout';
@@ -38,7 +37,6 @@ export function Casing({
   label?: boolean;
   dim?: boolean;
 }) {
-  const clip = useClip();
   const activity = useActivity();
   const metal = useMetal('frame');
   const frame = { ...metal, emissiveIntensity: metal.emissiveIntensity * (dim ? 0.25 : 1) };
@@ -76,7 +74,7 @@ export function Casing({
       {bars.map((b, i) => (
         <mesh key={i} position={b.p}>
           <boxGeometry args={b.s} />
-          <meshStandardMaterial {...frame} clippingPlanes={clip} />
+          <meshStandardMaterial {...frame} />
         </mesh>
       ))}
       <mesh position={[0, h / 2, 0]} userData={{ inspect }}>
@@ -91,7 +89,7 @@ export function Casing({
           metalness={0.2}
           roughness={0.15}
           depthWrite={false}
-          clippingPlanes={clip}
+         
         />
       </mesh>
       <group ref={cog} position={[0, h / 2, 0]}>
@@ -101,7 +99,7 @@ export function Casing({
       {[0.012, h - 0.012].map((y) => (
         <mesh key={y} position={[0, y, 0]}>
           <cylinderGeometry args={[0.07, 0.07, 0.03, 12]} />
-          <meshStandardMaterial {...flange} clippingPlanes={clip} />
+          <meshStandardMaterial {...flange} />
         </mesh>
       ))}
       {label && (
