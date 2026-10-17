@@ -11,6 +11,8 @@ type TransformFn = Extract<Plugin['transform'], (...args: never[]) => unknown>;
 const mdxTransform = mdxPlugin.transform as TransformFn;
 
 export default defineConfig({
+  // quick Cloudflare tunnels (`cloudflared tunnel --url …`) for sharing a running build
+  server: { allowedHosts: ['.trycloudflare.com'] },
   plugins: [
     {
       ...mdxPlugin,
