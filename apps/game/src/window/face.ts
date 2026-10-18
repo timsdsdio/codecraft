@@ -1,8 +1,9 @@
 // Finds the viewer's eyes in the front camera with MediaPipe Face Landmarker and turns them into a
 // position in millimetres. Only position matters for the window effect, not where the eyes look.
 // Distance comes from the gap between the two iris centres, which is close to the same for most
-// adults (about 63 mm); sideways and vertical offsets follow from distance and the camera's field
-// of view.
+// adults (about 63 mm). The gap is measured in 3D using the depth MediaPipe gives each landmark, so
+// turning the head doesn't read as moving away. Sideways and vertical offsets follow from distance
+// and the camera's field of view.
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import type { Vec3 } from './projection';
 
@@ -26,6 +27,8 @@ export interface FaceSample {
   irises: [number, number][];
   /** time the frame was detected (performance.now()) */
   t: number;
+  /** time the camera captured the frame, as near as the browser says */
+  captured: number;
   /** time spent in detection, ms */
   ms: number;
 }
@@ -78,14 +81,14 @@ export class FaceTracker {
     this.video.srcObject = null;
   }
 
-  private loop = () => {
+  private loop = (_now?: number, frame?: VideoFrameCallbackMetadata) => {
     if (!this.running) return;
-    this.detect();
+    this.detect(frame?.captureTime);
     if ('requestVideoFrameCallback' in this.video) this.video.requestVideoFrameCallback(this.loop);
     else requestAnimationFrame(this.loop);
   };
 
-  private detect() {
+  private detect(captureTime?: number) {
     const v = this.video;
     if (!this.landmarker || v.readyState < 2 || v.currentTime === this.lastVideoTime) return;
     this.lastVideoTime = v.currentTime;
@@ -98,7 +101,8 @@ export class FaceTracker {
     const w = v.videoWidth;
     const h = v.videoHeight;
     const [a, b] = IRIS_CENTRES.map((i) => face[i]);
-    const gapPx = Math.hypot((a.x - b.x) * w, (a.y - b.y) * h);
+    // landmark z is in the same units as x
+    const gapPx = Math.hypot((a.x - b.x) * w, (a.y - b.y) * h, (a.z - b.z) * w);
     const { fovDeg, ipdMm } = this.settings();
     const f = Math.max(w, h) / 2 / Math.tan((fovDeg * Math.PI) / 360);
     const z = (f * ipdMm) / gapPx;
@@ -112,6 +116,8 @@ export class FaceTracker {
         [b.x, b.y],
       ],
       t,
+      // without a capture time, assume the frame waited about one frame before detection began
+      captured: captureTime ?? t0 - 33,
       ms: t - t0,
     });
   }

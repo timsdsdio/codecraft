@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import './window.css';
 import { FaceTracker, type FaceSample } from './face';
+import { GyroFrame } from './gyro';
 import { aimThroughGlass, OneEuro, type Vec3 } from './projection';
 import { buildBox, lights } from './scene';
 
@@ -18,6 +19,7 @@ interface Settings {
   depth: number; // box depth as a multiple of the screen's height
   flipX: boolean;
   flipY: boolean;
+  gyroAssist: boolean;
   preview: boolean;
 }
 
@@ -32,6 +34,7 @@ const DEFAULTS: Settings = {
   depth: 1.2,
   flipX: false,
   flipY: false,
+  gyroAssist: true,
   preview: true,
 };
 const STORE = 'codecraft.window.settings';
@@ -102,7 +105,12 @@ function fromLens(p: Vec3): Vec3 {
   };
 }
 
-// face
+// face: the eye is filtered in the gyroscope's reference frame, which doesn't turn with the phone,
+// and turned into the phone's frame every render
+const gyro = new GyroFrame();
+const faceRef = new THREE.Vector3(0, 0, HELD_EYE_MM);
+const v = new THREE.Vector3();
+const assisted = () => settings.gyroAssist && gyro.active;
 let lastFace: FaceSample | null = null;
 const faceTimes: number[] = [];
 const face = new FaceTracker(
@@ -115,9 +123,9 @@ const face = new FaceTracker(
     }
     if (mode !== 'face' || !s) return;
     const p = fromLens(s.eye);
-    eye.x = filters.x.filter(p.x, s.t);
-    eye.y = filters.y.filter(p.y, s.t);
-    eye.z = filters.z.filter(p.z, s.t);
+    v.set(p.x, p.y, p.z);
+    if (assisted()) gyro.toReference(v, s.captured);
+    faceRef.set(filters.x.filter(v.x, s.t), filters.y.filter(v.y, s.t), filters.z.filter(v.z, s.t));
     showIrises(s);
   },
 );
@@ -125,7 +133,9 @@ let faceReady = false;
 
 // tilt: integrate the gyroscope, leaking back to centre so the rest position follows the hand
 const tilt = { x: 0, y: 0, t: 0, ok: false };
+let motionStarted = false;
 function onMotion(e: DeviceMotionEvent) {
+  gyro.update(e);
   const r = e.rotationRate;
   if (!r || r.beta == null || r.gamma == null) return;
   tilt.ok = true;
@@ -147,6 +157,7 @@ async function startTilt() {
     throw new Error('Motion access was turned down. Reload the page to be asked again.');
   }
   addEventListener('devicemotion', onMotion);
+  motionStarted = true;
 }
 
 // touch: the finger stands in for the eye, three times as far out so small drags show a lot
@@ -241,6 +252,14 @@ $('go-drag').addEventListener('click', () => begin('drag'));
 modeButtons.forEach((b) =>
   b.addEventListener('click', async () => {
     const m = b.dataset.mode as Mode;
+    // ask for motion first: iOS only allows the request straight from the tap
+    if (m !== 'drag' && !motionStarted) {
+      const failed = await startTilt().then(
+        () => false,
+        (e) => ((readout.textContent = describe(e)), true),
+      );
+      if (failed && m === 'tilt') return;
+    }
     if (m === 'face' && !faceReady) {
       try {
         await face.start((msg) => (readout.textContent = msg));
@@ -251,7 +270,6 @@ modeButtons.forEach((b) =>
         return;
       }
     }
-    if (m === 'tilt' && !tilt.t) await startTilt().catch((e) => (readout.textContent = describe(e)));
     setMode(m);
     syncPreview();
   }),
@@ -271,6 +289,7 @@ const sliders = {
 const checks = {
   flipX: $<HTMLInputElement>('s-flipx'),
   flipY: $<HTMLInputElement>('s-flipy'),
+  gyroAssist: $<HTMLInputElement>('s-gyro'),
   preview: $<HTMLInputElement>('s-preview'),
 } as const;
 
@@ -295,6 +314,7 @@ for (const [k, el] of Object.entries(checks) as [keyof typeof checks, HTMLInputE
   el.addEventListener('change', () => {
     settings[k] = el.checked;
     save();
+    if (k === 'gyroAssist') Object.values(filters).forEach((f) => f.reset());
     syncPreview();
   });
 }
@@ -322,6 +342,13 @@ fs.addEventListener('click', () => {
 const sign = (v: number) => (v < 0 ? '−' : '+') + Math.abs(Math.round(v)).toString().padStart(3, ' ');
 renderer.setAnimationLoop((t) => {
   if (box) box.cube.rotation.set(t * 0.0003, t * 0.0005, 0);
+  if (mode === 'face') {
+    v.copy(faceRef);
+    if (assisted()) gyro.toPhone(v);
+    eye.x = v.x;
+    eye.y = v.y;
+    eye.z = v.z;
+  }
   aimThroughGlass(camera, eye, glassW, glassH);
   renderer.render(scene, camera);
 
@@ -329,7 +356,10 @@ renderer.setAnimationLoop((t) => {
   readout.textContent = `eye x${sign(eye.x)} y${sign(eye.y)} z${sign(eye.z)} mm`;
   if (mode === 'face') {
     const fresh = lastFace && performance.now() - lastFace.t < 500;
-    rate.textContent = fresh ? `${faceTimes.length} fps · ${lastFace!.ms.toFixed(0)} ms per frame` : 'no face in view';
+    const lag = lastFace ? lastFace.t - lastFace.captured : 0;
+    rate.textContent = fresh
+      ? `${faceTimes.length} fps · ${lag.toFixed(0)} ms behind${assisted() ? ' · gyro assist' : ''}`
+      : 'no face in view';
   } else if (mode === 'tilt') {
     rate.textContent = tilt.ok ? 'gyroscope' : 'no gyroscope readings';
   } else {
