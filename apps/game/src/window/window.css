@@ -1,0 +1,186 @@
+:root {
+  --cyan: #00fff0;
+  --line: rgba(0, 255, 240, 0.38);
+  --ink: #d6f7ff;
+  --dim: rgba(214, 247, 255, 0.6);
+  --panel: rgba(3, 9, 18, 0.88);
+  --sa-t: env(safe-area-inset-top, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
+  --sa-l: env(safe-area-inset-left, 0px);
+  --sa-r: env(safe-area-inset-right, 0px);
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #03070f;
+  color: var(--ink);
+  font: 13px/1.5 ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+}
+[hidden] {
+  display: none !important;
+}
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  display: block;
+}
+.dim {
+  color: var(--dim);
+}
+button {
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+button.primary,
+button[aria-checked='true'] {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #021015;
+}
+
+.sheet {
+  position: fixed;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  padding: 20px max(16px, var(--sa-r)) calc(20px + var(--sa-b)) max(16px, var(--sa-l));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+.sheet h1,
+.sheet h2 {
+  margin: 0;
+  color: var(--cyan);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 18px;
+}
+.sheet p {
+  margin: 0;
+  max-width: 60ch;
+}
+.start {
+  bottom: 0;
+}
+.settings {
+  bottom: 0;
+  top: auto;
+}
+.settings label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.settings output {
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.settings input[type='range'] {
+  width: 100%;
+  accent-color: var(--cyan);
+}
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.checks label {
+  justify-content: flex-start;
+  gap: 6px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.card-wrap {
+  display: flex;
+  justify-content: center;
+}
+.card {
+  border: 2px dashed var(--cyan);
+  border-radius: 3mm;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--dim);
+  max-width: 100%;
+}
+
+.hud {
+  position: fixed;
+  top: calc(8px + var(--sa-t));
+  left: max(12px, var(--sa-l));
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  text-shadow: 0 0 6px #000;
+}
+.preview {
+  position: fixed;
+  top: calc(8px + var(--sa-t));
+  right: max(12px, var(--sa-r));
+  width: 72px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.preview video {
+  display: block;
+  width: 100%;
+  transform: scaleX(-1);
+}
+.preview .dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--cyan);
+}
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px max(12px, var(--sa-r)) calc(10px + var(--sa-b)) max(12px, var(--sa-l));
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: linear-gradient(to top, rgba(3, 7, 15, 0.9), rgba(3, 7, 15, 0));
+}
+.modes {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+}
