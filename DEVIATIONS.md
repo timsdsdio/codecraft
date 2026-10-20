@@ -1,9 +1,26 @@
 # Decisions
 
-The decisions currently in force that differ from `docs/STACK.md`, or that the wiki's design
-depends on, each with its reason. When one changes, edit its entry.
+The decisions currently in force that differ from `docs/STACK.md`, or that the designs depend on,
+each with its reason. When one changes, edit its entry.
 
-## Design
+## Bladecraft
+
+- **Single-player, saved in the browser.** The world, inventory and achievements live in
+  `localStorage`. `docs/STACK.md`'s server-authoritative architecture applies once worlds are
+  shared or players meet.
+- **The engine is plain three.js, the UI is React.** A voxel game runs one imperative loop
+  (physics, raycasts, a merged terrain mesh rebuilt on change), which R3F's component tree would
+  only wrap. React draws the HUD and the inventory, bench and achievement screens, and re-renders
+  when the game bumps a version number (`useSyncExternalStore`).
+- **Coefficients are exact rationals.** Items stack only with equal items, and crafting must give
+  the same item every time; floating point would make e₁ from one recipe differ from e₁ from
+  another. A rotor such as 1 + e₁₂ is applied with R X R⁻¹, which stays exact without normalising.
+- **Items are elements of G(3), not projective GA.** Vectors are arrows and bivectors are planes, the usual way geometric
+  algebra is taught. In projective GA a vector is a plane, which is a confusing first step.
+- **The bench offers every operation at once and previews each result**, so comparing A ∧ B with
+  A B, or A ∧ B with B ∧ A, is the main way to learn what they do.
+
+## CodeCraft design
 
 - **Floors are tree depth, with the root at the bottom and the screen as the roof.** Every
   component's casing sits directly under its DOM box. Children's boxes nest inside their parents',
@@ -45,7 +62,7 @@ depends on, each with its reason. When one changes, edit its entry.
   edges. A Create-style brass look exists as a switch (`look` on `Stage`, a TRON / BRASS toggle in
   the wiki) until one is chosen.
 
-## Engineering
+## CodeCraft engineering
 
 - **No server in the first version.** A single-player visualizer needs none. `docs/STACK.md`
   applies once todos sync through Electric or players can visit each other's apps.
@@ -71,7 +88,7 @@ depends on, each with its reason. When one changes, edit its entry.
   the 3D chunk. Importing the main entry from the wiki shell put three.js in the main bundle
   (1.47 MB against about 400 KB).
 
-## Wiki
+## CodeCraft wiki
 
 - **The wiki uses only the front-end half of the stack** (Vite, React 19, R3F 9, drei 10). Pages
   are MDX files in git rather than database rows: the wiki is a design document edited in many

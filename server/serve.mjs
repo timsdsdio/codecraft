@@ -1,5 +1,6 @@
-// Production server: serves the built game at /, the visualised todo app at /app/ and the wiki at
-// /wiki/, from one port. Static files only; unknown paths fall back to each app's index.html.
+// Production server: serves Bladecraft at /, CodeCraft at /codecraft/, the todo app CodeCraft
+// visualises at /app/ and CodeCraft's wiki at /wiki/, from one port. Static files only; unknown paths
+// fall back to each app's index.html.
 import { createServer } from 'node:http';
 import { createReadStream, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
@@ -11,7 +12,8 @@ const port = Number(process.env.PORT) || 3000;
 const mounts = [
   { prefix: '/app/', dir: join(root, 'apps/todo/dist') },
   { prefix: '/wiki/', dir: join(root, 'apps/wiki/dist') },
-  { prefix: '/', dir: join(root, 'apps/game/dist') },
+  { prefix: '/codecraft/', dir: join(root, 'apps/game/dist') },
+  { prefix: '/', dir: join(root, 'apps/bladecraft/dist') },
 ];
 
 const types = {
@@ -36,7 +38,7 @@ const isFile = (p) => {
 
 createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
-  if (path === '/app' || path === '/wiki') {
+  if (path === '/app' || path === '/wiki' || path === '/codecraft') {
     res.writeHead(301, { location: `${path}/` }).end();
     return;
   }

@@ -4,9 +4,11 @@
   "type": "module",
   "packageManager": "pnpm@10.18.0",
   "scripts": {
-    "dev": "pnpm --parallel --filter @codecraft/todo --filter @codecraft/game dev",
+    "dev": "pnpm --filter @codecraft/bladecraft dev",
+    "codecraft": "pnpm --parallel --filter @codecraft/todo --filter @codecraft/game dev",
     "wiki": "pnpm --filter @codecraft/wiki dev",
-    "build": "pnpm --filter @codecraft/todo --filter @codecraft/game --filter @codecraft/wiki build",
+    "test": "pnpm -r test",
+    "build": "pnpm --filter @codecraft/bladecraft --filter @codecraft/todo --filter @codecraft/game --filter @codecraft/wiki build",
     "start": "node server/serve.mjs",
     "typecheck": "pnpm -r typecheck"
   },
