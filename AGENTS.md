@@ -1,8 +1,9 @@
 # Working on CodeCraft
 
-Start with `README.md` for the layout of the repo. The design lives in the wiki
-(`apps/wiki/src/content/`). The stack and its lessons are in `docs/STACK.md`, and decisions that
-differ from either are in `DEVIATIONS.md`.
+Start with `README.md` for the layout of the repo, which holds two games: Bladecraft (`/`) and
+CodeCraft (`/codecraft/`). CodeCraft's design lives in the wiki (`apps/wiki/src/content/`),
+Bladecraft's in `docs/BLADECRAFT.md`. The stack and its lessons are in `docs/STACK.md`, and
+decisions that differ from any of these are in `DEVIATIONS.md`.
 
 ## Writing copy
 
