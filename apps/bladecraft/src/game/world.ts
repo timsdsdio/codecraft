@@ -13,6 +13,7 @@ import {
   el,
   loadMv,
   loadKnownStack,
+  savedName,
   saveMv,
   saveStack,
   scalar,
@@ -333,6 +334,7 @@ function loadBlock(s: Json): Block {
   // start from a fresh machine so fields added later get their defaults
   const m = Object.assign(newMachine(o.type!, o.facing!), decode(s)) as Machine;
   if (m.type === 'duct' && m.item) m.item.id = loadedIds++;
+  if (m.type === 'mill' && m.live) m.live = savedName(m.live) as Verb;
   return m;
 }
 

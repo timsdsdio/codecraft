@@ -24,7 +24,7 @@ export const GRADE_CARD = [
   [7, 6, 5, 3],
 ];
 const DOT_COLOUR: Record<number, string> = { 0: '#fff6d0', 1: '#ff5a5a', 2: '#5aff8a', 4: '#5aa8ff', 3: '#00fff0', 5: '#00fff0', 6: '#00fff0', 7: '#ffd25a' };
-const VERB_MARK: Record<Verb, string> = { join: '∧', meter: '⌋', multiply: '×', turn: '↻', reverse: '~', sieve: '⟨⟩' };
+const VERB_MARK: Record<Verb, string> = { wedge: '∧', dot: '⌋', geometric: '×', sandwich: '↻', reverse: '~', grade: '⟨⟩' };
 
 export function Icon({ item, size = 44 }: { item: Item; size?: number }) {
   return (

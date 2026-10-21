@@ -21,6 +21,7 @@ import {
   stackOf,
   valueOf,
   loadSlots,
+  savedName,
   saveSlots,
   type Item,
   type Stack,
@@ -98,7 +99,7 @@ export class Game {
   achievements = new Achievements();
   factory: Factory;
   /** hand sorts done on the rail under each rule */
-  sorts: Record<Rule, number> = { join: 0, meter: 0, multiply: 0 };
+  sorts: Record<Rule, number> = { wedge: 0, dot: 0, geometric: 0 };
   selected = 0;
   screen: Screen = 'start';
   target: Hit | null = null;
@@ -112,7 +113,7 @@ export class Game {
     tray: Multivector.zero(G3),
     left: null,
     bottom: null,
-    rule: 'join',
+    rule: 'wedge',
     rail: null,
   };
   readonly touch = matchMedia('(pointer: coarse)').matches;
@@ -168,8 +169,8 @@ export class Game {
 
   learned = (rule: Rule) => this.sorts[rule] >= SORTS_TO_LEARN;
 
-  /** a rule can be learned once the one before it is: Join, then Meter, then Multiply */
-  learnable = (rule: Rule) => rule === 'join' || this.learned(RULES[RULES.indexOf(rule) - 1]);
+  /** a rule can be learned once the one before it is: the wedge, then the dot, then the geometric product */
+  learnable = (rule: Rule) => rule === 'wedge' || this.learned(RULES[RULES.indexOf(rule) - 1]);
 
   // --- world lifecycle -------------------------------------------------------------------------
 
@@ -184,7 +185,7 @@ export class Game {
     this.inventory[1] = stack({ kind: 'lattice' }, 32);
     this.cursor = null;
     this.achievements = new Achievements();
-    this.sorts = { join: 0, meter: 0, multiply: 0 };
+    this.sorts = { wedge: 0, dot: 0, geometric: 0 };
     this.player = new Player();
     this.selected = 0;
     this.turn = 0;
@@ -205,7 +206,8 @@ export class Game {
       this.world = World.load(s.world);
       this.inventory = loadSlots(s.inventory, SLOTS);
       this.achievements.load(s.achievements ?? []);
-      this.sorts = { join: 0, meter: 0, multiply: 0, ...s.sorts };
+      this.sorts = { wedge: 0, dot: 0, geometric: 0 };
+      for (const [rule, n] of Object.entries(s.sorts ?? {})) this.sorts[savedName(rule) as Rule] = n as number;
       this.player.pos.set(...(s.player.pos as [number, number, number]));
       this.player.yaw = s.player.yaw;
       this.player.pitch = s.player.pitch;
@@ -254,7 +256,7 @@ export class Game {
       machines.push(b);
       stacks.push(...contents(b));
     }
-    return { stacks, machines, workbenchPlaced, learned: { join: this.learned('join'), meter: this.learned('meter'), multiply: this.learned('multiply') } };
+    return { stacks, machines, workbenchPlaced, learned: { wedge: this.learned('wedge'), dot: this.learned('dot'), geometric: this.learned('geometric') } };
   }
 
   private checkGoals() {
@@ -662,7 +664,7 @@ export class Game {
     this.changed();
   }
 
-  /** turn a card in a Mill slot end to end, so a Multiply card multiplies from the right */
+  /** turn a card in a Mill slot end to end, so a Geometric card multiplies from the right */
   flipCard(i: number) {
     const m = this.panelBlock;
     if (m?.kind !== 'machine' || m.type !== 'mill') return;

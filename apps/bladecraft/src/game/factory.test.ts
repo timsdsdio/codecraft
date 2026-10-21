@@ -91,7 +91,7 @@ test('an Unpacker sends each blade of a multivector out on its own', () => {
 test('a Mill runs what arrives at its back through its cards, taking a lamp’s time per pair of blades', () => {
   const w = new World();
   const mill = newMachine('mill', E) as Extract<Machine, { type: 'mill' }>;
-  mill.cards[0] = stack(card('multiply', e1));
+  mill.cards[0] = stack(card('geometric', e1));
   w.set(0, Y, 0, mill);
   w.set(1, Y, 0, newMachine('store', E));
   const f = new Factory(w);
@@ -106,7 +106,7 @@ test('a Mill runs what arrives at its back through its cards, taking a lamp’s 
 test('a Mill’s second deck works on what the first deck made', () => {
   const w = new World();
   const mill = newMachine('mill', E) as Extract<Machine, { type: 'mill' }>;
-  mill.cards[0] = stack(card('multiply', e1));
+  mill.cards[0] = stack(card('geometric', e1));
   mill.cards[2] = stack(card('reverse', null));
   w.set(0, Y, 0, mill);
   w.set(1, Y, 0, newMachine('store', E));
@@ -119,7 +119,7 @@ test('a Mill’s second deck works on what the first deck made', () => {
 test('a Mill with a live card waits for its side port and presses what arrives there into a card', () => {
   const w = new World();
   const mill = newMachine('mill', E) as Extract<Machine, { type: 'mill' }>;
-  mill.live = 'join';
+  mill.live = 'wedge';
   w.set(0, Y, 0, mill);
   w.set(1, Y, 0, newMachine('store', E));
   const f = new Factory(w);
@@ -156,4 +156,15 @@ test('loading a world leaves out machines the game no longer has, along with the
   const back = World.load(saved as unknown as ReturnType<World['save']>);
   assert.equal(back.get(1, Y, 0), undefined);
   assert.deepEqual(held(back, 0, 0), ['e₁']);
+});
+
+test('cards, plates and a Mill’s live card saved under the earlier verb names load under the current ones', () => {
+  const w = new World();
+  w.set(0, Y, 0, newMachine('mill', E));
+  const saved = w.save() as unknown as [number, number, number, Record<string, unknown>][];
+  saved[0][3].live = 'join';
+  (saved[0][3].cards as unknown[])[0] = { $stack: { item: { kind: 'card', verb: 'turn', mv: null, right: false }, count: [1, 1] } };
+  const mill = World.load(saved as unknown as ReturnType<World['save']>).get(0, Y, 0) as Extract<Machine, { type: 'mill' }>;
+  assert.equal(mill.live, 'wedge');
+  assert.equal(mill.cards[0]?.item.kind === 'card' && mill.cards[0].item.verb, 'sandwich');
 });

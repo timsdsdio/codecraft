@@ -353,16 +353,16 @@ function BuildTab({ game }: { game: Game }) {
 // --- machines ----------------------------------------------------------------------------------
 
 const VERB_DOES: Record<Verb, string> = {
-  join: 'M ∧ X',
-  meter: 'M ⌋ X',
-  multiply: 'M X',
-  turn: 'M X M̃ / (M M̃)',
+  wedge: 'M ∧ X',
+  dot: 'M ⌋ X',
+  geometric: 'M X',
+  sandwich: 'M X M̃ / (M M̃)',
   reverse: 'X̃',
-  sieve: 'the grades M has',
+  grade: 'the grades M has',
 };
 
 function cardDoes(c: Card) {
-  if (c.verb === 'multiply' && c.right) return 'X M';
+  if (c.verb === 'geometric' && c.right) return 'X M';
   return VERB_DOES[c.verb];
 }
 
@@ -443,7 +443,7 @@ export function MachineScreen({ game }: { game: Game }) {
                     return (
                       <div key={i} className="labelled">
                         {slot('cards', i, 'card')}
-                        {c?.kind === 'card' && c.verb === 'multiply' && (
+                        {c?.kind === 'card' && c.verb === 'geometric' && (
                           <button className="small" onClick={() => game.flipCard(i)}>
                             {c.right ? 'From the right ⟵' : 'From the left'}
                           </button>
@@ -462,7 +462,7 @@ export function MachineScreen({ game }: { game: Game }) {
                 <button className={!m.live ? 'primary' : ''} onClick={() => game.setLive(null)}>
                   Off
                 </button>
-                {(['join', 'meter', 'multiply', 'turn'] as Verb[]).map((v) => (
+                {(['wedge', 'dot', 'geometric', 'sandwich'] as Verb[]).map((v) => (
                   <button key={v} className={m.live === v ? 'primary' : ''} onClick={() => game.setLive(v)}>
                     {VERB_NAMES[v]}
                   </button>

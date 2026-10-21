@@ -2,23 +2,24 @@
 // factors in a row (e₁₂ × e₂₃ is e₁ e₂ e₂ e₃), then swapping neighbours, each swap flipping the
 // sign, and cancelling neighbours that match (e₂ e₂ = 1) until the row is in order. The rules differ
 // only in what may cancel:
-//   join      nothing may cancel; if a pair has to, the result is 0        (the outer product, ∧)
-//   meter     every factor of the left blade must cancel, or the result is 0 (the left contraction, ⌋)
-//   multiply  anything may cancel                                          (the geometric product)
+//   wedge      nothing may cancel; if a pair has to, the result is 0        (the outer product, ∧)
+//   dot        every factor of the left blade must cancel, or the result is 0 (the inner product: the
+//              left contraction, ⌋, which is the dot product for two vectors)
+//   geometric  anything may cancel                                          (the geometric product)
 // For an orthonormal basis these are exact: ∧ is the geometric product when the blades share no
 // direction, ⌋ is the geometric product when the left blade lies inside the right one, and both are 0
 // otherwise. The Workbench grid extends each rule to whole multivectors term by term, which is the
 // distributive law.
 import { G3, Multivector } from '@codecraft/ga';
 
-export type Rule = 'join' | 'meter' | 'multiply';
-export const RULES: Rule[] = ['join', 'meter', 'multiply'];
-export const RULE_NAMES: Record<Rule, string> = { join: 'Join', meter: 'Meter', multiply: 'Multiply' };
-export const RULE_SYMBOLS: Record<Rule, string> = { join: '∧', meter: '⌋', multiply: '' };
+export type Rule = 'wedge' | 'dot' | 'geometric';
+export const RULES: Rule[] = ['wedge', 'dot', 'geometric'];
+export const RULE_NAMES: Record<Rule, string> = { wedge: 'Wedge', dot: 'Dot', geometric: 'Geometric' };
+export const RULE_SYMBOLS: Record<Rule, string> = { wedge: '∧', dot: '⌋', geometric: '' };
 
 /** A ∘ B under a rule, for whole multivectors */
 export function product(rule: Rule, a: Multivector, b: Multivector) {
-  return rule === 'join' ? a.op(b) : rule === 'meter' ? a.lc(b) : a.gp(b);
+  return rule === 'wedge' ? a.op(b) : rule === 'dot' ? a.lc(b) : a.gp(b);
 }
 
 /** a multivector's terms, one single-blade multivector each, in blade order */
@@ -81,16 +82,16 @@ export const sorted = (rail: Rail) => rail.tiles.every((t, i) => i === 0 || rail
 
 /** what's left once sorted: the blade and its sign, or 0 when the rule rejects the sort */
 export function railResult(rail: Rail, rule: Rule): { blade: number; sign: 1 | -1 } | null {
-  if (rule === 'join' && rail.cancelled > 0) return null;
-  if (rule === 'meter' && rail.tiles.some((t) => t.from === 'left')) return null;
+  if (rule === 'wedge' && rail.cancelled > 0) return null;
+  if (rule === 'dot' && rail.tiles.some((t) => t.from === 'left')) return null;
   return { blade: rail.tiles.reduce((b, t) => b | (1 << t.axis), 0), sign: rail.sign };
 }
 
 /** why a rule gives 0 for this sort, in words, or null when it doesn't */
 export function railWhyZero(rail: Rail, rule: Rule): string | null {
-  if (rule === 'join' && rail.cancelled > 0) return 'A pair had to cancel, and Join allows none: this cell is 0.';
-  if (rule === 'meter' && rail.tiles.some((t) => t.from === 'left'))
-    return 'A left-factor blade never cancelled, and Meter needs all of them to: this cell is 0.';
+  if (rule === 'wedge' && rail.cancelled > 0) return 'A pair had to cancel, and the wedge allows none: this cell is 0.';
+  if (rule === 'dot' && rail.tiles.some((t) => t.from === 'left'))
+    return 'A left-factor blade never cancelled, and the dot needs all of them to: this cell is 0.';
   return null;
 }
 

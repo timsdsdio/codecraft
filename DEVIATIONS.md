@@ -17,7 +17,7 @@ each with its reason. When one changes, edit its entry.
   at a fixed 20 ticks a second and knows nothing about drawing, so it runs under `node --test`
   (`pnpm test`) and the renderer only reads what it left in each block.
 - **Weights are exact rationals.** Things stack only when one is an exact multiple of the other;
-  floating point would make e₁ from one machine differ from e₁ from another. A Turn card divides by
+  floating point would make e₁ from one machine differ from e₁ from another. A Sandwich card divides by
   M M̃ rather than normalising M, which keeps it exact and makes 2 − 2e₁₂ turn the same as 1 − e₁₂.
 - **A stack's count is the element's weight.** An element item holds a base with whole, coprime
   weights, first weight positive, so 3e₁ and e₁ stack and −e₁ cancels e₁. One rule (stack when one
@@ -60,8 +60,11 @@ each with its reason. When one changes, edit its entry.
   Mill runs any of them. Two decks (outputs add side by side, the second runs on the first) and a
   live card from the side port cover sums, compositions and two-input operations without more
   blocks. The cards in its slots show on the model.
-- **Products are learned by hand before any machine does them.** Join, Meter and Multiply are one
-  blade sort on the rail with different rules for cancelling, and each verb plate needs its rule
+- **Operations go by their usual names.** The wedge (outer product), the dot (inner product, as the
+  left contraction ⌋), the geometric product, the sandwich product, the reverse and grade
+  projection are named as books and papers name them, so what a player learns carries over.
+- **Products are learned by hand before any machine does them.** The wedge, the dot and the
+  geometric product are one blade sort on the rail with different rules for cancelling, and each verb plate needs its rule
   learned by sorting three cells by hand. Machines and plates cost elements that only hand work
   makes. Lattice alone builds only ducts, Stores, splitters, mergers, crossings and blank cards.
 - **Goals are possession, not delivery.** A goal is met when the thing it names exists anywhere: in
