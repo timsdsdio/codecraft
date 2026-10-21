@@ -169,7 +169,7 @@ function TouchControls({ game }: { game: Game }) {
       {!knob && <div className="stick-hint">move</div>}
       <div className="actions">
         <button className="act" disabled={!canBreak} onClick={() => game.breakBlock()}>
-          {b?.kind === 'deposit' ? 'Take' : 'Break'}
+          Break
         </button>
         {canUse && (
           <button className="act use" onClick={() => game.use()}>

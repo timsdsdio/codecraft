@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { card } from './cards.ts';
 import { Factory, LAMP_TIME } from './factory.ts';
 import { el, scalar, stack, stackOf, valueOf, type Stack } from './items.ts';
-import { World, newMachine, type Dir, type Machine } from './world.ts';
+import { World, drop, newMachine, type Dir, type Machine } from './world.ts';
 
 const Y = 3;
 const E = 0 as Dir;
@@ -124,4 +124,15 @@ test('a Mill with no cards passes things straight through', () => {
   f.accept(0, Y, 0, stackOf(e1.add(e2))!, 2);
   run(f, 2);
   assert.deepEqual(held(w, 1, 0), ['e₁ + e₂']);
+});
+
+test('a deposit breaks into 4 blades by hand, while an extractor draws from it without using it up', () => {
+  const deposit = { kind: 'deposit' as const, mv: e1 };
+  assert.equal(val(drop(deposit)), '4e₁');
+  const w = new World();
+  w.set(0, Y, 0, deposit);
+  w.set(1, Y, 0, newMachine('extractor', E));
+  w.set(2, Y, 0, newMachine('store', E));
+  run(new Factory(w), 20);
+  assert.equal(w.get(0, Y, 0)?.kind, 'deposit');
 });

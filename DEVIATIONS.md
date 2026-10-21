@@ -67,12 +67,14 @@ each with its reason. When one changes, edit its entry.
 - **Goals are possession, not delivery.** A goal is met when the thing it names exists anywhere: in
   the inventory, a Store, a machine, or placed. Nothing has to be delivered, so a factory can grow
   in any direction, as in Minecraft tech mods, rather than around one central block.
-- **Deposits never run out and can't be removed.** Taking from one by hand leaves it in place, so a
-  world can never lose its only source of an element.
+- **A deposit breaks into 4 blades by hand, but an extractor never uses it up.** Breaking ore gives
+  a handful quickly, which keeps the start engaging, while the extractor, the guide's third step,
+  turns any deposit into an endless source, so hand mining never becomes the way to get blades in
+  bulk.
 - **The Workbench grid is matrix multiplication.** One factor runs down the left edge and the other
   along the bottom, so each cell is one pair of blades and the result is their sum. The grid shows
   at a glance that a product is bilinear and which pairs vanish under each rule.
-- **Touch controls are explicit buttons that appear when they apply** (Take or Break, Use, Place,
+- **Touch controls are explicit buttons that appear when they apply** (Break, Use, Place,
   Rotate, Jump) rather than taps and long presses on the view, which were easy to confuse.
 
 ## CodeCraft design
