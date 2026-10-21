@@ -2,11 +2,11 @@
 
 This repository holds two games that share a look and a toolchain.
 
-**Bladecraft** is a block-building game where the items are elements of geometric algebra. You
-mine vectors from deposits, combine them at an algebra bench (sum, outer product, geometric
-product, applying one element to another) and place what you make; placed elements are machines
-that push, turn and launch you. An optional tree of achievements teaches the algebra as you play.
-Its design is in `docs/BLADECRAFT.md`.
+**Bladecraft** is a block-building factory game where the items are elements of geometric algebra.
+Extractors draw vectors from deposits, ducts carry them into machines that add, wedge, multiply and
+rotate them, and a hub at spawn orders specific elements. Machines are built from elements you
+first made by hand, and an optional tree of achievements teaches the algebra as you play. Its
+design is in `docs/BLADECRAFT.md`.
 
 **CodeCraft** shrinks you to 100 px tall and stands you on a running React app. Crouch, and you
 drop into the factory underneath it, Create-mod style: logic casings for components, tanks for
@@ -33,7 +33,7 @@ pnpm install
 pnpm dev           # Bladecraft on http://localhost:5340
 pnpm codecraft     # the todo app on :5320 and CodeCraft on http://localhost:5330
 pnpm wiki          # the wiki on http://localhost:5310
-pnpm test          # the algebra's tests
+pnpm test          # the algebra's and the factory's tests
 ```
 
 For production, `pnpm build` then `pnpm start` serves everything from one port (`$PORT`, default

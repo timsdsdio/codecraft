@@ -3,16 +3,18 @@
 // and the tree only shows how the ideas build on each other. A node is listed once one of its
 // parents is earned, so the next ideas come into view as you go.
 import type { Multivector } from '@codecraft/ga';
-import type { Block } from './world';
-
-export type Op = 'add' | 'sub' | 'wedge' | 'product' | 'contract' | 'sandwich' | 'reverse';
+import type { MachineType } from './items.ts';
+import type { Op } from './ops.ts';
+import type { Block } from './world.ts';
 
 export type GameEvent =
   | { type: 'break'; block: Block }
   | { type: 'inventory'; elements: Multivector[] }
-  | { type: 'craft'; op: Op; a: Multivector; b: Multivector | null; result: Multivector }
+  | { type: 'craft'; by: 'hand' | 'machine'; op: Op; a: Multivector; b: Multivector | null; result: Multivector }
+  | { type: 'build'; machine: MachineType }
   | { type: 'place'; block: Block }
-  | { type: 'ride'; effect: 'push' | 'spin' | 'bounce' };
+  | { type: 'deliver'; mv: Multivector }
+  | { type: 'order'; index: number };
 
 export interface Achievement {
   id: string;
@@ -37,7 +39,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'Break ground',
     goal: 'Break any block.',
     lesson:
-      'The world is a lattice with deposits in it. Red deposits hold e₁, green e₂, blue e₃, and pale ones the scalar 1. Everything else in the game is made from these with the algebra bench.',
+      'The world is a lattice with deposits in it, each labelled with its element: e₁ (red), e₂ (green), e₃ (blue) and the scalar 1 (pale). Breaking a deposit gives you one and leaves it standing; an extractor draws on it forever. Everything else is made from these.',
     parents: [],
     test: (e) => e.type === 'break',
   },
@@ -157,30 +159,39 @@ export const ACHIEVEMENTS: Achievement[] = [
     test: (e) => e.type === 'craft' && e.op === 'sandwich' && isVector(e.a) && !!e.b && isVector(e.b),
   },
   {
-    id: 'machine',
-    title: 'Machines from algebra',
-    goal: 'Place an element in the world.',
+    id: 'built',
+    title: 'Built to last',
+    goal: 'Build a machine at the bench.',
     lesson:
-      'A placed element acts on whatever stands on it. Its vector part pushes along the arrow, its scalar part springs you up, and the floor-plane part of its bivector (e₁₂) turns you, counter-clockwise for +e₁₂.',
-    parents: ['direction'],
-    test: (e) => e.type === 'place' && e.block.kind === 'element',
+      'Machines are made from elements. An extractor costs the scalar 1, a wedger costs a bivector, a multiplier a rotor: to automate an operation, you first do it by hand.',
+    parents: ['break-ground'],
+    test: (e) => e.type === 'build',
   },
   {
-    id: 'along-for-the-ride',
-    title: 'Along for the ride',
-    goal: 'Stand on a vector machine.',
-    lesson: 'Longer vectors push harder: 2e₁ carries you east twice as fast as e₁. Combine vectors at the bench to steer.',
-    parents: ['machine'],
-    test: (e) => e.type === 'ride' && e.effect === 'push',
+    id: 'delivery',
+    title: 'Special delivery',
+    goal: 'Get an element to the hub by duct.',
+    lesson:
+      'Ducts carry one element at a time the way they point, and wait when the next block is full, so nothing is ever lost. The hub takes anything, but only elements matching its order count.',
+    parents: ['built'],
+    test: (e) => e.type === 'deliver',
   },
   {
-    id: 'turntable',
-    title: 'Turntable',
-    goal: 'Stand on a machine with an e₁₂ part.',
+    id: 'order-filled',
+    title: 'Order filled',
+    goal: 'Complete an order at the hub.',
+    lesson: 'Each order asks for an element one operation further along. Its hint says which machine makes it and what to feed it.',
+    parents: ['delivery'],
+    test: (e) => e.type === 'order',
+  },
+  {
+    id: 'hands-off',
+    title: 'Hands off',
+    goal: 'Have a machine combine two elements.',
     lesson:
-      'A bivector is a plane of rotation. +e₁₂ turns east toward north, counter-clockwise from above; −e₁₂ turns the other way. Rotors are built from exactly this.',
-    parents: ['machine', 'oriented-area'],
-    test: (e) => e.type === 'ride' && e.effect === 'spin',
+      'A machine takes A from its back and B from its sides, or uses a fixed B set in its panel. With a fixed B, a wedger becomes "wedge everything with e₃" and a sandwich press "turn everything by this rotor".',
+    parents: ['built'],
+    test: (e) => e.type === 'craft' && e.by === 'machine',
   },
 ];
 

@@ -1,50 +1,94 @@
-// The voxel world: a bounded grid of blocks. Lattice is the inert building material the ground is
-// made of. Deposits hold raw elements (the basis vectors e₁, e₂, e₃ and the scalar 1) and give them
-// up when broken. Any element placed back into the world becomes a machine block that acts on what
-// touches it (see machines.ts).
+// The voxel world: a bounded grid of blocks.
+//   lattice    the inert building material the ground is made of
+//   deposit    a never-ending source of one raw element (e₁, e₂, e₃ or the scalar 1); breaking it
+//              by hand gives one element and leaves it in place, and an extractor draws on it forever
+//   bench      the hand bench: combine elements by hand and build machines
+//   hub        the factory's goal, at spawn: it takes delivered elements toward its current order
+//   machine    extractors, ducts, collectors and operation machines; each faces one of four
+//              directions and holds what is passing through it (see factory.ts)
 //
 // World axes follow three.js (x east, y up, z south); algebra axes are e₁ east, e₂ north, e₃ up, a
 // right-handed set, so the arrow drawn for e₁ points the way you walk to go east.
 import type { Multivector } from '@codecraft/ga';
-import { element, el, loadItem, saveItem, scalar, type Item, type SavedItem } from './items';
+import { el, loadMv, saveMv, scalar, MACHINE_NAMES, type Item, type MachineType, type SavedMv } from './items.ts';
 
-export type Block =
-  | { kind: 'lattice' }
-  | { kind: 'bench' }
-  | { kind: 'deposit'; mv: Multivector }
-  | { kind: 'element'; mv: Multivector };
+/** 0 east (+x), 1 north (−z), 2 west (−x), 3 south (+z): counter-clockwise from above */
+export type Dir = 0 | 1 | 2 | 3;
+export const STEP: Record<Dir, [number, number]> = { 0: [1, 0], 1: [0, -1], 2: [-1, 0], 3: [0, 1] };
+export const opposite = (d: Dir) => ((d + 2) % 4) as Dir;
+export const DIR_NAMES = ['east', 'north', 'west', 'south'] as const;
+
+/** an element riding a duct: t runs from 0 (just entered) to 1 (at the far end) */
+export interface Carried {
+  id: number;
+  mv: Multivector;
+  t: number;
+  /** the side it came in from, for drawing the turn */
+  from: Dir | null;
+}
+
+export type MachineState =
+  | { type: 'duct'; item: Carried | null }
+  | { type: 'extractor'; timer: number; out: Carried | null }
+  | { type: 'collector'; stored: { mv: Multivector; count: number }[] }
+  | { type: 'adder' | 'wedger' | 'multiplier' | 'sandwich'; a: Multivector | null; b: Multivector | null; fixed: Multivector | null; out: Multivector | null; work: number };
+
+export type Machine = { kind: 'machine'; facing: Dir } & MachineState;
+export type OperationMachine = Extract<Machine, { a: unknown }>;
+
+export type Block = { kind: 'lattice' } | { kind: 'bench' } | { kind: 'hub' } | { kind: 'deposit'; mv: Multivector } | Machine;
+
+export function newMachine(type: MachineType, facing: Dir): Machine {
+  if (type === 'duct') return { kind: 'machine', facing, type, item: null };
+  if (type === 'extractor') return { kind: 'machine', facing, type, timer: 0, out: null };
+  if (type === 'collector') return { kind: 'machine', facing, type, stored: [] };
+  return { kind: 'machine', facing, type, a: null, b: null, fixed: null, out: null, work: 0 };
+}
 
 export const SIZE = 64;
 export const HEIGHT = 32;
 export const GROUND = 3; // the first empty layer
+export const HUB: [number, number, number] = [SIZE / 2, GROUND, SIZE / 2 - 3];
+export const SPAWN: [number, number, number] = [SIZE / 2 + 0.5, GROUND, SIZE / 2 + 2.5];
 
 const index = (x: number, y: number, z: number) => x + SIZE * (z + SIZE * y);
-export const inBounds = (x: number, y: number, z: number) =>
-  x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < HEIGHT;
+export const inBounds = (x: number, y: number, z: number) => x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < HEIGHT;
 
 export function blockName(b: Block) {
   if (b.kind === 'lattice') return 'Lattice';
   if (b.kind === 'bench') return 'Algebra bench';
+  if (b.kind === 'hub') return 'Hub';
   if (b.kind === 'deposit') return `${b.mv} deposit`;
-  return `${b.mv} machine`;
+  return MACHINE_NAMES[b.type];
 }
 
-/** what breaking a block gives */
-export function drop(b: Block): Item {
-  return b.kind === 'deposit' || b.kind === 'element' ? element(b.mv) : { kind: b.kind };
+/** what breaking a block gives (deposits give their element and stay; the hub can't be broken) */
+export function drop(b: Block): Item | null {
+  if (b.kind === 'hub') return null;
+  if (b.kind === 'deposit') return { kind: 'element', mv: b.mv };
+  if (b.kind === 'machine') return { kind: 'machine', type: b.type };
+  return { kind: b.kind };
 }
 
-/** what placing an item makes */
-export function blockFor(item: Item): Block {
-  return item.kind === 'element' ? { kind: 'element', mv: item.mv } : { kind: item.kind };
+/** everything a machine holds, returned to the player when it is broken */
+export function contents(m: Machine): Multivector[] {
+  if (m.type === 'duct') return m.item ? [m.item.mv] : [];
+  if (m.type === 'extractor') return m.out ? [m.out.mv] : [];
+  if (m.type === 'collector') return m.stored.flatMap((s) => Array(s.count).fill(s.mv));
+  return [m.a, m.b, m.fixed, m.out].filter((x): x is Multivector => !!x);
 }
 
-/** blocks you can't see through: their hidden faces aren't drawn */
-export const opaque = (b: Block | undefined) => !!b && b.kind !== 'element';
+/** blocks you can use (open a panel for) rather than place against */
+export const usable = (b: Block | undefined) => !!b && (b.kind === 'bench' || b.kind === 'hub' || (b.kind === 'machine' && b.type !== 'duct'));
+
+/** how tall a block is for walking on: ducts are low enough to step over */
+export const heightOf = (b: Block | undefined) => (!b ? 0 : b.kind === 'machine' && b.type === 'duct' ? 0.375 : 1);
 
 export class World {
   private blocks = new Map<number, Block>();
-  /** bumps on every change, so the renderer knows to rebuild */
+  /** positions of every machine and the hub, for the factory to step without scanning the grid */
+  readonly active = new Map<number, [number, number, number]>();
+  /** bumps when blocks are added, removed or replaced, so the renderer knows to rebuild */
   version = 0;
 
   get(x: number, y: number, z: number) {
@@ -53,8 +97,11 @@ export class World {
 
   set(x: number, y: number, z: number, b: Block | null) {
     if (!inBounds(x, y, z)) return false;
-    if (b) this.blocks.set(index(x, y, z), b);
-    else this.blocks.delete(index(x, y, z));
+    const i = index(x, y, z);
+    if (b) this.blocks.set(i, b);
+    else this.blocks.delete(i);
+    if (b && (b.kind === 'machine' || b.kind === 'hub')) this.active.set(i, [x, y, z]);
+    else this.active.delete(i);
     this.version++;
     return true;
   }
@@ -78,36 +125,80 @@ export class World {
     const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
     for (let x = 0; x < SIZE; x++) for (let z = 0; z < SIZE; z++) for (let y = 0; y < GROUND; y++) w.set(x, y, z, { kind: 'lattice' });
 
-    // outcrops of deposits, kept clear of the spawn point
+    const [hx, hy, hz] = HUB;
+    w.set(hx, hy, hz, { kind: 'hub' });
+    // one of each deposit a short walk from spawn, with room around them for an extractor and ducts
+    const starters: [number, number, Multivector][] = [
+      [hx - 5, hz, el('1')],
+      [hx + 5, hz, el('2')],
+      [hx - 5, hz + 6, scalar(1)],
+      [hx + 5, hz + 6, el('3')],
+    ];
+    for (const [x, z, mv] of starters) w.set(x, GROUND, z, { kind: 'deposit', mv });
+
+    // outcrops further out
     const kinds = [el('1'), el('2'), el('3'), scalar(1)];
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 60; i++) {
       const x = 2 + Math.floor(rand() * (SIZE - 4));
       const z = 2 + Math.floor(rand() * (SIZE - 4));
-      if (Math.hypot(x - SIZE / 2, z - SIZE / 2) < 4) continue;
+      if (Math.hypot(x - hx, z - hz - 3) < 10) continue;
       const mv = kinds[i % kinds.length];
-      const h = 1 + Math.floor(rand() * 3);
+      const h = 1 + Math.floor(rand() * 2);
       for (let y = 0; y < h; y++) w.set(x, GROUND + y, z, { kind: 'deposit', mv });
-      // some deposits sit in the ground too, under a lattice cap
-      if (rand() < 0.4) w.set(x, GROUND - 1, z, { kind: 'deposit', mv });
     }
     w.version = 0;
     return w;
   }
 
   save() {
-    return [...this.entries()].map(([x, y, z, b]) => {
-      const item: SavedItem = b.kind === 'deposit' || b.kind === 'element' ? saveItem(element(b.mv)) : { kind: b.kind };
-      return [x, y, z, b.kind === 'deposit' ? 'deposit' : 'block', item] as const;
-    });
+    return [...this.entries()].map(([x, y, z, b]) => [x, y, z, saveBlock(b)] as const);
   }
 
   static load(saved: ReturnType<World['save']>) {
     const w = new World();
-    for (const [x, y, z, tag, item] of saved) {
-      const it = loadItem(item);
-      w.set(x, y, z, tag === 'deposit' && it.kind === 'element' ? { kind: 'deposit', mv: it.mv } : blockFor(it));
-    }
+    for (const [x, y, z, b] of saved) w.set(x, y, z, loadBlock(b));
     w.version = 0;
     return w;
   }
+}
+
+// --- saving blocks -----------------------------------------------------------------------------
+
+type SavedBlock = Record<string, unknown> & { kind: string };
+const mvOrNull = (m: Multivector | null) => (m ? saveMv(m) : null);
+const loadOrNull = (s: unknown) => (s ? loadMv(s as SavedMv) : null);
+
+function saveBlock(b: Block): SavedBlock {
+  if (b.kind === 'deposit') return { kind: 'deposit', mv: saveMv(b.mv) };
+  if (b.kind !== 'machine') return { kind: b.kind };
+  const base = { kind: 'machine', type: b.type, facing: b.facing };
+  switch (b.type) {
+    case 'duct':
+      return { ...base, item: b.item ? { mv: saveMv(b.item.mv), t: b.item.t, from: b.item.from } : null };
+    case 'extractor':
+      return { ...base, timer: b.timer, out: b.out ? saveMv(b.out.mv) : null };
+    case 'collector':
+      return { ...base, stored: b.stored.map((s) => [saveMv(s.mv), s.count]) };
+    default:
+      return { ...base, a: mvOrNull(b.a), b: mvOrNull(b.b), fixed: mvOrNull(b.fixed), out: mvOrNull(b.out), work: b.work };
+  }
+}
+
+let loadedIds = 1_000_000;
+function loadBlock(s: SavedBlock): Block {
+  if (s.kind === 'deposit') return { kind: 'deposit', mv: loadMv(s.mv as SavedMv) };
+  if (s.kind !== 'machine') return { kind: s.kind } as Block;
+  const m = newMachine(s.type as MachineType, s.facing as Dir);
+  if (m.type === 'duct' && s.item) {
+    const it = s.item as { mv: SavedMv; t: number; from: Dir | null };
+    m.item = { id: loadedIds++, mv: loadMv(it.mv), t: it.t, from: it.from };
+  } else if (m.type === 'extractor') {
+    m.timer = (s.timer as number) ?? 0;
+    m.out = s.out ? { id: loadedIds++, mv: loadMv(s.out as SavedMv), t: 1, from: null } : null;
+  } else if (m.type === 'collector') {
+    m.stored = ((s.stored as [SavedMv, number][]) ?? []).map(([mv, count]) => ({ mv: loadMv(mv), count }));
+  } else if (m.type !== 'duct') {
+    Object.assign(m, { a: loadOrNull(s.a), b: loadOrNull(s.b), fixed: loadOrNull(s.fixed), out: loadOrNull(s.out), work: (s.work as number) ?? 0 });
+  }
+  return m;
 }

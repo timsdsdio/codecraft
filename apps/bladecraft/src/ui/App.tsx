@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { Game } from '../game/game';
 import { HOTBAR, itemName } from '../game/items';
+import { usable } from '../game/world';
 import { Icon } from './Icon';
-import { AchievementsScreen, BenchScreen, InventoryScreen, StartScreen } from './Screens';
+import { AchievementsScreen, BenchScreen, HubScreen, InventoryScreen, MachineScreen, StartScreen } from './Screens';
 
 export function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -30,12 +31,14 @@ function Overlay({ game }: { game: Game }) {
       {s === 'start' && <StartScreen game={game} />}
       {s === 'inventory' && <InventoryScreen game={game} />}
       {s === 'bench' && <BenchScreen game={game} />}
+      {s === 'machine' && <MachineScreen game={game} />}
+      {s === 'hub' && <HubScreen game={game} />}
       {s === 'achievements' && <AchievementsScreen game={game} />}
       <div className="toasts" role="status">
         {game.toasts.slice(-3).map((t) => (
-          <div key={t.id} className="toast">
-            <small>Achievement</small>
-            <b>{t.achievement.title}</b>
+          <div key={t.id} className={`toast ${t.kind}`}>
+            {t.kind !== 'note' && <small>{t.kind === 'achievement' ? 'Achievement' : 'Hub'}</small>}
+            <b>{t.title}</b>
           </div>
         ))}
       </div>
@@ -43,62 +46,99 @@ function Overlay({ game }: { game: Game }) {
   );
 }
 
-export function Hotbar({ game }: { game: Game }) {
+export function Hotbar({ game, onReselect }: { game: Game; onReselect?: () => void }) {
   return (
     <div className="hotbar">
       {game.inventory.slots.slice(0, HOTBAR).map((st, i) => (
-        <button key={i} className={`slot${i === game.selected ? ' on' : ''}`} onClick={() => game.select(i)} aria-label={st ? itemName(st.item) : `Empty slot ${i + 1}`}>
+        <button
+          key={i}
+          className={`slot${i === game.selected ? ' on' : ''}`}
+          onClick={() => (i === game.selected && onReselect ? onReselect() : game.select(i))}
+          aria-label={st ? `${itemName(st.item)}, ${st.count}` : `Empty slot ${i + 1}`}
+        >
           {st && <Icon item={st.item} />}
           {st && st.count > 1 && <span className="count">{st.count}</span>}
+          {st && <span className="name">{itemName(st.item)}</span>}
         </button>
       ))}
     </div>
   );
 }
 
+function GuideCard({ game }: { game: Game }) {
+  const [open, setOpen] = useState(true);
+  const g = game.guide;
+  return (
+    <button className={`guide${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}>
+      <small>{g.label}</small>
+      <b>{g.title}</b>
+      {g.progress && (
+        <span className="bar" aria-label={`${g.progress.done} of ${g.progress.of}`}>
+          <span style={{ width: `${(100 * g.progress.done) / g.progress.of}%` }} />
+          <em>
+            {g.progress.done}/{g.progress.of}
+          </em>
+        </span>
+      )}
+      {open && <span className="hint">{g.hint}</span>}
+    </button>
+  );
+}
+
 function Hud({ game }: { game: Game }) {
-  const held = game.inventory.slots[game.selected];
+  const held = game.held;
+  const p = game.prompt;
   return (
     <>
       <div className="crosshair" />
+      {p && (
+        <div className="prompt">
+          <b>{p.name}</b>
+          {!game.touch && desktopActions(p.actions).map((a) => <span key={a}>{a}</span>)}
+        </div>
+      )}
       <div className="hud-top">
-        <div className="target">{game.targetLabel}</div>
-      </div>
-      <div className="hud-bottom">
-        <div className="held">{held ? itemName(held.item) : ''}</div>
-        <Hotbar game={game} />
-        {!game.touch && <div className="hint">Left click breaks · right click places or opens a bench · E inventory · L achievements</div>}
-      </div>
-      {game.touch && (
+        <GuideCard game={game} />
         <div className="hud-buttons">
           <button onClick={() => game.open('inventory')}>Items</button>
           <button onClick={() => game.open('achievements')}>Goals</button>
         </div>
-      )}
+      </div>
+      <div className="hud-bottom">
+        <div className="held">
+          {held ? itemName(held) : 'Empty hand'}
+          {held?.kind === 'machine' && !game.touch && <span className="dim"> · R rotates</span>}
+        </div>
+        <Hotbar game={game} onReselect={() => game.open('inventory')} />
+        {!game.touch && <div className="hint">1–9 or wheel picks · E items · L achievements</div>}
+      </div>
     </>
   );
 }
 
-/** left half: a joystick wherever the thumb lands; right half: drag to look, tap to use, hold to break */
+/** desktop wording for the actions: right click uses a machine if there is one, so placing against it needs shift */
+function desktopActions(actions: string[]) {
+  const canUse = actions.some((a) => a.startsWith('Use:'));
+  return actions.map((a) =>
+    a
+      .replace(/^Break:/, 'Left click:')
+      .replace(/^Use:/, 'Right click:')
+      .replace(/^Place:/, canUse ? 'Shift + right click:' : 'Right click:'),
+  );
+}
+
+/** left half: a joystick wherever the thumb lands; right half: drag to look; buttons do the actions */
 function TouchControls({ game }: { game: Game }) {
   const [knob, setKnob] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
-  const look = useRef<{ id: number; x: number; y: number; moved: number; t: number; timer: number } | null>(null);
+  const look = useRef<{ id: number; x: number; y: number } | null>(null);
   const stick = useRef<number | null>(null);
 
   const onDown = (e: ReactPointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    if (e.clientX < innerWidth / 2 && stick.current === null) {
+    if (e.clientX < innerWidth * 0.45 && stick.current === null) {
       stick.current = e.pointerId;
       setKnob({ x: e.clientX, y: e.clientY, dx: 0, dy: 0 });
-    } else if (!look.current) {
-      const timer = window.setTimeout(() => {
-        if (look.current && look.current.moved < 12) {
-          game.breakBlock();
-          look.current.moved = Infinity; // held: no tap on release
-        }
-      }, 380);
-      look.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0, t: performance.now(), timer };
-    }
+    } else if (!look.current) look.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
   };
   const onMove = (e: ReactPointerEvent) => {
     if (e.pointerId === stick.current && knob) {
@@ -107,12 +147,9 @@ function TouchControls({ game }: { game: Game }) {
       setKnob({ ...knob, dx, dy });
       game.stick = { forward: -dy / 50, right: dx / 50 };
     } else if (look.current && e.pointerId === look.current.id) {
-      const dx = e.clientX - look.current.x;
-      const dy = e.clientY - look.current.y;
-      look.current.moved += Math.hypot(dx, dy);
+      game.turnView((e.clientX - look.current.x) * 0.006, (e.clientY - look.current.y) * 0.006);
       look.current.x = e.clientX;
       look.current.y = e.clientY;
-      game.turn(dx * 0.006, dy * 0.006);
     }
   };
   const onUp = (e: ReactPointerEvent) => {
@@ -120,13 +157,13 @@ function TouchControls({ game }: { game: Game }) {
       stick.current = null;
       setKnob(null);
       game.stick = { forward: 0, right: 0 };
-    } else if (look.current && e.pointerId === look.current.id) {
-      clearTimeout(look.current.timer);
-      if (look.current.moved < 12) game.use();
-      look.current = null;
-    }
+    } else if (look.current?.id === e.pointerId) look.current = null;
   };
 
+  const b = game.targetBlock;
+  const canUse = usable(b);
+  const p = game.placement();
+  const canBreak = !!b && b.kind !== 'hub';
   return (
     <>
       <div className="touch" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
@@ -135,14 +172,33 @@ function TouchControls({ game }: { game: Game }) {
           <div className="knob" style={{ transform: `translate(${knob.dx}px, ${knob.dy}px)` }} />
         </div>
       )}
-      <button
-        className="jump"
-        onPointerDown={() => (game.wantJump = true)}
-        onPointerUp={() => (game.wantJump = false)}
-        onPointerCancel={() => (game.wantJump = false)}
-      >
-        Jump
-      </button>
+      {!knob && <div className="stick-hint">move</div>}
+      <div className="actions">
+        <button className="act" disabled={!canBreak} onClick={() => game.breakBlock()}>
+          {b?.kind === 'deposit' ? 'Take' : 'Break'}
+        </button>
+        {canUse && (
+          <button className="act use" onClick={() => game.use()}>
+            Use
+          </button>
+        )}
+        <button className="act place" disabled={!p?.ok} onClick={() => game.place()}>
+          Place
+        </button>
+        {game.held?.kind === 'machine' && (
+          <button className="act" onClick={() => game.rotate()}>
+            Rotate
+          </button>
+        )}
+        <button
+          className="act jump"
+          onPointerDown={() => (game.wantJump = true)}
+          onPointerUp={() => (game.wantJump = false)}
+          onPointerCancel={() => (game.wantJump = false)}
+        >
+          Jump
+        </button>
+      </div>
     </>
   );
 }
