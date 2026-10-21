@@ -74,23 +74,26 @@ machine the game no longer has loads without it.
 
 ## The Workbench
 
-The Workbench is where you do algebra by hand and build everything else. Its Hand work tab has
-three parts.
+The Workbench is where you do algebra by hand and build everything else. Its Hand work tab has two
+panels laid out like Minecraft crafting: inputs on the left, an arrow, and an output slot on the
+right. Clicking an output puts the result on the cursor (or stacks it onto a matching cursor), and
+shift-clicking sends it to the inventory.
 
-- **The tray** adds. Drop elements on it and they add into one multivector, laid out on the grade
-  card: the scalar, the three vectors, the three bivectors and the trivector each in their own cell.
-  Clicking a cell takes that blade back out (right click takes one), and Take all packs the whole sum
-  into one item. This is how e₁ and e₂ become e₁ + e₂.
-- **The grid** multiplies. One factor goes in the slot at the top of the left edge and its blades
-  run down the column; the other goes in the slot at the end of the bottom edge and its blades run
-  along the row. Each cell is one blade of the left factor times one blade of the right, as in
-  matrix multiplication, and the result is every cell added up. Make takes both factors, whole
-  stacks and all, so 2e₁ by 3e₂ under the wedge makes 6e₁₂; put down one with a right click to multiply
-  just one.
-- **The rail** shows one cell worked out. The two blades are laid out as tiles, e₁, e₂ and e₃ each
-  in its axis colour, left-factor tiles first and outlined. Tap ⇄ to swap two neighbours, which
-  flips the sign, or × to cancel two matching tiles, until the row is in order. What is left is the
-  cell's blade and sign.
+- **Add.** Drop elements on the tray and they add into one multivector, laid out on the grade card:
+  the scalar, the three vectors, the three bivectors and the trivector each in their own cell.
+  Clicking a cell takes that blade back out (right click takes one). The output slot holds the sum
+  packed into one item, so this is how e₁ and e₂ become e₁ + e₂.
+- **Multiply.** A multiplication table. Factor A goes in the slot at the top of the left column and
+  its blades run down it; factor B goes in the slot at the end of the bottom row and its blades run
+  along it; the rule's symbol sits in the corner. Each square is one blade of A times one blade of B,
+  and the output is every square added up. Taking it uses up both factors, whole stacks and all, so
+  2e₁ by 3e₂ under the wedge makes 6e₁₂; put down one with a right click to multiply just one.
+- **Sorting a square.** Tapping a square opens it under the table, worked out by hand. Its two blades
+  are laid out as tiles, e₁, e₂ and e₃ each in its axis colour, A's tiles first and outlined. The goal
+  is the tiles in order, e₁ then e₂ then e₃: tapping between two tiles swaps them, which flips the
+  sign, or cancels them when they are equal, since e₁e₁ = 1. The taps that make progress glow. What is
+  left is the square's blade and sign, and the square fills in with it; Next square opens the next
+  one still unknown.
 
 The grid has three rules, and they differ only in which cancellations they allow (`products.ts`):
 
@@ -103,9 +106,13 @@ The grid has three rules, and they differ only in which cancellations they allow
 The wedge is the outer product. The dot is the inner product geometric algebra mostly uses, the left
 contraction A ⌋ B; for two vectors it is the familiar dot product. The geometric product is the
 whole thing, and the rail shows why for vectors it is the dot and the wedge together. The rules go by
-their usual names so that what you learn here carries over to any book on the subject. A rule starts out unknown: its cells show ? and
-Make does nothing. Sorting three cells by hand under a rule learns it (a cell that opens already in
-order doesn't count), after which the grid fills in by itself and the rail can sort for you. The wedge
+their usual names so that what you learn here carries over to any book on the subject.
+
+A rule starts out unknown: its squares show ? until you work them out by hand, and the output
+stays empty until every square of the table is worked out. Sorting three squares by hand under a
+rule learns it (a square that opens already in order doesn't count), after which every table fills
+in by itself and Sort it for me does the tapping. Squares worked out by hand are remembered, by the
+pair of blades and the rule. The wedge
 is learnable from the start, the dot once the wedge is learned, and the geometric product once the
 dot is.
 

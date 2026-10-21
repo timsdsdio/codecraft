@@ -1,17 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { G3, Multivector, Q } from '@codecraft/ga';
 import { ACHIEVEMENTS, BRANCHES, layoutBranch, type Achievement } from '../game/achievements';
 import { millOutput, type Card } from '../game/cards';
 import { MERGE_ORDER, SPLIT_ORDER, decks, outputs } from '../game/factory';
 import { FREQUENCIES, WAVE_SPEED, fieldText, scalarPart, upPart } from '../game/field';
 import { SORTS_TO_LEARN, type Game } from '../game/game';
-import { MACHINE_NAMES, VERB_NAMES, itemName, valueOf, type Verb } from '../game/items';
-import { RULES, RULE_NAMES, RULE_SYMBOLS, autoSort, pairAction, product, railWhyZero, sorted, terms } from '../game/products';
+import { MACHINE_NAMES, VERB_NAMES, itemName, stackOf, valueOf, type Verb } from '../game/items';
+import { RULES, RULE_NAMES, RULE_SYMBOLS, autoSort, pairAction, product, railWhyZero, sorted, terms, type Rule } from '../game/products';
 import { bloch, probUp } from '../game/qubit';
 import { RECIPES, canBuild, sortLabel } from '../game/recipes';
 import { DIR_NAMES, type SortMode } from '../game/world';
 import { ElementIcon, GradeCard, GRADE_CARD, Icon } from './Icon';
-import { CursorLayer, PlayerInventory, SlotInput, SlotView } from './Slots';
+import { CursorLayer, PlayerInventory, SlotInput, SlotView, countLabel } from './Slots';
 
 function Sheet({ title, game, children, icon, slots = true }: { title: string; game: Game; children: ReactNode; icon?: ReactNode; slots?: boolean }) {
   return (
@@ -113,12 +113,12 @@ function bladeName(blade: number) {
 }
 
 /** a blade cell: its icon and weight */
-function BladeCell({ mv, onPointerDown, active, title }: { mv: Multivector | null; onPointerDown?: (button: 'left' | 'right') => void; active?: boolean; title?: string }) {
+function BladeCell({ mv, onPointerDown, active, title, className = '' }: { mv: Multivector | null; onPointerDown?: (button: 'left' | 'right') => void; active?: boolean; title?: string; className?: string }) {
   const c = mv ? [...mv.terms.values()][0] : null;
   const unit = mv ? Multivector.blade(G3, [...mv.terms.keys()][0]) : null;
   return (
     <button
-      className={`cell${!mv ? ' empty' : ''}${c && c.n < 0 ? ' negative' : ''}${active ? ' on' : ''}`}
+      className={`cell ${className}${!mv ? ' empty' : ''}${c && c.n < 0 ? ' negative' : ''}${active ? ' on' : ''}`}
       onPointerDown={(e) => {
         e.preventDefault();
         onPointerDown?.(e.button === 2 ? 'right' : 'left');
@@ -137,32 +137,54 @@ function BladeCell({ mv, onPointerDown, active, title }: { mv: Multivector | nul
   );
 }
 
+/** a crafting output: click takes the result onto the cursor (or stacks it there), shift-click sends it to the inventory */
+function OutputSlot({ value, onTake, label }: { value: Multivector | null; onTake: (shift: boolean) => void; label: string }) {
+  const s = value && !value.isZero() ? stackOf(value) : null;
+  return (
+    <button
+      className={`slot big output${s ? ' ready' : ''}`}
+      disabled={!s}
+      onPointerDown={(e) => (e.preventDefault(), onTake(e.shiftKey))}
+      onContextMenu={(e) => e.preventDefault()}
+      aria-label={s ? `Take ${String(value)}` : label}
+    >
+      {s && <Icon item={s.item} />}
+      {s && countLabel(s) && <span className="count">{countLabel(s)}</span>}
+      {!s && <span className="slot-label">{label}</span>}
+    </button>
+  );
+}
+
 function HandWork({ game }: { game: Game }) {
-  const b = game.bench;
-  const tray = b.tray;
-  const [a, bottom] = game.factors();
-  const rule = b.rule;
-  const learned = game.learned(rule);
-  const learnable = game.learnable(rule);
-  const left = a ? terms(a) : [];
-  const right = bottom ? terms(bottom) : [];
-  const result = game.benchResult();
   return (
     <div className="bench">
-      <section className="tray-area">
-        <h3>Tray</h3>
-        <p className="dim">Drop elements here to add them. Take one blade back out with a click; Take all packs the sum into one item.</p>
-        <div className="tray" onPointerDown={(e) => game.cursor && (e.preventDefault(), game.trayDrop(e.button === 2 ? 'right' : 'left'))} onContextMenu={(e) => e.preventDefault()}>
+      <AddPanel game={game} />
+      <MultiplyPanel game={game} />
+    </div>
+  );
+}
+
+function AddPanel({ game }: { game: Game }) {
+  const tray = game.bench.tray;
+  const drop = (e: ReactPointerEvent) => {
+    if (!game.cursor) return;
+    e.preventDefault();
+    game.trayDrop(e.button === 2 ? 'right' : 'left');
+  };
+  return (
+    <section className="panel add">
+      <header>
+        <h3>Add</h3>
+        <span className="dim">Drop elements on the tray; their sum comes out on the right.</span>
+      </header>
+      <div className="craft-row">
+        <div className={`tray${game.cursor?.item.kind === 'element' ? ' accepting' : ''}`} onPointerDown={drop} onContextMenu={(e) => e.preventDefault()} aria-label="Tray">
           {GRADE_CARD.map((row, r) => (
             <div key={r} className="tray-row">
               {row.map((blade) => {
                 const c = tray.terms.get(blade);
                 return c ? (
-                  <BladeCell
-                    key={blade}
-                    mv={Multivector.blade(G3, blade, c)}
-                    onPointerDown={(button) => !game.cursor && game.trayTake(blade, button)}
-                  />
+                  <BladeCell key={blade} mv={Multivector.blade(G3, blade, c)} title={`${Multivector.blade(G3, blade, c)}: click to take it back`} onPointerDown={(button) => !game.cursor && game.trayTake(blade, button)} />
                 ) : (
                   <div key={blade} className="cell placeholder">
                     {bladeName(blade)}
@@ -172,82 +194,125 @@ function HandWork({ game }: { game: Game }) {
             </div>
           ))}
         </div>
-        <div className="row">
-          <span className="sum">{tray.isZero() ? 'empty' : String(tray)}</span>
-          <button disabled={tray.isZero()} onClick={() => game.trayTakeAll()}>
-            Take all
-          </button>
+        <span className="arrow" aria-hidden="true">
+          →
+        </span>
+        <div className="labelled">
+          <OutputSlot value={tray} onTake={(shift) => game.trayOutput(shift)} label="sum" />
+          <small>{tray.isZero() ? 'Sum' : String(tray)}</small>
         </div>
-      </section>
-
-      <section className="grid-area">
-        <h3>Grid</h3>
-        <div className="rules" role="tablist">
-          {RULES.map((r) => (
-            <button key={r} role="tab" aria-selected={rule === r} disabled={!game.learnable(r)} onClick={() => game.setRule(r)}>
-              {RULE_NAMES[r]} {RULE_SYMBOLS[r]}
-              <small>{game.learned(r) ? 'learned' : game.learnable(r) ? `${game.sorts[r]}/${SORTS_TO_LEARN} sorted` : 'locked'}</small>
-            </button>
-          ))}
-        </div>
-        {!learned && learnable && (
-          <p className="callout">
-            {RULE_NAMES[rule]} isn’t learned yet. Put a factor on each edge, then tap cells and sort them on the rail by hand. Sort{' '}
-            {SORTS_TO_LEARN - game.sorts[rule]} more to learn it.
-          </p>
-        )}
-        <div className="mgrid">
-          <div className="edge-left">
-            <SlotView game={game} at={{ c: 'bench', field: 'left', i: 0 }} label="left factor" />
-            {left.map((t, i) => (
-              <BladeCell key={i} mv={t} />
-            ))}
-          </div>
-          <div className="mgrid-main">
-            <div className="cells" style={{ gridTemplateColumns: `repeat(${Math.max(1, right.length)}, auto)` }}>
-              {left.map((ta, i) =>
-                right.map((tb, j) => {
-                  const v = product(rule, ta, tb);
-                  const active = b.rail?.cell[0] === i && b.rail?.cell[1] === j;
-                  if (!learned)
-                    return (
-                      <button key={`${i}-${j}`} className={`cell unknown${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} aria-label={`cell ${ta} by ${tb}, not yet worked out`}>
-                        ?
-                      </button>
-                    );
-                  return v.isZero() ? (
-                    <button key={`${i}-${j}`} className={`cell zero${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)}>
-                      0
-                    </button>
-                  ) : (
-                    <BladeCell key={`${i}-${j}`} mv={v} active={active} onPointerDown={() => game.openCell(i, j)} />
-                  );
-                }),
-              )}
-            </div>
-            <div className="edge-bottom">
-              {right.map((t, j) => (
-                <BladeCell key={j} mv={t} />
-              ))}
-              <SlotView game={game} at={{ c: 'bench', field: 'bottom', i: 0 }} label="right factor" />
-            </div>
-          </div>
-          <div className="result">
-            <small>Result</small>
-            <button className="slot big" disabled={result === null} onPointerDown={(e) => (e.preventDefault(), game.make(e.shiftKey))} aria-label="Make">
-              {result && !result.isZero() && <Icon item={{ kind: 'element', mv: result }} />}
-              {result?.isZero() && <span className="dim">0</span>}
-            </button>
-            <span className="sum">{result === null ? (a && bottom ? 'learn the rule first' : 'put a factor on each edge') : String(result)}</span>
-          </div>
-        </div>
-        <Rail game={game} />
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
 
-function Rail({ game }: { game: Game }) {
+const RULE_TELLS: Record<Rule, string> = {
+  wedge: 'the wedge lets nothing cancel',
+  dot: 'the dot needs every A tile (outlined) to cancel',
+  geometric: 'the geometric product lets anything cancel',
+};
+
+function MultiplyPanel({ game }: { game: Game }) {
+  const b = game.bench;
+  const [a, bottom] = game.factors();
+  const rule = b.rule;
+  const learned = game.learned(rule);
+  const left = a ? terms(a) : [];
+  const right = bottom ? terms(bottom) : [];
+  const nA = Math.max(1, left.length);
+  const nB = Math.max(1, right.length);
+  const result = game.benchResult();
+  const known = (ta: Multivector, tb: Multivector) => learned || game.solvedByHand(rule, ta, tb);
+  const unknown = left.flatMap((ta, i) => right.map((tb, j) => [i, j, known(ta, tb)] as const)).filter(([, , k]) => !k);
+  const toLearn = SORTS_TO_LEARN - game.sorts[rule];
+
+  let hint: ReactNode;
+  if (!a || !bottom) hint = <>Put a multivector in <b>A</b> and another in <b>B</b>. Each square is one blade of A times one blade of B.</>;
+  else if (learned) hint = <>You know the {RULE_NAMES[rule].toLowerCase()}, so every square fills in. Take the product from the output.</>;
+  else if (unknown.length) hint = <>Tap a <b>?</b> square to work it out by hand. {toLearn} more sorted by hand and you know the {RULE_NAMES[rule].toLowerCase()}.</>;
+  else hint = <>Every square is worked out, so the product is ready to take.</>;
+
+  return (
+    <section className="panel multiply">
+      <header>
+        <h3>Multiply</h3>
+        <div className="rules" role="tablist" aria-label="Product">
+          {RULES.map((r) => (
+            <button key={r} role="tab" aria-selected={rule === r} disabled={!game.learnable(r)} onClick={() => game.setRule(r)}>
+              <b>
+                {RULE_SYMBOLS[r] || '·'} {RULE_NAMES[r]}
+              </b>
+              <small>{game.learned(r) ? 'known' : game.learnable(r) ? `${game.sorts[r]}/${SORTS_TO_LEARN} sorted` : `after the ${RULE_NAMES[RULES[RULES.indexOf(r) - 1]].toLowerCase()}`}</small>
+            </button>
+          ))}
+        </div>
+      </header>
+      <p className="hint-line">{hint}</p>
+      <div className="table-scroll">
+        <div
+          className="mtable"
+          style={{ gridTemplateColumns: `auto repeat(${nB}, var(--cell)) auto auto auto`, gridTemplateRows: `auto repeat(${nA}, var(--cell)) auto` }}
+        >
+          <div className="labelled a-slot" style={{ gridColumn: 1, gridRow: 1 }}>
+            <SlotView game={game} at={{ c: 'bench', field: 'left', i: 0 }} label="A" />
+          </div>
+          {Array.from({ length: nA }, (_, i) => (
+            <div key={`a${i}`} style={{ gridColumn: 1, gridRow: i + 2 }} className="head">
+              {left[i] ? <BladeCell mv={left[i]} className="factor" /> : <div className="cell placeholder">A</div>}
+            </div>
+          ))}
+          {Array.from({ length: nA }, (_, i) =>
+            Array.from({ length: nB }, (_, j) => {
+              const ta = left[i];
+              const tb = right[j];
+              const style = { gridColumn: j + 2, gridRow: i + 2 };
+              if (!ta || !tb) return <div key={`${i}-${j}`} className="cell placeholder" style={style} />;
+              const active = b.rail?.cell[0] === i && b.rail?.cell[1] === j;
+              if (!known(ta, tb))
+                return (
+                  <button key={`${i}-${j}`} style={style} className={`cell unknown${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} title={`${ta} times ${tb}: tap to work it out`}>
+                    ?
+                  </button>
+                );
+              const v = product(rule, ta, tb);
+              return v.isZero() ? (
+                <button key={`${i}-${j}`} style={style} className={`cell zero${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} title={`${ta} times ${tb} is 0`}>
+                  0
+                </button>
+              ) : (
+                <div key={`${i}-${j}`} style={style}>
+                  <BladeCell mv={v} active={active} onPointerDown={() => game.openCell(i, j)} title={`${ta} times ${tb} is ${v}`} />
+                </div>
+              );
+            }),
+          )}
+          <div className="corner" style={{ gridColumn: 1, gridRow: nA + 2 }} aria-hidden="true">
+            {RULE_SYMBOLS[rule] || '·'}
+          </div>
+          {Array.from({ length: nB }, (_, j) => (
+            <div key={`b${j}`} style={{ gridColumn: j + 2, gridRow: nA + 2 }} className="head">
+              {right[j] ? <BladeCell mv={right[j]} className="factor" /> : <div className="cell placeholder">B</div>}
+            </div>
+          ))}
+          <div className="labelled b-slot" style={{ gridColumn: nB + 2, gridRow: nA + 2 }}>
+            <SlotView game={game} at={{ c: 'bench', field: 'bottom', i: 0 }} label="B" />
+          </div>
+          <span className="arrow" style={{ gridColumn: nB + 3, gridRow: `2 / span ${nA}` }} aria-hidden="true">
+            →
+          </span>
+          <div className="labelled" style={{ gridColumn: nB + 4, gridRow: `2 / span ${nA}` }}>
+            <OutputSlot value={result} onTake={(shift) => game.make(shift)} label={a && bottom ? '?' : 'A·B'} />
+            <small>{result ? (result.isZero() ? '0' : String(result)) : 'Product'}</small>
+          </div>
+        </div>
+      </div>
+      <Sorter game={game} next={unknown[0] ? [unknown[0][0], unknown[0][1]] : null} />
+    </section>
+  );
+}
+
+/** the rail: one square worked out by hand, its tiles sorted into order with swaps and cancels */
+function Sorter({ game, next }: { game: Game; next: [number, number] | null }) {
   const open = game.bench.rail;
   const rule = game.bench.rule;
   const learned = game.learned(rule);
@@ -258,56 +323,76 @@ function Rail({ game }: { game: Game }) {
     const t = setTimeout(() => game.railTap(autoSort(open.rail)[0]), 450);
     return () => clearTimeout(t);
   }, [auto, open, game, game.version]);
-  if (!open) return <p className="dim rail-hint">Tap a cell of the grid to see it worked out on the rail.</p>;
+  if (!open) return null;
   const r = open.rail;
   const done = sorted(r);
   const answer = game.railAnswer();
   const why = done ? railWhyZero(r, rule) : null;
+  const [ba, bb] = open.pair;
+  const toLearn = SORTS_TO_LEARN - game.sorts[rule];
+  const ruleName = RULE_NAMES[rule].toLowerCase();
   return (
-    <div className="rail">
-      <div className="rail-row">
-        <span className="token">{r.sign > 0 ? '+' : '−'}</span>
-        {r.tiles.length === 0 && <span className="dim">nothing left: the scalar 1</span>}
-        {r.tiles.map((t, k) => (
-          <span key={k} className="rail-step">
-            <span className={`tile axis${t.axis} from-${t.from}`}>e{['₁', '₂', '₃'][t.axis]}</span>
-            {k + 1 < r.tiles.length && (
-              <button className={`gap ${pairAction(r, k)}`} disabled={done || auto} onClick={() => game.railTap(k)} aria-label={pairAction(r, k) === 'cancel' ? 'cancel this pair' : 'swap these two'}>
-                {pairAction(r, k) === 'cancel' ? '×' : '⇄'}
-              </button>
-            )}
-          </span>
-        ))}
+    <div className="sorter" role="group" aria-label="Sort this square">
+      <div className="sorter-head">
+        <b>
+          {bladeName(ba)} × {bladeName(bb)}
+        </b>
+        <span className="dim">worked out by hand</span>
+        <button className="small close" onClick={() => game.closeRail()} aria-label="Close">
+          ✕
+        </button>
       </div>
       {!done && (
-        <p className="dim">
-          Tap ⇄ to swap two neighbours (the sign flips) or × to cancel a matching pair, until the row is in order. Left-factor tiles are outlined.
-          {learned && (
-            <>
-              {' '}
-              <button onClick={() => setAuto(true)} disabled={auto}>
-                Sort it for me
-              </button>
-            </>
-          )}
+        <p className="goal">
+          Put the tiles in order, <b>e₁ then e₂ then e₃</b>. Tap between two tiles to <b>swap</b> them, which flips the sign, or to{' '}
+          <b>cancel</b> two equal tiles, since e₁e₁ = 1. Here {RULE_TELLS[rule]}.
         </p>
       )}
+      <div className="rail-row">
+        <span className={`token${r.sign < 0 ? ' minus' : ''}`} aria-label={r.sign < 0 ? 'minus' : 'plus'}>
+          {r.sign > 0 ? '+' : '−'}
+        </span>
+        {r.tiles.length === 0 && <span className="tile scalar">1</span>}
+        {r.tiles.map((t, k) => {
+          const action = k + 1 < r.tiles.length ? pairAction(r, k) : null;
+          const useful = action === 'cancel' || (action === 'swap' && t.axis > r.tiles[k + 1].axis);
+          return (
+            <span key={k} className="rail-step">
+              <span className={`tile axis${t.axis} from-${t.from}`}>e{['₁', '₂', '₃'][t.axis]}</span>
+              {action && (
+                <button className={`gap ${action}${useful && !done ? ' useful' : ''}`} disabled={done || auto} onClick={() => game.railTap(k)}>
+                  <span aria-hidden="true">{action === 'cancel' ? '⨯' : '⇄'}</span>
+                  <small>{action}</small>
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      {!done && learned && (
+        <button onClick={() => setAuto(true)} disabled={auto}>
+          Sort it for me
+        </button>
+      )}
       {done && (
-        <p>
-          {why ?? (
-            <>
-              Sorted: this cell is <b>{answer ? `${answer.sign < 0 ? '−' : ''}${bladeName(answer.blade)}` : '0'}</b>, times the weights of
-              the two blades.
-            </>
-          )}
-          {!learned && r.moves === 0 && (
+        <div className={`verdict${why ? ' zero' : ''}`}>
+          <b>{why ? '= 0' : `= ${answer && answer.sign < 0 ? '−' : ''}${answer ? bladeName(answer.blade) : '1'}`}</b>
+          <span>{why ?? 'times the weights of the two blades. The square is filled in.'}</span>
+          {!learned && (
             <span className="dim">
-              {' '}
-              It was in order already, so there was nothing to sort, and it doesn’t count toward learning {RULE_NAMES[rule]}. Cells whose blades
-              start out of order do, such as e₂ on the left by e₁ along the bottom.
+              {r.moves === 0
+                ? 'It was in order already, so it doesn’t count toward learning: try a square whose tiles are out of order.'
+                : toLearn > 0
+                  ? `${toLearn} more sorted by hand and you know the ${ruleName}.`
+                  : `You know the ${ruleName} now.`}
             </span>
           )}
-        </p>
+          {next && (
+            <button className="primary" onClick={() => game.openCell(...next)}>
+              Next square
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
