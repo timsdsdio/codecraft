@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { Game } from '../game/game';
-import { HOTBAR, itemName } from '../game/items';
+import { itemName, stackName } from '../game/items';
+import { HOTBAR } from '../game/slots';
 import { usable } from '../game/world';
 import { Icon } from './Icon';
-import { AchievementsScreen, BenchScreen, HubScreen, InventoryScreen, MachineScreen, StartScreen } from './Screens';
+import { AchievementsScreen, InventoryScreen, MachineScreen, StartScreen, WorkbenchScreen } from './Screens';
+import { countLabel } from './Slots';
 
 export function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -30,14 +32,13 @@ function Overlay({ game }: { game: Game }) {
       {s === 'play' && game.touch && <TouchControls game={game} />}
       {s === 'start' && <StartScreen game={game} />}
       {s === 'inventory' && <InventoryScreen game={game} />}
-      {s === 'bench' && <BenchScreen game={game} />}
+      {s === 'workbench' && <WorkbenchScreen game={game} />}
       {s === 'machine' && <MachineScreen game={game} />}
-      {s === 'hub' && <HubScreen game={game} />}
       {s === 'achievements' && <AchievementsScreen game={game} />}
       <div className="toasts" role="status">
         {game.toasts.slice(-3).map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
-            {t.kind !== 'note' && <small>{t.kind === 'achievement' ? 'Achievement' : 'Hub'}</small>}
+            {t.kind === 'achievement' && <small>Achievement</small>}
             <b>{t.title}</b>
           </div>
         ))}
@@ -49,15 +50,15 @@ function Overlay({ game }: { game: Game }) {
 export function Hotbar({ game, onReselect }: { game: Game; onReselect?: () => void }) {
   return (
     <div className="hotbar">
-      {game.inventory.slots.slice(0, HOTBAR).map((st, i) => (
+      {game.inventory.slice(0, HOTBAR).map((st, i) => (
         <button
           key={i}
           className={`slot${i === game.selected ? ' on' : ''}`}
           onClick={() => (i === game.selected && onReselect ? onReselect() : game.select(i))}
-          aria-label={st ? `${itemName(st.item)}, ${st.count}` : `Empty slot ${i + 1}`}
+          aria-label={st ? stackName(st) : `Empty slot ${i + 1}`}
         >
           {st && <Icon item={st.item} />}
-          {st && st.count > 1 && <span className="count">{st.count}</span>}
+          {st && countLabel(st) && <span className="count">{countLabel(st)}</span>}
           {st && <span className="name">{itemName(st.item)}</span>}
         </button>
       ))}
@@ -72,14 +73,6 @@ function GuideCard({ game }: { game: Game }) {
     <button className={`guide${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}>
       <small>{g.label}</small>
       <b>{g.title}</b>
-      {g.progress && (
-        <span className="bar" aria-label={`${g.progress.done} of ${g.progress.of}`}>
-          <span style={{ width: `${(100 * g.progress.done) / g.progress.of}%` }} />
-          <em>
-            {g.progress.done}/{g.progress.of}
-          </em>
-        </span>
-      )}
       {open && <span className="hint">{g.hint}</span>}
     </button>
   );
@@ -164,7 +157,7 @@ function TouchControls({ game }: { game: Game }) {
   const b = game.targetBlock;
   const canUse = usable(b);
   const p = game.placement();
-  const canBreak = !!b && b.kind !== 'hub';
+  const canBreak = !!b;
   return (
     <>
       <div className="touch" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />

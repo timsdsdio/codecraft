@@ -5,9 +5,10 @@ each with its reason. When one changes, edit its entry.
 
 ## Bladecraft
 
-- **Single-player, saved in the browser.** The world, factory, inventory and achievements live in
-  `localStorage`. `docs/STACK.md`'s server-authoritative architecture applies once worlds are
-  shared or players meet.
+- **Single-player, saved in the browser.** The world, factory, inventory and goals live in
+  `localStorage`. A save in an older format is not converted: that world starts fresh.
+  `docs/STACK.md`'s server-authoritative architecture applies once worlds are shared or players
+  meet.
 - **The engine is plain three.js, the UI is React.** A voxel game runs one imperative loop
   (physics, raycasts, a merged terrain mesh rebuilt on change), which R3F's component tree would
   only wrap. React draws the HUD and the panels, and re-renders when the game bumps a version
@@ -15,9 +16,19 @@ each with its reason. When one changes, edit its entry.
 - **The factory is a pure simulation with its own tests.** `factory.ts` steps the world's machines
   at a fixed 20 ticks a second and knows nothing about drawing, so it runs under `node --test`
   (`pnpm test`) and the renderer only reads what it left in each block.
-- **Coefficients are exact rationals.** Elements stack, and the hub counts deliveries, only when
-  they are exactly equal; floating point would make e₁ from one machine differ from e₁ from
-  another. A rotor such as 1 + e₁₂ is applied with R X R⁻¹, which stays exact without normalising.
+- **Weights are exact rationals.** Things stack only when one is an exact multiple of the other;
+  floating point would make e₁ from one machine differ from e₁ from another. A Turn card divides by
+  M M̃ rather than normalising M, which keeps it exact and makes 2 − 2e₁₂ turn the same as 1 − e₁₂.
+- **A stack's count is the element's weight.** An element item holds a base with whole, coprime
+  weights, first weight positive, so 3e₁ and e₁ stack and −e₁ cancels e₁. One rule (stack when one
+  is a multiple of the other, and stacking adds) then covers what a Minecraft stack is and what
+  vector addition is, so the inventory itself teaches that weights add.
+- **A multivector is one item, opened up only on a workspace.** In a slot it is one grade card; the
+  Workbench tray, the Card Press bed and the Mill panel lay its blades out. Spreading it across
+  several slots everywhere would make every inventory screen a puzzle.
+- **Inventory follows Minecraft.** Left click, right click, shift click, drag to spread and number
+  keys mean what they mean there, so a Minecraft player already knows how to move things. Touch
+  maps tap, long press and double tap onto left, right and shift click.
 - **Elements are from G(3), not projective GA.** Vectors are arrows and bivectors are planes, the
   usual way geometric algebra is taught. In projective GA a vector is a plane, which is a confusing
   first step.
@@ -36,22 +47,31 @@ each with its reason. When one changes, edit its entry.
   because it is the phase −1, a different point on the same Hopf fiber.
 - **The electromagnetic field is floating point; probe readings are exact.** The field changes
   smoothly in time, so it can't be exact rationals. A probe rounds each coefficient to the nearest
-  half, which makes a reading an ordinary element that stacks, sorts and counts like any other.
+  half, which makes a reading exact, so equal readings stack.
 - **A field region is one layer of plates.** The field then depends only on e₁ and e₂, which keeps
   the simulation small enough for a phone and every arrow visible from above. Charges give E in the
   plane and currents run along e₃, so the two halves of the field stay apart and the static half can
   be solved directly.
-- **The hub knows a probe's readings by identity.** A reading of e₁ equals the e₁ from an extractor,
-  but only readings count toward field orders, so the factory remembers which element objects probes
-  made. Readings still in ducts when the game is saved count as ordinary elements after loading.
-- **One block per operation.** An adder, a wedger and a multiplier look different and are told apart
-  at a glance, which a single machine with a chosen operation would not allow.
-- **Machines cost elements you made by hand**, so the bench's hand operations are the tech tree: a
-  wedger needs a bivector, a multiplier a rotor. Lattice alone builds only ducts and collectors.
+- **A probe reading is its own kind of item.** A reading of e₁ would otherwise be the same as the e₁
+  from an extractor, and the field goals could be met without a field. As an item it records what
+  the field was, and survives saving.
+- **One programmable machine, the Mill, instead of a block per operation.** Every multivector is
+  also an operation, so the operation is a card pressed from an element and a verb plate, and one
+  Mill runs any of them. Two decks (outputs add side by side, the second runs on the first) and a
+  live card from the side port cover sums, compositions and two-input operations without more
+  blocks. The cards in its slots show on the model.
+- **Products are learned by hand before any machine does them.** Join, Meter and Multiply are one
+  blade sort on the rail with different rules for cancelling, and each verb plate needs its rule
+  learned by sorting three cells by hand. Machines and plates cost elements that only hand work
+  makes. Lattice alone builds only ducts, Stores, splitters, mergers, crossings and blank cards.
+- **Goals are possession, not delivery.** A goal is met when the thing it names exists anywhere: in
+  the inventory, a Store, a machine, or placed. Nothing has to be delivered, so a factory can grow
+  in any direction, as in Minecraft tech mods, rather than around one central block.
 - **Deposits never run out and can't be removed.** Taking from one by hand leaves it in place, so a
   world can never lose its only source of an element.
-- **The bench offers every operation at once and previews each result**, so comparing A ∧ B with
-  A B, or A ∧ B with B ∧ A, is the main way to learn what they do.
+- **The Workbench grid is matrix multiplication.** One factor runs down the left edge and the other
+  along the bottom, so each cell is one pair of blades and the result is their sum. The grid shows
+  at a glance that a product is bilinear and which pairs vanish under each rule.
 - **Touch controls are explicit buttons that appear when they apply** (Take or Break, Use, Place,
   Rotate, Jump) rather than taps and long presses on the view, which were easy to confuse.
 

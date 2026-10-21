@@ -1,10 +1,9 @@
 import { test } from 'node:test';
 import { Q } from '@codecraft/ga';
 import assert from 'node:assert/strict';
-import { Field, isReading, reading } from './field.ts';
+import { Field, reading } from './field.ts';
 import { Factory } from './factory.ts';
-import { el, scalar } from './items.ts';
-import { ORDERS } from './orders.ts';
+import { el, scalar, stackOf } from './items.ts';
 import { World, newMachine, type Dir, type Machine } from './world.ts';
 
 const Y = 3;
@@ -15,9 +14,8 @@ const E = 0 as Dir;
 function region(type: 'charge' | 'wire' | 'antenna', mv: ReturnType<typeof el>, R = 10) {
   const w = new World();
   for (let x = C - R; x <= C + R; x++) for (let z = C - R; z <= C + R; z++) w.set(x, Y, z, newMachine('plate', E));
-  const m = newMachine(type, E) as Machine & { charge?: unknown; current?: unknown };
-  if (m.type === 'charge') m.charge = mv;
-  if (m.type === 'wire' || m.type === 'antenna') m.current = mv;
+  const m = newMachine(type, E) as Extract<Machine, { type: typeof type }>;
+  m.slot = stackOf(mv);
   w.set(C, Y, C, m);
   return { w, f: new Field() };
 }
@@ -98,7 +96,7 @@ test('separate groups of plates are separate fields, and a gap of one block cuts
   for (let x = 0; x <= 4; x++) w.set(x, Y, 0, newMachine('plate', E));
   for (let x = 6; x <= 9; x++) w.set(x, Y, 0, newMachine('plate', E));
   const q = newMachine('charge', E) as Extract<Machine, { type: 'charge' }>;
-  q.charge = scalar(1);
+  q.slot = stackOf(scalar(1));
   w.set(2, Y, 0, q);
   const f = new Field();
   run(f, w, 1);
@@ -107,36 +105,38 @@ test('separate groups of plates are separate fields, and a gap of one block cuts
   assert.ok([...f.at(6, Y, 0).e, ...f.at(5, Y, 0).e].every((n) => n === 0));
 });
 
-test('a probe ducts readings to the hub, which counts them toward a field order; elements made otherwise don’t count', () => {
+test('a probe ducts readings into a Store as their own kind of item; a charge takes only scalars', () => {
   const w = new World();
   for (let x = 0; x <= 8; x++) for (let z = 0; z <= 8; z++) w.set(x, Y, z, newMachine('plate', E));
-  const hub = { order: ORDERS.findIndex((o) => o.kind === 'reading'), delivered: 0 };
-  const f = new Factory(w, hub);
-  // a charge in the middle, set by duct; a probe one block east facing east, through a duct to the hub
+  const seen: string[] = [];
+  const f = new Factory(w, { reading: (mv) => seen.push(String(mv)) });
+  // a charge in the middle, set by duct; a probe one block east facing east, through a duct to a Store
   w.set(4, Y, 4, newMachine('charge', E));
-  assert.ok(f.accept(4, Y, 4, scalar(1), 2));
-  assert.ok(f.accept(4, Y, 4, el('1'), 2), 'takes it, and it vanishes');
-  assert.ok((w.get(4, Y, 4) as Extract<Machine, { type: 'charge' }>).charge?.equals(scalar(1)));
+  assert.ok(f.accept(4, Y, 4, stackOf(scalar(1))!, 2));
+  assert.ok(!f.accept(4, Y, 4, stackOf(el('1'))!, 2), 'a vector is refused');
+  assert.ok((w.get(4, Y, 4) as Extract<Machine, { type: 'charge' }>).slot?.count.n === 1);
   w.set(5, Y, 4, newMachine('probe', E));
   w.set(6, Y, 4, newMachine('duct', E));
-  w.set(7, Y, 4, { kind: 'hub' });
+  w.set(7, Y, 4, newMachine('store', E));
   for (let t = 0; t < 2.6; t += 0.05) f.step(0.05);
-  assert.equal(hub.delivered, 2);
-  const probe = w.get(5, Y, 4) as Extract<Machine, { type: 'probe' }>;
+  const store = w.get(7, Y, 4) as Extract<Machine, { type: 'store' }>;
+  const held = store.slots.filter((s) => !!s);
+  assert.ok(held.length > 0, 'readings arrived');
   // E one block east of the charge points east (a little stronger than 1/r, as the earthed edge is close)
-  assert.ok(probe.reading && isReading(probe.reading), String(probe.reading));
-  assert.deepEqual([...probe.reading.terms.keys()], [1]);
-  assert.ok(probe.reading.terms.get(1)!.n > 0);
-  // an e₁ from anywhere else is the same element, but not a reading
-  f.accept(7, Y, 4, el('1'), 2);
-  assert.equal(hub.delivered, 2);
+  for (const s of held) {
+    assert.equal(s!.item.kind, 'reading');
+    if (s!.item.kind !== 'reading') continue;
+    assert.deepEqual([...s!.item.mv.terms.keys()], [1]);
+    assert.ok(s!.item.mv.terms.get(1)!.n > 0);
+  }
+  assert.ok(seen.length >= 2);
 });
 
 test('a probe outside any field reads nothing', () => {
   const w = new World();
-  const f = new Factory(w, { order: 0, delivered: 0 });
+  const f = new Factory(w);
   w.set(1, Y, 1, newMachine('probe', E));
-  w.set(2, Y, 1, newMachine('collector', E));
+  w.set(2, Y, 1, newMachine('store', E));
   for (let t = 0; t < 3; t += 0.05) f.step(0.05);
-  assert.equal((w.get(2, Y, 1) as Extract<Machine, { type: 'collector' }>).stored.length, 0);
+  assert.ok((w.get(2, Y, 1) as Extract<Machine, { type: 'store' }>).slots.every((s) => !s));
 });

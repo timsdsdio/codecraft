@@ -1,17 +1,30 @@
 // The voxel world: a bounded grid of blocks.
-//   lattice    the inert building material the ground is made of
-//   deposit    a never-ending source of one raw element (e₁, e₂, e₃ or the scalar 1); breaking it
-//              by hand gives one element and leaves it in place, and an extractor draws on it forever
-//   bench      the hand bench: combine elements by hand and build machines
-//   hub        the factory's goal, at spawn: it takes delivered elements toward its current order
-//   machine    extractors, ducts, collectors, operation machines and field blocks; each faces one
-//              of four directions and holds what is passing through it (see factory.ts and field.ts)
+//   lattice     the inert building material the ground is made of
+//   deposit     a never-ending source of one unit blade (e₁, e₂, e₃ or the scalar 1); breaking it by
+//               hand gives one and leaves it in place, and an extractor draws on it forever
+//   workbench   hand work (the tray, the grid and the rail) and building things
+//   machine     everything with a facing: extractors, ducts, Stores, logistics, Mills, the Card Press,
+//               qubit machines and field blocks; each holds what is passing through it (factory.ts)
 //
 // World axes follow three.js (x east, y up, z south); algebra axes are e₁ east, e₂ north, e₃ up, a
 // right-handed set, so the arrow drawn for e₁ points the way you walk to go east.
 import type { Multivector } from '@codecraft/ga';
-import { el, loadMv, saveMv, scalar, MACHINE_NAMES, type Item, type MachineType, type SavedMv } from './items.ts';
-import type { GateId } from './qubit.ts';
+import {
+  MACHINE_NAMES,
+  el,
+  loadMv,
+  loadStack,
+  saveMv,
+  saveStack,
+  scalar,
+  type Item,
+  type MachineType,
+  type SavedMv,
+  type SavedStack,
+  type Stack,
+  type Verb,
+} from './items.ts';
+import type { Slots } from './slots.ts';
 
 /** 0 east (+x), 1 north (−z), 2 west (−x), 3 south (+z): counter-clockwise from above */
 export type Dir = 0 | 1 | 2 | 3;
@@ -19,116 +32,166 @@ export const STEP: Record<Dir, [number, number]> = { 0: [1, 0], 1: [0, -1], 2: [
 export const opposite = (d: Dir) => ((d + 2) % 4) as Dir;
 export const DIR_NAMES = ['east', 'north', 'west', 'south'] as const;
 
-/** an element riding a duct: t runs from 0 (just entered) to 1 (at the far end) */
+/** a stack riding a duct: t runs from 0 (just entered) to 1 (at the far end) */
 export interface Carried {
   id: number;
-  mv: Multivector;
+  stack: Stack;
   t: number;
   /** the side it came in from, for drawing the turn */
   from: Dir | null;
 }
 
-export type MachineState =
-  | { type: 'duct'; item: Carried | null }
-  | { type: 'extractor'; timer: number; out: Carried | null }
-  | { type: 'collector'; stored: { mv: Multivector; count: number }[] }
-  | ({ type: 'adder' | 'wedger' | 'multiplier' | 'sandwich' | 'gate' | 'bloch' | 'detector' } & Inputs)
-  | ({ type: 'orrery'; seen: Multivector[] } & Inputs)
-  // logistics: these only move elements around
-  | { type: 'splitter'; item: Multivector | null; next: number }
-  | { type: 'merger'; slots: (Multivector | null)[]; next: number }
-  | { type: 'sorter'; item: Multivector | null; filter: Multivector | null; mode: SortMode; side: 1 | 3 }
-  | { type: 'crossing'; slots: (Multivector | null)[] }
-  // the field (field.ts): plates hold it; a charge's scalar and a wire's or antenna's e₃ part are its sources
-  | { type: 'plate' }
-  | { type: 'charge'; charge: Multivector | null }
-  | { type: 'wire'; current: Multivector | null }
-  | { type: 'antenna'; current: Multivector | null; frequency: number }
-  | { type: 'probe'; timer: number; out: Multivector | null; reading: Multivector | null };
-
-/** what a sorter sends to its side: elements equal to its sample, or every element of one kind */
+/** what a sorter sends to its side: elements that are multiples of its sample, or every element of one kind */
 export type SortMode = 'same' | 'scalar' | 'vector' | 'bivector' | 'trivector' | 'state';
 
-/** what an operation machine holds: A, B (or a fixed B, possibly one of the preset gates), the result, and how far along it is */
-interface Inputs {
-  a: Multivector | null;
-  b: Multivector | null;
-  fixed: Multivector | null;
-  /** a gate set from the presets in its panel, which costs nothing and isn't given back */
-  preset: GateId | null;
-  out: Multivector | null;
-  work: number;
-}
+export const STORE_SLOTS = 27;
+/** a Mill's card slots: deck one is slots 0 and 1, deck two is slots 2 and 3 */
+export const MILL_SLOTS = 4;
 
-/** machines that take only A (from any side but the front) */
-export const SINGLE_INPUT: readonly MachineType[] = ['bloch', 'detector', 'orrery'];
+export type MachineState =
+  | { type: 'duct'; item: Carried | null }
+  | { type: 'extractor'; timer: number; out: Stack | null }
+  | { type: 'store'; slots: Slots }
+  // logistics: these only move things around
+  | { type: 'splitter'; item: Stack | null; next: number }
+  | { type: 'merger'; slots: Slots; next: number }
+  | { type: 'sorter'; item: Stack | null; filter: Multivector | null; mode: SortMode; side: 1 | 3 }
+  | { type: 'crossing'; slots: Slots }
+  // packer slots are indexed by side relative to its facing (1 left, 2 back, 3 right)
+  | { type: 'packer'; slots: Slots; out: Stack | null }
+  | { type: 'unpacker'; item: Stack | null; queue: Stack[] }
+  | { type: 'mill'; cards: Slots; live: Verb | null; x: Stack | null; side: Stack | null; out: Stack | null; work: number; lamps: number }
+  | { type: 'press'; bed: Stack | null; plate: Stack | null; blank: Stack | null }
+  | { type: 'detector'; a: Stack | null; out: Stack | null; work: number }
+  | { type: 'orrery'; a: Stack | null; out: Stack | null; work: number; seen: Multivector[] }
+  // the field (field.ts): plates hold it; a charge's scalar and a wire's or antenna's e₃ part are its sources
+  | { type: 'plate' }
+  | { type: 'charge'; slot: Stack | null }
+  | { type: 'wire'; slot: Stack | null }
+  | { type: 'antenna'; slot: Stack | null; frequency: number }
+  | { type: 'probe'; timer: number; out: Stack | null; reading: Multivector | null };
 
 export type Machine = { kind: 'machine'; facing: Dir } & MachineState;
-export type OperationMachine = Extract<Machine, { a: unknown }>;
+export type MachineOf<T extends MachineType> = Extract<Machine, { type: T }>;
 
-export type Block = { kind: 'lattice' } | { kind: 'bench' } | { kind: 'hub' } | { kind: 'deposit'; mv: Multivector } | Machine;
+export type Block = { kind: 'lattice' } | { kind: 'workbench' } | { kind: 'deposit'; mv: Multivector } | Machine;
+
+const empty = (n: number): Slots => Array(n).fill(null);
 
 export function newMachine(type: MachineType, facing: Dir): Machine {
-  if (type === 'duct') return { kind: 'machine', facing, type, item: null };
-  if (type === 'extractor') return { kind: 'machine', facing, type, timer: 0, out: null };
-  if (type === 'collector') return { kind: 'machine', facing, type, stored: [] };
-  if (type === 'splitter') return { kind: 'machine', facing, type, item: null, next: 0 };
-  // merger slots are indexed by side relative to its facing (1 left, 2 back, 3 right); crossing slots by the absolute side an element came in from
-  if (type === 'merger') return { kind: 'machine', facing, type, slots: [null, null, null, null], next: 0 };
-  if (type === 'sorter') return { kind: 'machine', facing, type, item: null, filter: null, mode: 'same', side: 1 };
-  if (type === 'crossing') return { kind: 'machine', facing, type, slots: [null, null, null, null] };
-  if (type === 'plate') return { kind: 'machine', facing, type };
-  if (type === 'charge') return { kind: 'machine', facing, type, charge: null };
-  if (type === 'wire') return { kind: 'machine', facing, type, current: null };
-  if (type === 'antenna') return { kind: 'machine', facing, type, current: null, frequency: 1 };
-  if (type === 'probe') return { kind: 'machine', facing, type, timer: 0, out: null, reading: null };
-  const inputs = { a: null, b: null, fixed: null, preset: null, out: null, work: 0 };
-  if (type === 'orrery') return { kind: 'machine', facing, type, seen: [], ...inputs };
-  return { kind: 'machine', facing, type, ...inputs };
+  const m = (state: MachineState) => ({ kind: 'machine', facing, ...state }) as Machine;
+  switch (type) {
+    case 'duct':
+      return m({ type, item: null });
+    case 'extractor':
+      return m({ type, timer: 0, out: null });
+    case 'store':
+      return m({ type, slots: empty(STORE_SLOTS) });
+    case 'splitter':
+      return m({ type, item: null, next: 0 });
+    case 'merger':
+      return m({ type, slots: empty(4), next: 0 });
+    case 'sorter':
+      return m({ type, item: null, filter: null, mode: 'same', side: 1 });
+    case 'crossing':
+      return m({ type, slots: empty(4) });
+    case 'packer':
+      return m({ type, slots: empty(4), out: null });
+    case 'unpacker':
+      return m({ type, item: null, queue: [] });
+    case 'mill':
+      return m({ type, cards: empty(MILL_SLOTS), live: null, x: null, side: null, out: null, work: 0, lamps: 0 });
+    case 'press':
+      return m({ type, bed: null, plate: null, blank: null });
+    case 'detector':
+      return m({ type, a: null, out: null, work: 0 });
+    case 'orrery':
+      return m({ type, a: null, out: null, work: 0, seen: [] });
+    case 'plate':
+      return m({ type });
+    case 'charge':
+      return m({ type, slot: null });
+    case 'wire':
+      return m({ type, slot: null });
+    case 'antenna':
+      return m({ type, slot: null, frequency: 1 });
+    case 'probe':
+      return m({ type, timer: 0, out: null, reading: null });
+  }
 }
 
 export const SIZE = 64;
 export const HEIGHT = 32;
 export const GROUND = 3; // the first empty layer
-export const HUB: [number, number, number] = [SIZE / 2, GROUND, SIZE / 2 - 3];
 export const SPAWN: [number, number, number] = [SIZE / 2 + 0.5, GROUND, SIZE / 2 + 2.5];
+/** the patch of ground the starting deposits sit around */
+const HOME: [number, number] = [SIZE / 2, SIZE / 2 - 3];
 
 const index = (x: number, y: number, z: number) => x + SIZE * (z + SIZE * y);
 export const inBounds = (x: number, y: number, z: number) => x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < HEIGHT;
 
 export function blockName(b: Block) {
   if (b.kind === 'lattice') return 'Lattice';
-  if (b.kind === 'bench') return 'Algebra bench';
-  if (b.kind === 'hub') return 'Hub';
+  if (b.kind === 'workbench') return 'Workbench';
   if (b.kind === 'deposit') return `${b.mv} deposit`;
   return MACHINE_NAMES[b.type];
 }
 
-/** what breaking a block gives (deposits give their element and stay; the hub can't be broken) */
-export function drop(b: Block): Item | null {
-  if (b.kind === 'hub') return null;
+/** what breaking a block gives (deposits give their blade and stay) */
+export function drop(b: Block): Item {
   if (b.kind === 'deposit') return { kind: 'element', mv: b.mv };
   if (b.kind === 'machine') return { kind: 'machine', type: b.type };
   return { kind: b.kind };
 }
 
 /** everything a machine holds, returned to the player when it is broken */
-export function contents(m: Machine): Multivector[] {
-  if (m.type === 'duct') return m.item ? [m.item.mv] : [];
-  if (m.type === 'extractor') return m.out ? [m.out.mv] : [];
-  if (m.type === 'collector') return m.stored.flatMap((s) => Array(s.count).fill(s.mv));
-  if (m.type === 'splitter' || m.type === 'sorter') return m.item ? [m.item] : [];
-  if (m.type === 'merger' || m.type === 'crossing') return m.slots.filter((x): x is Multivector => !!x);
-  if (m.type === 'plate') return [];
-  if (m.type === 'charge') return m.charge ? [m.charge] : [];
-  if (m.type === 'wire' || m.type === 'antenna') return m.current ? [m.current] : [];
-  if (m.type === 'probe') return m.out ? [m.out] : [];
-  // a preset gate was never the player's to get back
-  return [m.a, m.b, m.preset ? null : m.fixed, m.out].filter((x): x is Multivector => !!x);
+export function contents(m: Machine): Stack[] {
+  const all: (Stack | null | undefined)[] = [];
+  switch (m.type) {
+    case 'duct':
+      all.push(m.item?.stack);
+      break;
+    case 'store':
+    case 'merger':
+    case 'crossing':
+      all.push(...m.slots);
+      break;
+    case 'packer':
+      all.push(...m.slots, m.out);
+      break;
+    case 'unpacker':
+      all.push(m.item, ...m.queue);
+      break;
+    case 'mill':
+      all.push(...m.cards, m.x, m.side, m.out);
+      break;
+    case 'press':
+      all.push(m.bed, m.plate, m.blank);
+      break;
+    case 'detector':
+    case 'orrery':
+      all.push(m.a, m.out);
+      break;
+    case 'charge':
+    case 'wire':
+    case 'antenna':
+      all.push(m.slot);
+      break;
+    case 'extractor':
+    case 'probe':
+      all.push(m.out);
+      break;
+    case 'splitter':
+    case 'sorter':
+      all.push(m.item);
+      break;
+  }
+  return all.filter((s): s is Stack => !!s);
 }
 
 /** blocks you can use (open a panel for) rather than place against */
-export const usable = (b: Block | undefined) => !!b && (b.kind === 'bench' || b.kind === 'hub' || (b.kind === 'machine' && b.type !== 'duct' && b.type !== 'plate'));
+export const usable = (b: Block | undefined) =>
+  !!b && (b.kind === 'workbench' || (b.kind === 'machine' && b.type !== 'duct' && b.type !== 'plate'));
 
 /** how tall a block is for walking on: ducts are low enough to step over, and field plates lie flat */
 export const heightOf = (b: Block | undefined) =>
@@ -136,7 +199,7 @@ export const heightOf = (b: Block | undefined) =>
 
 export class World {
   private blocks = new Map<number, Block>();
-  /** positions of every machine and the hub, for the factory to step without scanning the grid */
+  /** positions of every machine, for the factory to step without scanning the grid */
   readonly active = new Map<number, [number, number, number]>();
   /** bumps when blocks are added, removed or replaced, so the renderer knows to rebuild */
   version = 0;
@@ -150,7 +213,7 @@ export class World {
     const i = index(x, y, z);
     if (b) this.blocks.set(i, b);
     else this.blocks.delete(i);
-    if (b && (b.kind === 'machine' || b.kind === 'hub')) this.active.set(i, [x, y, z]);
+    if (b?.kind === 'machine') this.active.set(i, [x, y, z]);
     else this.active.delete(i);
     this.version++;
     return true;
@@ -169,14 +232,21 @@ export class World {
     }
   }
 
+  /** every machine of one type, with where it is */
+  *machines<T extends MachineType>(type: T): Generator<[MachineOf<T>, [number, number, number]]> {
+    for (const p of this.active.values()) {
+      const b = this.get(...p);
+      if (b?.kind === 'machine' && b.type === type) yield [b as MachineOf<T>, p];
+    }
+  }
+
   static generate(seed = Date.now()) {
     const w = new World();
     let s = seed % 2147483647 || 1;
     const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
     for (let x = 0; x < SIZE; x++) for (let z = 0; z < SIZE; z++) for (let y = 0; y < GROUND; y++) w.set(x, y, z, { kind: 'lattice' });
 
-    const [hx, hy, hz] = HUB;
-    w.set(hx, hy, hz, { kind: 'hub' });
+    const [hx, hz] = HOME;
     // one of each deposit a short walk from spawn, with room around them for an extractor and ducts
     const starters: [number, number, Multivector][] = [
       [hx - 5, hz, el('1')],
@@ -213,93 +283,47 @@ export class World {
 }
 
 // --- saving blocks -----------------------------------------------------------------------------
+// Machine state is plain data except for stacks, multivectors and carried items, which are encoded
+// by shape: a field holding a stack is saved as { $stack }, a multivector as { $mv }.
 
-type SavedBlock = Record<string, unknown> & { kind: string };
-const mvOrNull = (m: Multivector | null) => (m ? saveMv(m) : null);
-const loadOrNull = (s: unknown) => (s ? loadMv(s as SavedMv) : null);
+type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
-function saveBlock(b: Block): SavedBlock {
-  if (b.kind === 'deposit') return { kind: 'deposit', mv: saveMv(b.mv) };
-  if (b.kind !== 'machine') return { kind: b.kind };
-  const base = { kind: 'machine', type: b.type, facing: b.facing };
-  switch (b.type) {
-    case 'duct':
-      return { ...base, item: b.item ? { mv: saveMv(b.item.mv), t: b.item.t, from: b.item.from } : null };
-    case 'extractor':
-      return { ...base, timer: b.timer, out: b.out ? saveMv(b.out.mv) : null };
-    case 'collector':
-      return { ...base, stored: b.stored.map((s) => [saveMv(s.mv), s.count]) };
-    case 'splitter':
-      return { ...base, item: mvOrNull(b.item), next: b.next };
-    case 'merger':
-      return { ...base, slots: b.slots.map(mvOrNull), next: b.next };
-    case 'sorter':
-      return { ...base, item: mvOrNull(b.item), filter: mvOrNull(b.filter), mode: b.mode, side: b.side };
-    case 'crossing':
-      return { ...base, slots: b.slots.map(mvOrNull) };
-    case 'plate':
-      return base;
-    case 'charge':
-      return { ...base, charge: mvOrNull(b.charge) };
-    case 'wire':
-      return { ...base, current: mvOrNull(b.current) };
-    case 'antenna':
-      return { ...base, current: mvOrNull(b.current), frequency: b.frequency };
-    case 'probe':
-      return { ...base, timer: b.timer, out: mvOrNull(b.out) };
-    default:
-      return {
-        ...base,
-        a: mvOrNull(b.a),
-        b: mvOrNull(b.b),
-        fixed: mvOrNull(b.fixed),
-        preset: b.preset,
-        out: mvOrNull(b.out),
-        work: b.work,
-        ...(b.type === 'orrery' ? { seen: b.seen.map(saveMv) } : {}),
-      };
+function encode(v: unknown): Json {
+  if (v === null || v === undefined) return null;
+  if (Array.isArray(v)) return v.map(encode);
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    if ('item' in o && 'count' in o) return { $stack: saveStack(o as unknown as Stack) as unknown as Json };
+    if ('terms' in o && 'alg' in o) return { $mv: saveMv(o as unknown as Multivector) };
+    return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, encode(x)]));
   }
+  return v as Json;
+}
+
+function decode(v: Json): unknown {
+  if (v === null) return null;
+  if (Array.isArray(v)) return v.map(decode);
+  if (typeof v === 'object') {
+    if ('$stack' in v) return loadStack(v.$stack as unknown as SavedStack);
+    if ('$mv' in v) return loadMv(v.$mv as unknown as SavedMv);
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, decode(x)]));
+  }
+  return v;
+}
+
+function saveBlock(b: Block): Json {
+  if (b.kind === 'deposit') return { kind: 'deposit', mv: saveMv(b.mv) };
+  return encode(b);
 }
 
 let loadedIds = 1_000_000;
-function loadBlock(s: SavedBlock): Block {
-  if (s.kind === 'deposit') return { kind: 'deposit', mv: loadMv(s.mv as SavedMv) };
-  if (s.kind !== 'machine') return { kind: s.kind } as Block;
-  const m = newMachine(s.type as MachineType, s.facing as Dir);
-  if (m.type === 'duct' && s.item) {
-    const it = s.item as { mv: SavedMv; t: number; from: Dir | null };
-    m.item = { id: loadedIds++, mv: loadMv(it.mv), t: it.t, from: it.from };
-  } else if (m.type === 'extractor') {
-    m.timer = (s.timer as number) ?? 0;
-    m.out = s.out ? { id: loadedIds++, mv: loadMv(s.out as SavedMv), t: 1, from: null } : null;
-  } else if (m.type === 'collector') {
-    m.stored = ((s.stored as [SavedMv, number][]) ?? []).map(([mv, count]) => ({ mv: loadMv(mv), count }));
-  } else if (m.type === 'splitter') {
-    Object.assign(m, { item: loadOrNull(s.item), next: (s.next as number) ?? 0 });
-  } else if (m.type === 'merger') {
-    Object.assign(m, { slots: ((s.slots as unknown[]) ?? [null, null, null, null]).map(loadOrNull), next: (s.next as number) ?? 0 });
-  } else if (m.type === 'sorter') {
-    Object.assign(m, { item: loadOrNull(s.item), filter: loadOrNull(s.filter), mode: (s.mode as SortMode) ?? 'same', side: (s.side as 1 | 3) ?? 1 });
-  } else if (m.type === 'crossing') {
-    m.slots = ((s.slots as unknown[]) ?? [null, null, null, null]).map(loadOrNull);
-  } else if (m.type === 'charge') {
-    m.charge = loadOrNull(s.charge);
-  } else if (m.type === 'wire') {
-    m.current = loadOrNull(s.current);
-  } else if (m.type === 'antenna') {
-    Object.assign(m, { current: loadOrNull(s.current), frequency: (s.frequency as number) ?? 1 });
-  } else if (m.type === 'probe') {
-    Object.assign(m, { timer: (s.timer as number) ?? 0, out: loadOrNull(s.out) });
-  } else if (m.type !== 'duct' && m.type !== 'plate') {
-    Object.assign(m, {
-      a: loadOrNull(s.a),
-      b: loadOrNull(s.b),
-      fixed: loadOrNull(s.fixed),
-      preset: (s.preset as GateId | null) ?? null,
-      out: loadOrNull(s.out),
-      work: (s.work as number) ?? 0,
-    });
-    if (m.type === 'orrery') m.seen = ((s.seen as SavedMv[]) ?? []).map(loadMv);
-  }
+function loadBlock(s: Json): Block {
+  const o = s as { kind: string; mv?: SavedMv; type?: MachineType; facing?: Dir };
+  if (o.kind === 'deposit') return { kind: 'deposit', mv: loadMv(o.mv!) };
+  if (o.kind !== 'machine') return { kind: o.kind } as Block;
+  // start from a fresh machine so fields added later get their defaults
+  const m = Object.assign(newMachine(o.type!, o.facing!), decode(s)) as Machine;
+  if (m.type === 'duct' && m.item) m.item.id = loadedIds++;
   return m;
 }
+

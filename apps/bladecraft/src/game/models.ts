@@ -11,21 +11,23 @@
 //   wire             a copper rod up out of the field, beads of light running along it with the current
 //   antenna          a coil and mast whose beads rock up and down with the current, sparking at the top
 //   probe            a glass bulb that flashes with each reading, and a gauge showing how strong it is
-//   adder            two meshing gears that turn while it works
-//   wedger           a stamping press whose ram comes down as the work completes
-//   multiplier       a spoked flywheel that spins up while it works
-//   sandwich press   two jaws closing on a turntable that turns a quarter per operation
-//   collector        a banded tank with a gauge window showing how full it is
-//   hub              a pedestal with armillary rings turning around the element it wants
-//   bench            a workbench with a vice and a gear train
+//   packer           a crate with a hopper whose lid drops each time it packs
+//   unpacker         a crate with a comb wheel that turns as it deals out blades
+//   mill             an iron cabinet with four card slots on top, its cards standing in them, and a
+//                    grid of lamps on its side lighting one per pair of blades as it works
+//   card press       a frame with a ram over a bed; the ram hovers low when there is something to press
+//   detector         a Stern–Gerlach magnet whose up or down lamp flashes with each measurement
+//   orrery           a brass tripod with the Hopf fibers of the states it has seen turning above it
+//   store            a banded tank with a gauge window showing how full it is
+//   workbench        a wooden bench with a vice and a gear train
 import * as THREE from 'three';
 import type { Multivector } from '@codecraft/ga';
-import { DUCT_SPEED, EXTRACT_EVERY, WORK_TIME, COLLECTOR_CAPACITY, MERGE_ORDER, SPLIT_ORDER, sortMatches } from './factory';
-import type { MachineType } from './items';
+import { DUCT_SPEED, EXTRACT_EVERY, LAMP_TIME, MERGE_ORDER, PACK_TIME, SPLIT_ORDER, WORK_TIME, sortMatches } from './factory';
+import { valueOf, type MachineType } from './items';
 import { MACHINE_LOOK, hex } from './looks';
 import { E3, bloch, fiber, project, toQuat } from './qubit';
 import { FREQUENCIES, scalarPart, upPart } from './field';
-import { SINGLE_INPUT, type Block } from './world';
+import { STORE_SLOTS, type Block } from './world';
 import { parts, toWorld } from './glyph';
 
 // --- shared materials and geometry -------------------------------------------------------------
@@ -235,19 +237,16 @@ export interface Model {
   /** where steam comes out, in the model's frame */
   chimney: THREE.Vector3;
   update(b: Block | undefined, dt: number, time: number): void;
-  /** a flash, for the hub when an element it wants arrives */
-  pulse?(): void;
 }
 
 const ANCHORS = () => ({
   a: new THREE.Vector3(-0.72, 0.42, 0),
   b: new THREE.Vector3(0, 0.42, 0.72),
   out: new THREE.Vector3(0.72, 0.42, 0),
-  fixed: new THREE.Vector3(0.3, 1.42, 0.3),
 });
 
-/** the iron cabinet every operation machine is built on */
-function chassis(type: MachineType, sides = 'B', stand = true) {
+/** the iron cabinet the Mill and the detector are built on */
+function chassis(type: MachineType, sides: string) {
   const g = new THREE.Group();
   g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
   g.add(mesh(box(0.8, 0.5, 0.8), M.iron, 0, 0.35, 0));
@@ -274,132 +273,10 @@ function chassis(type: MachineType, sides = 'B', stand = true) {
   sym.rotation.z = -Math.PI / 2;
   sym.position.set(-0.24, 0.664, 0);
   g.add(sym);
-  // a stand for a fixed B, which floats above
-  if (stand) {
-    g.add(mesh(cyl(0.012, 0.012, 0.62, 6), M.brass, 0.3, 0.97, 0.3));
-    const ring = mesh(torus(0.08, 0.012), M.brass, 0.3, 1.28, 0.3);
-    ring.rotation.x = Math.PI / 2;
-    g.add(ring);
-  }
   const lamp = pilot(MACHINE_LOOK[type].colour);
   lamp.lamp.position.set(-0.32, 0.66, 0.32);
   g.add(lamp.lamp);
   return { g, lamp };
-}
-
-type OpBlock = Extract<Block, { kind: 'machine'; a: unknown }>;
-const opState = (b: Block | undefined) => {
-  const m = b?.kind === 'machine' && 'a' in b ? (b as OpBlock) : null;
-  const working = !!m && !!m.a && (SINGLE_INPUT.includes(m.type) || !!(m.fixed ?? m.b)) && !m.out;
-  return { m, working, progress: m ? m.work / WORK_TIME : 0 };
-};
-
-function adder(): Model {
-  const { g, lamp } = chassis('adder');
-  const big = mesh(gear(0.17, 12, 0.05), M.brass, -0.05, 0.86, 0);
-  const small = mesh(gear(0.12, 9, 0.05), M.copper, 0.22, 0.83, 0);
-  small.rotation.z = Math.PI / 9;
-  const axle = mesh(box(0.5, 0.04, 0.04), M.darkIron, 0.08, 0.7, 0);
-  g.add(big, small, axle, mesh(box(0.04, 0.2, 0.04), M.darkIron, -0.05, 0.76, 0), mesh(box(0.04, 0.16, 0.04), M.darkIron, 0.22, 0.75, 0));
-  let speed = 0;
-  return {
-    group: g,
-    anchors: ANCHORS(),
-    chimney: new THREE.Vector3(0, 1.1, 0),
-    update(b, dt) {
-      const { working } = opState(b);
-      speed += ((working ? 4 : 0) - speed) * Math.min(1, dt * 4);
-      big.rotation.z += speed * dt;
-      small.rotation.z -= speed * dt * (12 / 9);
-      lamp.set(working, dt);
-    },
-  };
-}
-
-function wedger(): Model {
-  const { g, lamp } = chassis('wedger');
-  // a press frame over an anvil
-  for (const z of [-0.26, 0.26]) g.add(mesh(box(0.06, 0.62, 0.06), M.darkIron, 0.12, 0.97, z));
-  g.add(mesh(box(0.1, 0.08, 0.62), M.darkIron, 0.12, 1.3, 0));
-  g.add(mesh(box(0.26, 0.06, 0.3), M.steel, 0.12, 0.69, 0));
-  const ram = new THREE.Group();
-  ram.add(mesh(cyl(0.05, 0.05, 0.4, 12), M.steel, 0, 0.2, 0), mesh(box(0.22, 0.08, 0.24), M.brass, 0, 0, 0));
-  ram.position.set(0.12, 1.0, 0);
-  g.add(ram);
-  return {
-    group: g,
-    anchors: ANCHORS(),
-    chimney: new THREE.Vector3(0.12, 1.35, 0),
-    update(b, dt) {
-      const { working, progress } = opState(b);
-      // rise slowly while working, then drop on the stroke at the end
-      const target = working ? (progress < 0.8 ? 1.05 + progress * 0.12 : 0.76) : 1.0;
-      ram.position.y += (target - ram.position.y) * Math.min(1, dt * (progress >= 0.8 ? 30 : 6));
-      lamp.set(working, dt);
-    },
-  };
-}
-
-function multiplier(): Model {
-  const { g, lamp } = chassis('multiplier');
-  const fly = wheel(0.3, 6, M.brass);
-  fly.rotation.x = Math.PI / 2; // lie flat, turning about y
-  const spinner = new THREE.Group();
-  spinner.add(fly);
-  spinner.position.set(0.05, 0.86, 0);
-  g.add(mesh(cyl(0.03, 0.03, 0.22, 10), M.steel, 0.05, 0.76, 0), spinner);
-  const governor = new THREE.Group();
-  const balls = [-1, 1].map((s) => mesh(sphere(0.045), M.copper, s * 0.08, 0.1, 0));
-  governor.add(...balls);
-  for (const s of [-1, 1]) governor.add(mesh(cyl(0.008, 0.008, 0.12, 4), M.steel, s * 0.04, 0.05, 0));
-  governor.position.set(0.05, 0.9, 0);
-  g.add(governor);
-  let speed = 0;
-  return {
-    group: g,
-    anchors: ANCHORS(),
-    chimney: new THREE.Vector3(0.05, 1.1, 0),
-    update(b, dt) {
-      const { working } = opState(b);
-      speed += ((working ? 6 : 0.0) - speed) * Math.min(1, dt * 2);
-      spinner.rotation.y += speed * dt;
-      governor.rotation.y = spinner.rotation.y;
-      // the governor's balls fly out and up as it spins faster
-      balls.forEach((ball, i) => ball.position.set((i ? 1 : -1) * (0.08 + speed * 0.006), 0.1 + speed * 0.008, 0));
-      lamp.set(working, dt);
-    },
-  };
-}
-
-function sandwich(): Model {
-  const { g, lamp } = chassis('sandwich');
-  for (const [x, z] of [[-0.05, -0.28], [-0.05, 0.28]]) g.add(mesh(cyl(0.03, 0.03, 0.62, 8), M.darkIron, x, 0.97, z));
-  const lower = mesh(cyl(0.22, 0.22, 0.05, 24), M.darkBrass, 0.05, 0.69, 0);
-  const table = new THREE.Group();
-  const disc = mesh(cyl(0.2, 0.2, 0.04, 24), M.brass);
-  const mark = mesh(box(0.18, 0.012, 0.04), M.copper, 0.08, 0.026, 0);
-  table.add(disc, mark);
-  table.position.set(0.05, 0.74, 0);
-  const upper = new THREE.Group();
-  upper.add(mesh(cyl(0.22, 0.22, 0.05, 24), M.darkBrass), mesh(cyl(0.04, 0.04, 0.3, 10), M.steel, 0, 0.17, 0));
-  upper.position.set(0.05, 1.05, 0);
-  g.add(lower, table, upper, mesh(box(0.06, 0.06, 0.62), M.darkIron, -0.05, 1.28, 0));
-  let turned = 0;
-  let wasWorking = false;
-  return {
-    group: g,
-    anchors: ANCHORS(),
-    chimney: new THREE.Vector3(0.05, 1.3, 0),
-    update(b, dt) {
-      const { working, progress } = opState(b);
-      if (wasWorking && !working) turned += Math.PI / 2;
-      wasWorking = working;
-      const close = working ? Math.min(1, progress * 2) : 0;
-      upper.position.y = 1.05 - close * 0.24;
-      table.rotation.y += (turned + (working ? progress * (Math.PI / 2) : 0) - table.rotation.y) * Math.min(1, dt * 6);
-      lamp.set(working, dt);
-    },
-  };
 }
 
 function extractor(): Model {
@@ -701,7 +578,7 @@ function crossing(): Model {
   return { group: g, anchors: logisticAnchors(0.5), chimney: new THREE.Vector3(), update() {} };
 }
 
-function collector(): Model {
+function store(): Model {
   const g = new THREE.Group();
   g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
   g.add(mesh(cyl(0.36, 0.38, 0.72, 28), M.iron, 0, 0.46, 0));
@@ -725,64 +602,15 @@ function collector(): Model {
     anchors: ANCHORS(),
     chimney: new THREE.Vector3(0, 1.05, 0),
     update(b) {
-      const m = b?.kind === 'machine' && b.type === 'collector' ? b : null;
-      const fill = m ? m.stored.reduce((n, s) => n + s.count, 0) / COLLECTOR_CAPACITY : 0;
+      const m = b?.kind === 'machine' && b.type === 'store' ? b : null;
+      const fill = m ? m.slots.filter(Boolean).length / STORE_SLOTS : 0;
       level.scale.y = Math.max(0.001, fill * 0.5);
       level.position.y = 0.21 + fill * 0.25;
     },
   };
 }
 
-function hub(): Model {
-  const g = new THREE.Group();
-  g.add(mesh(cyl(0.5, 0.52, 0.12, 8), M.darkIron, 0, 0.06, 0));
-  g.add(mesh(cyl(0.38, 0.46, 0.6, 8), M.iron, 0, 0.42, 0));
-  g.add(mesh(cyl(0.44, 0.4, 0.08, 8), M.brass, 0, 0.76, 0));
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-    g.add(mesh(cyl(0.03, 0.03, 0.6, 6), M.brass, Math.cos(a) * 0.43, 0.42, Math.sin(a) * 0.43));
-  }
-  for (let i = 0; i < 4; i++) {
-    const pl = plate('HUB', 0.28, 0.14, 0x3a2208);
-    const a = (i / 4) * Math.PI * 2;
-    pl.position.set(Math.sin(a) * 0.41, 0.45, Math.cos(a) * 0.41);
-    pl.rotation.y = a;
-    g.add(pl);
-  }
-  // armillary rings around the beacon
-  const rings = [0.5, 0.42, 0.34].map((r, i) => {
-    const ring = mesh(torus(r, 0.018), i === 1 ? M.copper : M.brass);
-    const holder = new THREE.Group();
-    holder.add(ring);
-    holder.position.y = 1.5;
-    g.add(holder);
-    return holder;
-  });
-  rings[0].rotation.x = Math.PI / 2;
-  g.add(mesh(cyl(0.025, 0.025, 0.7, 8), M.brass, 0, 1.1, 0));
-  const glow = new THREE.MeshStandardMaterial({ color: 0xffd25a, emissive: 0xffb030, emissiveIntensity: 0.3 });
-  g.add(mesh(sphere(0.06), glow, 0, 0.82, 0));
-  let pulse = 0;
-  return {
-    group: g,
-    anchors: ANCHORS(),
-    chimney: new THREE.Vector3(0, 1.5, 0),
-    update(_b, dt, time) {
-      rings[0].rotation.z = time * 0.3;
-      rings[1].rotation.x = time * 0.5;
-      rings[1].rotation.y = 0.6;
-      rings[2].rotation.y = time * 0.8;
-      rings[2].rotation.x = 1.1;
-      pulse = Math.max(0, pulse - dt * 2);
-      glow.emissiveIntensity = 0.3 + pulse * 3;
-    },
-    pulse() {
-      pulse = 1;
-    },
-  };
-}
-
-function bench(): Model {
+function workbench(): Model {
   const g = new THREE.Group();
   for (const [x, z] of [[0.4, 0.4], [0.4, -0.4], [-0.4, 0.4], [-0.4, -0.4]]) g.add(mesh(box(0.08, 0.78, 0.08), M.darkIron, x, 0.39, z));
   g.add(mesh(box(0.86, 0.06, 0.86), M.darkIron, 0, 0.2, 0));
@@ -796,10 +624,10 @@ function bench(): Model {
   const g1 = mesh(gear(0.13, 10, 0.04), M.brass, -0.2, 1.03, -0.3);
   const g2 = mesh(gear(0.09, 7, 0.04), M.copper, 0.02, 0.99, -0.3);
   g.add(g1, g2);
-  const pl = plate('BENCH', 0.5, 0.14);
+  const pl = plate('WORKBENCH', 0.5, 0.14);
   pl.position.set(0, 0.84, 0.502);
   g.add(pl);
-  const sym = plate('∧ + AB', 0.4, 0.16);
+  const sym = plate('∧  ⌋  ×', 0.4, 0.16);
   sym.rotation.x = -Math.PI / 2;
   sym.position.set(-0.12, 0.902, 0.05);
   g.add(sym);
@@ -814,6 +642,146 @@ function bench(): Model {
   };
 }
 
+// --- the Mill, the Card Press and packing ------------------------------------------------------
+
+/** a brass card standing in a slot, punched in the grade-card layout */
+function standingCard() {
+  const c = new THREE.Group();
+  c.add(mesh(box(0.02, 0.2, 0.16), M.brass, 0, 0.1, 0));
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) c.add(mesh(box(0.022, 0.018, 0.018), M.darkIron, 0, 0.16 - j * 0.07, -0.055 + i * 0.037));
+  return c;
+}
+
+function mill(): Model {
+  const { g, lamp } = chassis('mill', 'LIVE');
+  // four card slots on top: deck one nearer the input, deck two nearer the output
+  const slots = [
+    [-0.12, -0.16],
+    [-0.12, 0.16],
+    [0.16, -0.16],
+    [0.16, 0.16],
+  ];
+  const cards = slots.map(([x, z]) => {
+    g.add(mesh(box(0.06, 0.03, 0.22), M.darkIron, x, 0.675, z));
+    const c = standingCard();
+    c.position.set(x, 0.69, z);
+    g.add(c);
+    return c;
+  });
+  const deck = plate('1      2', 0.4, 0.08);
+  deck.rotation.x = -Math.PI / 2;
+  deck.rotation.z = -Math.PI / 2;
+  deck.position.set(0.02, 0.664, 0);
+  g.add(deck);
+  // a grid of lamps on the side: one lights per pair of blades multiplied out
+  const lampMat = Array.from({ length: 9 }, () => new THREE.MeshStandardMaterial({ color: 0xffd25a, emissive: 0xffb020, emissiveIntensity: 0 }));
+  const face = new THREE.Group();
+  face.add(mesh(box(0.3, 0.3, 0.02), M.darkBrass, 0, 0, 0));
+  lampMat.forEach((mat, i) => face.add(mesh(sphere(0.028), mat, -0.09 + (i % 3) * 0.09, 0.09 - Math.floor(i / 3) * 0.09, 0.02)));
+  face.position.set(0.02, 0.36, 0.415);
+  g.add(face);
+  const lever = new THREE.Group();
+  lever.add(mesh(cyl(0.012, 0.012, 0.22, 6), M.steel, 0, 0.11, 0), mesh(sphere(0.03), M.brass, 0, 0.22, 0));
+  lever.position.set(-0.32, 0.66, -0.3);
+  g.add(lever);
+  return {
+    group: g,
+    anchors: { ...ANCHORS(), side: new THREE.Vector3(0, 0.42, 0.72) },
+    chimney: new THREE.Vector3(0, 1.0, 0),
+    update(b, dt) {
+      const m = b?.kind === 'machine' && b.type === 'mill' ? b : null;
+      cards.forEach((c, i) => (c.visible = m?.cards[i]?.item.kind === 'card'));
+      lever.rotation.z = m?.live ? 0.6 : -0.6;
+      const working = !!m?.x && (!m.live || !!m.side) && !m.out;
+      const total = Math.min(9, m?.lamps ?? 0);
+      const lit = working && m!.lamps ? Math.min(total, Math.floor((m!.work / (m!.lamps * LAMP_TIME)) * total) + 1) : 0;
+      lampMat.forEach((mat, i) => (mat.emissiveIntensity = i < lit ? 2.2 : i < total ? 0.15 : 0));
+      lamp.set(working, dt);
+    },
+  };
+}
+
+function press(): Model {
+  const g = new THREE.Group();
+  g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
+  g.add(mesh(box(0.7, 0.16, 0.6), M.iron, 0, 0.18, 0));
+  // the bed, where the multivector lies in its grade card
+  g.add(mesh(box(0.44, 0.03, 0.26), M.brass, 0, 0.275, 0));
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) g.add(mesh(box(0.08, 0.008, 0.08), M.darkBrass, -0.15 + i * 0.1, 0.294, -0.05 + j * 0.1));
+  for (const z of [-0.26, 0.26]) g.add(mesh(box(0.08, 0.9, 0.08), M.darkIron, 0, 0.71, z));
+  g.add(mesh(box(0.16, 0.1, 0.66), M.darkIron, 0, 1.18, 0));
+  const ram = new THREE.Group();
+  ram.add(mesh(cyl(0.04, 0.04, 0.3, 10), M.steel, 0, 0.15, 0), mesh(box(0.46, 0.08, 0.24), M.brass, 0, 0, 0));
+  ram.position.set(0, 0.8, 0);
+  g.add(ram);
+  const pl = plate('PRESS', 0.3, 0.1);
+  pl.position.set(0, 0.18, 0.301);
+  g.add(pl);
+  const verb = plate('VERB', 0.2, 0.08, 0x0a3a50);
+  verb.position.set(0, 0.96, 0.31);
+  g.add(verb);
+  let shown = '';
+  return {
+    group: g,
+    anchors: { ...ANCHORS(), bed: new THREE.Vector3(0, 0.55, 0) },
+    chimney: new THREE.Vector3(0, 1.3, 0),
+    update(b, dt, time) {
+      const m = b?.kind === 'machine' && b.type === 'press' ? b : null;
+      const label = m?.plate?.item.kind === 'plate' ? m.plate.item.verb.toUpperCase() : '—';
+      if (label !== shown) {
+        shown = label;
+        verb.material = plate(label, 0.2, 0.08, 0x0a3a50).material;
+      }
+      // ready to press: the ram hovers low and trembles
+      const ready = !!m?.plate && !!m.blank;
+      const target = ready ? 0.42 + Math.sin(time * 8) * 0.01 : 0.8;
+      ram.position.y += (target - ram.position.y) * Math.min(1, dt * 6);
+    },
+  };
+}
+
+function packer(): Model {
+  const g = crate('packer', [1, 2, 3], [0]);
+  const hopper = mesh(cyl(0.2, 0.09, 0.22, 20, true), M.copper, 0.04, 0.62, 0);
+  const lid = mesh(cyl(0.21, 0.21, 0.03, 20), M.brass, 0.04, 0.75, 0);
+  const sign = plate('+', 0.12, 0.12);
+  sign.position.set(0.04, 0.62, 0.21);
+  g.add(hopper, lid, sign);
+  let wasFull = false;
+  let drop = 0;
+  return {
+    group: g,
+    anchors: logisticAnchors(0.66),
+    chimney: new THREE.Vector3(0, 0.9, 0),
+    update(b, dt) {
+      const m = b?.kind === 'machine' && b.type === 'packer' ? b : null;
+      const full = !!m?.out;
+      if (full && !wasFull) drop = 1;
+      wasFull = full;
+      drop = Math.max(0, drop - dt / PACK_TIME);
+      lid.position.y = 0.75 - Math.sin(drop * Math.PI) * 0.1;
+    },
+  };
+}
+
+function unpacker(): Model {
+  const g = crate('unpacker', [2], [0]);
+  const comb = new THREE.Group();
+  const wheel = mesh(gear(0.16, 8, 0.04), M.brass);
+  comb.add(wheel);
+  comb.position.set(0.04, 0.72, 0);
+  g.add(comb, mesh(box(0.04, 0.2, 0.04), M.darkIron, 0.04, 0.6, 0));
+  return {
+    group: g,
+    anchors: { ...logisticAnchors(0.66), item: new THREE.Vector3(-0.3, 0.7, 0) },
+    chimney: new THREE.Vector3(0, 0.9, 0),
+    update(b, dt) {
+      const m = b?.kind === 'machine' && b.type === 'unpacker' ? b : null;
+      if (m?.queue.length) wheel.rotation.z -= dt * 3;
+    },
+  };
+}
+
 // --- qubit machines ----------------------------------------------------------------------------
 
 /** a colour for a point on the Bloch sphere: hue from its longitude, light at the top and dark at the bottom */
@@ -822,103 +790,8 @@ export function blochColour([x, y, z]: number[]) {
   return new THREE.Color().setHSL(hue, 0.85, 0.42 + 0.22 * z);
 }
 
-function gate(): Model {
-  const { g, lamp } = chassis('gate');
-  // a valve handwheel on a column: it turns through the gate's angle each time it works
-  g.add(mesh(cyl(0.05, 0.06, 0.28, 12), M.darkIron, -0.02, 0.8, 0));
-  const wheelArm = new THREE.Group();
-  const hand = wheel(0.24, 4, M.brass);
-  hand.rotation.y = Math.PI / 2; // face the input side
-  wheelArm.add(hand);
-  wheelArm.position.set(-0.02, 1.02, 0);
-  g.add(wheelArm);
-  // the gate's letter on a plate the player can read from the input side
-  const letter = plate('?', 0.2, 0.2, 0x0a3a50);
-  letter.position.set(-0.19, 0.8, 0);
-  letter.rotation.y = -Math.PI / 2;
-  g.add(letter);
-  let shown = '?';
-  let turned = 0;
-  let wasWorking = false;
-  return {
-    group: g,
-    anchors: ANCHORS(),
-    chimney: new THREE.Vector3(0, 1.3, 0),
-    update(b, dt) {
-      const { m, working, progress } = opState(b);
-      const label = m?.preset ?? (m?.fixed ? 'B' : m?.b ? 'B' : '?');
-      if (label !== shown) {
-        shown = label;
-        letter.material = plate(label, 0.2, 0.2, 0x0a3a50).material;
-      }
-      const angle = m?.preset === 'S' ? Math.PI / 2 : Math.PI;
-      if (wasWorking && !working) turned += angle;
-      wasWorking = working;
-      hand.rotation.x = turned + (working ? progress * angle : 0);
-      lamp.set(working, dt);
-    },
-  };
-}
-
-function blochProjector(): Model {
-  const g = new THREE.Group();
-  g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
-  g.add(mesh(cyl(0.3, 0.38, 0.2, 8), M.iron, 0, 0.2, 0));
-  port(g, new THREE.Vector3(-1, 0, 0), 0.22, 'A');
-  const spout = mesh(cyl(0.08, 0.08, 0.3), M.copper, 0.36, 0.22, 0);
-  spout.rotation.z = Math.PI / 2;
-  g.add(spout, mesh(cyl(0.04, 0.05, 0.4, 10), M.brass, 0, 0.5, 0));
-  // the globe: an equator, two meridians, and an axis from |0⟩ (top) to |1⟩ (bottom)
-  const globe = new THREE.Group();
-  globe.position.y = 1.0;
-  const R = 0.3;
-  const equator = mesh(torus(R, 0.012), M.brass);
-  equator.rotation.x = Math.PI / 2;
-  const m1 = mesh(torus(R, 0.01), M.darkBrass);
-  const m2 = mesh(torus(R, 0.01), M.darkBrass);
-  m2.rotation.y = Math.PI / 2;
-  globe.add(equator, m1, m2, mesh(cyl(0.008, 0.008, R * 2.3, 6), M.steel));
-  globe.add(mesh(sphere(0.035), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x666666 }), 0, R, 0));
-  globe.add(mesh(sphere(0.035), M.darkIron, 0, -R, 0));
-  const glassBall = mesh(geo('globeGlass', () => new THREE.SphereGeometry(R, 24, 16)), M.glass);
-  globe.add(glassBall);
-  // the pointer: where the last state pointed
-  const pointer = new THREE.Group();
-  const pmat = new THREE.MeshStandardMaterial({ color: 0xff6a3c, emissive: 0x802010, roughness: 0.3 });
-  pointer.add(mesh(cyl(0.012, 0.012, R * 0.8, 8), pmat, 0, R * 0.4, 0), mesh(geo('pcone', () => new THREE.ConeGeometry(0.035, 0.08, 10)), pmat, 0, R * 0.85, 0));
-  globe.add(pointer);
-  const pl = plate('BLOCH', 0.34, 0.11);
-  pl.position.set(0, 0.22, 0.34);
-  g.add(globe, pl);
-  const lamp = pilot(MACHINE_LOOK.bloch.colour);
-  lamp.lamp.position.set(0.3, 0.1, 0.3);
-  g.add(lamp.lamp);
-  const target = new THREE.Vector3(0, 1, 0);
-  const up = new THREE.Vector3(0, 1, 0);
-  const current = new THREE.Quaternion();
-  return {
-    group: g,
-    anchors: { ...ANCHORS(), a: new THREE.Vector3(-0.72, 0.3, 0), out: new THREE.Vector3(0.72, 0.3, 0) },
-    chimney: new THREE.Vector3(0, 1.35, 0),
-    update(b, dt, time) {
-      const { m, working } = opState(b);
-      if (m?.out) {
-        const v = parts(m.out).vector;
-        target.copy(toWorld(...v)).normalize();
-      }
-      // the world turns with the machine; the pointer must show algebra directions, so undo the machine's turn
-      const local = target.clone().applyQuaternion(g.quaternion.clone().invert());
-      current.slerp(new THREE.Quaternion().setFromUnitVectors(up, local), Math.min(1, dt * 4));
-      pointer.quaternion.copy(current);
-      globe.rotation.y = 0;
-      glassBall.rotation.y = time * 0.2;
-      lamp.set(working, dt);
-    },
-  };
-}
-
 function detector(): Model {
-  const { g, lamp } = chassis('detector', 'A', false);
+  const { g, lamp } = chassis('detector', 'A');
   // Stern–Gerlach magnet: a wedge pole above, a trough pole below, the beam passing between
   const north = mesh(geo('wedge', () => new THREE.CylinderGeometry(0.0, 0.16, 0.22, 4, 1)), new THREE.MeshStandardMaterial({ color: 0xb03030, metalness: 0.6, roughness: 0.4 }), 0.02, 1.0, 0);
   north.rotation.z = Math.PI;
@@ -938,8 +811,9 @@ function detector(): Model {
     anchors: ANCHORS(),
     chimney: new THREE.Vector3(0.02, 1.2, 0),
     update(b, dt) {
-      const { m, working } = opState(b);
-      const outKey = m?.out ? String(m.out) : '';
+      const m = b?.kind === 'machine' && b.type === 'detector' ? b : null;
+      const working = !!m?.a && !m.out;
+      const outKey = m?.out ? String(valueOf(m.out)) : '';
       if (outKey && outKey !== lastOut) {
         if (outKey === 'e₃') flashUp = 1;
         else flashDown = 1;
@@ -1067,7 +941,7 @@ function charge(): Model {
     anchors: ANCHORS(),
     chimney: new THREE.Vector3(0, 1.1, 0),
     update(b, dt, time) {
-      const q = b?.kind === 'machine' && b.type === 'charge' ? scalarPart(b.charge) : 0;
+      const q = b?.kind === 'machine' && b.type === 'charge' ? scalarPart(b.slot) : 0;
       glow.emissive.copy(q >= 0 ? red : blue);
       glow.emissiveIntensity = Math.min(1.5, Math.abs(q) * 0.6) * (0.85 + 0.15 * Math.sin(time * 3));
       lamp.set(q !== 0, dt);
@@ -1089,7 +963,7 @@ function wire(): Model {
     anchors: ANCHORS(),
     chimney: new THREE.Vector3(0, 1.7, 0),
     update(b, dt) {
-      const i = b?.kind === 'machine' && b.type === 'wire' ? upPart(b.current) : 0;
+      const i = b?.kind === 'machine' && b.type === 'wire' ? upPart(b.slot) : 0;
       beads(i * 0.8, dt);
       lamp.set(i !== 0, dt);
     },
@@ -1118,7 +992,7 @@ function antenna(): Model {
     chimney: new THREE.Vector3(0, 1.8, 0),
     update(b, dt, time) {
       const m = b?.kind === 'machine' && b.type === 'antenna' ? b : null;
-      const amp = m ? upPart(m.current) : 0;
+      const amp = m ? upPart(m.slot) : 0;
       const swing = m ? Math.cos(2 * Math.PI * FREQUENCIES[m.frequency] * time) : 0;
       // the beads rock up and down with the current
       beads(amp * swing * 1.2, dt);
@@ -1176,7 +1050,7 @@ function probe(): Model {
 }
 
 /** what a block is drawn as: a duct fed only from one side is drawn as a corner */
-export type ModelKind = MachineType | 'hub' | 'bench' | 'duct-left' | 'duct-right';
+export type ModelKind = MachineType | 'workbench' | 'duct-left' | 'duct-right';
 
 export function buildModel(kind: ModelKind): Model {
   switch (kind) {
@@ -1203,28 +1077,22 @@ export function buildModel(kind: ModelKind): Model {
     case 'plate':
       // plates are drawn all together (fieldview.ts)
       return { group: new THREE.Group(), anchors: ANCHORS(), chimney: new THREE.Vector3(), update() {} };
-    case 'adder':
-      return adder();
-    case 'wedger':
-      return wedger();
-    case 'multiplier':
-      return multiplier();
-    case 'sandwich':
-      return sandwich();
     case 'extractor':
       return extractor();
     case 'duct':
       return duct();
-    case 'collector':
-      return collector();
-    case 'hub':
-      return hub();
-    case 'bench':
-      return bench();
-    case 'gate':
-      return gate();
-    case 'bloch':
-      return blochProjector();
+    case 'store':
+      return store();
+    case 'packer':
+      return packer();
+    case 'unpacker':
+      return unpacker();
+    case 'mill':
+      return mill();
+    case 'press':
+      return press();
+    case 'workbench':
+      return workbench();
     case 'detector':
       return detector();
     case 'orrery':

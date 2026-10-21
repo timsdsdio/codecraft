@@ -1,19 +1,19 @@
-import { useState, type ReactNode } from 'react';
-import type { Multivector } from '@codecraft/ga';
+import { useEffect, useState, type ReactNode } from 'react';
+import { G3, Multivector, Q } from '@codecraft/ga';
 import { ACHIEVEMENTS, BRANCHES, layoutBranch, type Achievement } from '../game/achievements';
-import { COLLECTOR_CAPACITY, MERGE_ORDER, SPLIT_ORDER, WORK_TIME } from '../game/factory';
-import type { Game } from '../game/game';
-import { HOTBAR, MACHINE_NAMES, describe, itemName, SLOTS } from '../game/items';
-import { apply, type Op } from '../game/ops';
-import { ORDERS, orderLabel } from '../game/orders';
-import { RECIPES, canBuild, sortLabel } from '../game/recipes';
-import { DIR_NAMES, STEP, opposite, type Dir, type SortMode } from '../game/world';
-import { GATES, bloch, probUp, type GateId } from '../game/qubit';
+import { millOutput, type Card } from '../game/cards';
+import { MERGE_ORDER, SPLIT_ORDER, decks, outputs } from '../game/factory';
 import { FREQUENCIES, WAVE_SPEED, fieldText, scalarPart, upPart } from '../game/field';
-import { Q } from '@codecraft/ga';
-import { Icon } from './Icon';
+import { SORTS_TO_LEARN, type Game } from '../game/game';
+import { MACHINE_NAMES, VERB_NAMES, itemName, valueOf, type Verb } from '../game/items';
+import { RULES, RULE_NAMES, RULE_SYMBOLS, autoSort, pairAction, product, railWhyZero, sorted, terms } from '../game/products';
+import { bloch, probUp } from '../game/qubit';
+import { RECIPES, canBuild, sortLabel } from '../game/recipes';
+import { DIR_NAMES, type SortMode } from '../game/world';
+import { ElementIcon, GradeCard, GRADE_CARD, Icon } from './Icon';
+import { CursorLayer, PlayerInventory, SlotInput, SlotView } from './Slots';
 
-function Sheet({ title, game, children, icon }: { title: string; game: Game; children: ReactNode; icon?: ReactNode }) {
+function Sheet({ title, game, children, icon, slots = true }: { title: string; game: Game; children: ReactNode; icon?: ReactNode; slots?: boolean }) {
   return (
     <div className="sheet" role="dialog" aria-label={title}>
       <header>
@@ -26,11 +26,19 @@ function Sheet({ title, game, children, icon }: { title: string; game: Game; chi
         </button>
       </header>
       {children}
+      {slots && (
+        <>
+          <SlotInput game={game} />
+          <CursorLayer game={game} />
+        </>
+      )}
     </div>
   );
 }
 
-const el = (mv: Multivector) => ({ kind: 'element', mv }) as const;
+const HOW_TO_MOVE_THINGS =
+  'Left click picks up or puts down a whole stack; right click takes half or puts down one; shift click moves a stack across; drag a held stack over slots to spread it; a number key over a slot swaps it with the hotbar.';
+const HOW_TO_MOVE_THINGS_TOUCH = 'Tap picks up or puts down a whole stack; long-press takes half or puts down one; double-tap moves a stack across.';
 
 export function StartScreen({ game }: { game: Game }) {
   const [confirm, setConfirm] = useState(false);
@@ -39,20 +47,21 @@ export function StartScreen({ game }: { game: Game }) {
     <div className="start">
       <h1>Bladecraft</h1>
       <p>
-        Build a factory that does geometric algebra. Extract vectors from deposits, carry them through ducts into machines that add,
-        wedge, multiply and rotate them, and deliver what the hub orders. The guide in the corner walks you through the first steps.
+        A factory game where the items are blades of geometric algebra. Take blades from deposits, add them on the Workbench, learn to
+        multiply them by sorting their factors by hand, press multivectors into cards, and build Mills that do the algebra for you. The
+        goals tree suggests what to make next; the guide in the corner gets you started.
       </p>
       <p className="dim">
         {game.touch
-          ? 'Left thumb moves, right thumb looks. Buttons on the right break, use, place and rotate.'
-          : 'WASD moves, the mouse looks, space jumps. Left click breaks; right click uses a machine or places; shift + right click always places; R rotates. Esc frees the mouse to click the buttons; click the world to look again.'}
+          ? `Left thumb moves, right thumb looks. Buttons on the right break, use, place and rotate. ${HOW_TO_MOVE_THINGS_TOUCH}`
+          : `WASD moves, the mouse looks, space jumps. Left click breaks; right click uses a machine or places; shift + right click always places; R rotates; E opens your inventory. Esc frees the mouse to click the buttons; click the world to look again. In the inventory: ${HOW_TO_MOVE_THINGS}`}
       </p>
       <div className="row">
         <button className="primary" onClick={() => game.play()}>
           Play
         </button>
         <button onClick={() => game.open('achievements')}>
-          Achievements ({earned}/{ACHIEVEMENTS.length})
+          Goals ({earned}/{ACHIEVEMENTS.length})
         </button>
         {confirm ? (
           <button className="danger" onClick={() => (setConfirm(false), game.newWorld())}>
@@ -66,119 +75,241 @@ export function StartScreen({ game }: { game: Game }) {
   );
 }
 
-function Slots({ game, onPick, picked, filter, from = 0, to = SLOTS }: { game: Game; onPick: (i: number) => void; picked?: number | null; filter?: (i: number) => boolean; from?: number; to?: number }) {
+export function InventoryScreen({ game }: { game: Game }) {
   return (
-    <div className="grid">
-      {Array.from({ length: to - from }, (_, k) => {
-        const i = from + k;
-        const st = game.inventory.slots[i];
-        const usable = !filter || filter(i);
-        return (
-          <button
-            key={i}
-            className={`slot${picked === i ? ' on' : ''}${i === game.selected ? ' held' : ''}`}
-            disabled={!usable}
-            onClick={() => onPick(i)}
-            aria-label={st ? `${itemName(st.item)} ×${st.count}` : 'Empty slot'}
-          >
-            {st && <Icon item={st.item} />}
-            {st && st.count > 1 && <span className="count">{st.count}</span>}
-            {st && <span className="name">{itemName(st.item)}</span>}
+    <Sheet title="Inventory" game={game}>
+      <p className="dim">{game.touch ? HOW_TO_MOVE_THINGS_TOUCH : HOW_TO_MOVE_THINGS}</p>
+      <p className="dim">
+        Things stack when one is a multiple of the other, and stacking adds them: the number on an element is its weight. Put −e₁ on e₁
+        and they cancel. A multivector of several blades is one item, shown as its grade card.
+      </p>
+      <PlayerInventory game={game} />
+    </Sheet>
+  );
+}
+
+// --- the Workbench -----------------------------------------------------------------------------
+
+export function WorkbenchScreen({ game }: { game: Game }) {
+  const [tab, setTab] = useState<'algebra' | 'build'>('algebra');
+  return (
+    <Sheet title="Workbench" game={game}>
+      <div className="tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'algebra'} onClick={() => setTab('algebra')}>
+          Hand work
+        </button>
+        <button role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>
+          Build
+        </button>
+      </div>
+      {tab === 'algebra' ? <HandWork game={game} /> : <BuildTab game={game} />}
+      <PlayerInventory game={game} />
+    </Sheet>
+  );
+}
+
+function bladeName(blade: number) {
+  return String(Multivector.blade(G3, blade)) || '1';
+}
+
+/** a blade cell: its icon and weight */
+function BladeCell({ mv, onPointerDown, active, title }: { mv: Multivector | null; onPointerDown?: (button: 'left' | 'right') => void; active?: boolean; title?: string }) {
+  const c = mv ? [...mv.terms.values()][0] : null;
+  const unit = mv ? Multivector.blade(G3, [...mv.terms.keys()][0]) : null;
+  return (
+    <button
+      className={`cell${!mv ? ' empty' : ''}${c && c.n < 0 ? ' negative' : ''}${active ? ' on' : ''}`}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        onPointerDown?.(e.button === 2 ? 'right' : 'left');
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      title={title ?? (mv ? String(mv) : undefined)}
+      aria-label={title ?? (mv ? String(mv) : 'empty')}
+    >
+      {unit && (
+        <svg viewBox="-24 -24 48 48" aria-hidden="true">
+          <ElementIcon mv={unit} />
+        </svg>
+      )}
+      {c && !Q.eq(c, Q.ONE) && <span className="count">{Q.show(c).replace('-', '−')}</span>}
+    </button>
+  );
+}
+
+function HandWork({ game }: { game: Game }) {
+  const b = game.bench;
+  const tray = b.tray;
+  const [a, bottom] = game.factors();
+  const rule = b.rule;
+  const learned = game.learned(rule);
+  const learnable = game.learnable(rule);
+  const left = a ? terms(a) : [];
+  const right = bottom ? terms(bottom) : [];
+  const result = game.benchResult();
+  return (
+    <div className="bench">
+      <section className="tray-area">
+        <h3>Tray</h3>
+        <p className="dim">Drop elements here to add them. Take one blade back out with a click; Take all packs the sum into one item.</p>
+        <div className="tray" onPointerDown={(e) => game.cursor && (e.preventDefault(), game.trayDrop(e.button === 2 ? 'right' : 'left'))} onContextMenu={(e) => e.preventDefault()}>
+          {GRADE_CARD.map((row, r) => (
+            <div key={r} className="tray-row">
+              {row.map((blade) => {
+                const c = tray.terms.get(blade);
+                return c ? (
+                  <BladeCell
+                    key={blade}
+                    mv={Multivector.blade(G3, blade, c)}
+                    onPointerDown={(button) => !game.cursor && game.trayTake(blade, button)}
+                  />
+                ) : (
+                  <div key={blade} className="cell placeholder">
+                    {bladeName(blade)}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        <div className="row">
+          <span className="sum">{tray.isZero() ? 'empty' : String(tray)}</span>
+          <button disabled={tray.isZero()} onClick={() => game.trayTakeAll()}>
+            Take all
           </button>
-        );
-      })}
+        </div>
+      </section>
+
+      <section className="grid-area">
+        <h3>Grid</h3>
+        <div className="rules" role="tablist">
+          {RULES.map((r) => (
+            <button key={r} role="tab" aria-selected={rule === r} disabled={!game.learnable(r)} onClick={() => game.setRule(r)}>
+              {RULE_NAMES[r]} {RULE_SYMBOLS[r]}
+              <small>{game.learned(r) ? 'learned' : game.learnable(r) ? `${game.sorts[r]}/${SORTS_TO_LEARN} sorted` : 'locked'}</small>
+            </button>
+          ))}
+        </div>
+        {!learned && learnable && (
+          <p className="callout">
+            {RULE_NAMES[rule]} isn’t learned yet. Put a factor on each edge, then tap cells and sort them on the rail by hand. Sort{' '}
+            {SORTS_TO_LEARN - game.sorts[rule]} more to learn it.
+          </p>
+        )}
+        <div className="mgrid">
+          <div className="edge-left">
+            <SlotView game={game} at={{ c: 'bench', field: 'left', i: 0 }} label="left factor" />
+            {left.map((t, i) => (
+              <BladeCell key={i} mv={t} />
+            ))}
+          </div>
+          <div className="mgrid-main">
+            <div className="cells" style={{ gridTemplateColumns: `repeat(${Math.max(1, right.length)}, auto)` }}>
+              {left.map((ta, i) =>
+                right.map((tb, j) => {
+                  const v = product(rule, ta, tb);
+                  const active = b.rail?.cell[0] === i && b.rail?.cell[1] === j;
+                  if (!learned)
+                    return (
+                      <button key={`${i}-${j}`} className={`cell unknown${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} aria-label={`cell ${ta} by ${tb}, not yet worked out`}>
+                        ?
+                      </button>
+                    );
+                  return v.isZero() ? (
+                    <button key={`${i}-${j}`} className={`cell zero${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)}>
+                      0
+                    </button>
+                  ) : (
+                    <BladeCell key={`${i}-${j}`} mv={v} active={active} onPointerDown={() => game.openCell(i, j)} />
+                  );
+                }),
+              )}
+            </div>
+            <div className="edge-bottom">
+              {right.map((t, j) => (
+                <BladeCell key={j} mv={t} />
+              ))}
+              <SlotView game={game} at={{ c: 'bench', field: 'bottom', i: 0 }} label="right factor" />
+            </div>
+          </div>
+          <div className="result">
+            <small>Result</small>
+            <button className="slot big" disabled={result === null} onPointerDown={(e) => (e.preventDefault(), game.make(e.shiftKey))} aria-label="Make">
+              {result && !result.isZero() && <Icon item={{ kind: 'element', mv: result }} />}
+              {result?.isZero() && <span className="dim">0</span>}
+            </button>
+            <span className="sum">{result === null ? (a && bottom ? 'learn the rule first' : 'put a factor on each edge') : String(result)}</span>
+          </div>
+        </div>
+        <Rail game={game} />
+      </section>
     </div>
   );
 }
 
-export function InventoryScreen({ game }: { game: Game }) {
-  const [picked, setPicked] = useState<number | null>(null);
-  const [swapping, setSwapping] = useState(false);
-  const st = picked === null ? null : game.inventory.slots[picked];
-  const pick = (i: number) => {
-    if (swapping && picked !== null) {
-      game.swap(picked, i);
-      setSwapping(false);
-      setPicked(i);
-      return;
-    }
-    setPicked(picked === i ? null : i);
-  };
+function Rail({ game }: { game: Game }) {
+  const open = game.bench.rail;
+  const rule = game.bench.rule;
+  const learned = game.learned(rule);
+  const [auto, setAuto] = useState(false);
+  useEffect(() => {
+    if (!auto || !open) return;
+    if (sorted(open.rail)) return setAuto(false);
+    const t = setTimeout(() => game.railTap(autoSort(open.rail)[0]), 450);
+    return () => clearTimeout(t);
+  }, [auto, open, game, game.version]);
+  if (!open) return <p className="dim rail-hint">Tap a cell of the grid to see it worked out on the rail.</p>;
+  const r = open.rail;
+  const done = sorted(r);
+  const answer = game.railAnswer();
+  const why = done ? railWhyZero(r, rule) : null;
   return (
-    <Sheet title="Items" game={game}>
-      <h3>Hotbar</h3>
-      <Slots game={game} picked={picked} onPick={pick} to={HOTBAR} />
-      <h3>Storage</h3>
-      <Slots game={game} picked={picked} onPick={pick} from={HOTBAR} />
-      {swapping && <p className="callout pinned">Tap the slot to swap with.</p>}
-      {st && picked !== null && !swapping && (
-        <div className="detail pinned">
-          <Icon item={st.item} size={64} />
-          <div className="grow">
-            <b>
-              {itemName(st.item)} × {st.count}
-            </b>
-            <div className="dim">
-              {st.item.kind === 'element'
-                ? `${describe(st.item.mv)}. Feed it into a machine, or use it at the bench.`
-                : st.item.kind === 'machine'
-                  ? RECIPES.find((r) => r.makes === (st.item as { type: string }).type)?.does
-                  : st.item.kind === 'bench'
-                    ? 'Place it, then use it to build machines and combine elements by hand.'
-                    : 'Building material.'}
-            </div>
-            <div className="row">
-              {picked < HOTBAR ? (
-                <>
-                  <button
-                    className="primary"
-                    onClick={() => {
-                      game.select(picked);
-                      game.play();
-                    }}
-                  >
-                    Hold it
-                  </button>
-                  <button onClick={() => (game.shuttle(picked), setPicked(null))}>Move to storage</button>
-                </>
-              ) : (
-                <button className="primary" onClick={() => (game.shuttle(picked), setPicked(null))}>
-                  Move to hotbar
-                </button>
-              )}
-              <button onClick={() => setSwapping(true)}>Swap with…</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </Sheet>
-  );
-}
-
-const OPS: { op: Op; label: string; text: string }[] = [
-  { op: 'add', label: 'A + B', text: 'sum' },
-  { op: 'sub', label: 'A − B', text: 'difference' },
-  { op: 'wedge', label: 'A ∧ B', text: 'outer product' },
-  { op: 'product', label: 'A B', text: 'geometric product' },
-  { op: 'contract', label: 'A ⌋ B', text: 'inner product' },
-  { op: 'sandwich', label: 'A B A⁻¹', text: 'A applied to B' },
-  { op: 'reverse', label: 'Ã', text: 'reverse of A' },
-];
-
-export function BenchScreen({ game }: { game: Game }) {
-  const [tab, setTab] = useState<'build' | 'combine'>('build');
-  return (
-    <Sheet title="Algebra bench" game={game}>
-      <div className="tabs" role="tablist">
-        <button role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>
-          Build machines
-        </button>
-        <button role="tab" aria-selected={tab === 'combine'} onClick={() => setTab('combine')}>
-          Combine by hand
-        </button>
+    <div className="rail">
+      <div className="rail-row">
+        <span className="token">{r.sign > 0 ? '+' : '−'}</span>
+        {r.tiles.length === 0 && <span className="dim">nothing left: the scalar 1</span>}
+        {r.tiles.map((t, k) => (
+          <span key={k} className="rail-step">
+            <span className={`tile axis${t.axis} from-${t.from}`}>e{['₁', '₂', '₃'][t.axis]}</span>
+            {k + 1 < r.tiles.length && (
+              <button className={`gap ${pairAction(r, k)}`} disabled={done || auto} onClick={() => game.railTap(k)} aria-label={pairAction(r, k) === 'cancel' ? 'cancel this pair' : 'swap these two'}>
+                {pairAction(r, k) === 'cancel' ? '×' : '⇄'}
+              </button>
+            )}
+          </span>
+        ))}
       </div>
-      {tab === 'build' ? <BuildTab game={game} /> : <CombineTab game={game} />}
-    </Sheet>
+      {!done && (
+        <p className="dim">
+          Tap ⇄ to swap two neighbours (the sign flips) or × to cancel a matching pair, until the row is in order. Left-factor tiles are outlined.
+          {learned && (
+            <>
+              {' '}
+              <button onClick={() => setAuto(true)} disabled={auto}>
+                Sort it for me
+              </button>
+            </>
+          )}
+        </p>
+      )}
+      {done && (
+        <p>
+          {why ?? (
+            <>
+              Sorted: this cell is <b>{answer ? `${answer.sign < 0 ? '−' : ''}${bladeName(answer.blade)}` : '0'}</b>, times the weights of
+              the two blades.
+            </>
+          )}
+          {!learned && r.moves === 0 && (
+            <span className="dim">
+              {' '}
+              It was in order already, so there was nothing to sort, and it doesn’t count toward learning {RULE_NAMES[rule]}. Cells whose blades
+              start out of order do, such as e₂ on the left by e₁ along the bottom.
+            </span>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -186,19 +317,21 @@ function BuildTab({ game }: { game: Game }) {
   return (
     <div className="recipes">
       {RECIPES.map((r) => {
-        const ok = canBuild(game.inventory, r);
+        const ok = canBuild(game.inventory, r, game.learned);
+        const missingRule = (r.learned ?? []).find((rule) => !game.learned(rule));
         return (
-          <div key={r.makes} className={`recipe${ok ? ' ok' : ''}`}>
-            <Icon item={{ kind: 'machine', type: r.makes }} size={56} />
+          <div key={itemName(r.makes)} className={`recipe${ok ? ' ok' : ''}`}>
+            <Icon item={r.makes} size={56} />
             <div className="grow">
               <b>
-                {MACHINE_NAMES[r.makes]}
+                {itemName(r.makes)}
                 {r.count > 1 ? ` × ${r.count}` : ''}
               </b>
               <div className="dim">{r.does}</div>
               <ul>
+                {missingRule && <li className="missing">✗ learn {RULE_NAMES[missingRule]} on the rail first</li>}
                 {r.needs.map((n) => {
-                  const have = game.inventory.count(n.test);
+                  const have = game.inventory.reduce((k, s) => k + (s && n.test(s.item) && s.count.n > 0 ? Math.floor(Q.toNumber(s.count)) : 0), 0);
                   return (
                     <li key={n.label} className={have >= n.count ? 'have' : 'missing'}>
                       {have >= n.count ? '✓' : '✗'} {n.count} × {n.label} <span className="dim">(have {have})</span>
@@ -207,7 +340,7 @@ function BuildTab({ game }: { game: Game }) {
                 })}
               </ul>
             </div>
-            <button className={ok ? 'primary' : ''} disabled={!ok} onClick={() => game.buildMachine(r)}>
+            <button className={ok ? 'primary' : ''} disabled={!ok} onClick={() => game.buildRecipe(r)}>
               Build
             </button>
           </div>
@@ -217,401 +350,351 @@ function BuildTab({ game }: { game: Game }) {
   );
 }
 
-function CombineTab({ game }: { game: Game }) {
-  const [a, b] = game.benchInputs();
-  return (
-    <>
-      <p className="dim">Tap elements below to fill A, then B. Every result shows before you make it; making one uses one A and one B.</p>
-      <div className="inputs">
-        {(['A', 'B'] as const).map((name, k) => {
-          const mv = [a, b][k];
-          return (
-            <button key={name} className="input" onClick={() => game.benchClear(k as 0 | 1)} aria-label={mv ? `${name}: ${mv}, tap to clear` : `${name}: empty`}>
-              <small>{name}</small>
-              {mv ? <Icon item={el(mv)} size={56} /> : <span className="dim">empty</span>}
-              {mv && <span className="label">{String(mv)}</span>}
-            </button>
-          );
-        })}
-      </div>
-      <div className="ops">
-        {OPS.map(({ op, label, text }) => {
-          const result = a ? apply(op, a, b) : null;
-          const ready = !!a && (op === 'reverse' || !!b);
-          return (
-            <button key={op} className="op" disabled={!ready || !result} onClick={() => game.craft(op)} title={text}>
-              <span className="sym">{label}</span>
-              <span className="dim">{text}</span>
-              <span className="res">{!ready ? '' : !result ? 'A has no inverse' : result.isZero() ? '= 0, nothing' : `= ${result}`}</span>
-            </button>
-          );
-        })}
-      </div>
-      <Slots game={game} onPick={(i) => game.benchPut(i)} filter={(i) => game.inventory.slots[i]?.item.kind === 'element'} />
-    </>
-  );
-}
+// --- machines ----------------------------------------------------------------------------------
 
-function Held({ name, mv, note }: { name: string; mv: Multivector | null; note: string }) {
-  return (
-    <div className="held-slot">
-      <small>{name}</small>
-      {mv ? <Icon item={el(mv)} size={48} /> : <span className="dim empty">—</span>}
-      <span>{mv ? String(mv) : note}</span>
-    </div>
-  );
-}
+const VERB_DOES: Record<Verb, string> = {
+  join: 'M ∧ X',
+  meter: 'M ⌋ X',
+  multiply: 'M X',
+  turn: 'M X M̃ / (M M̃)',
+  reverse: 'X̃',
+  sieve: 'the grades M has',
+};
 
-const OP_SYMBOL = { adder: '+', wedger: '∧', multiplier: '×', sandwich: 'applied by', gate: 'on' } as const;
+function cardDoes(c: Card) {
+  if (c.verb === 'multiply' && c.right) return 'X M';
+  return VERB_DOES[c.verb];
+}
 
 export function MachineScreen({ game }: { game: Game }) {
   const m = game.panelBlock;
   if (m?.kind !== 'machine' || !game.panel) return null;
   const [x, y, z] = game.panel;
   const title = MACHINE_NAMES[m.type];
-  const recipe = RECIPES.find((r) => r.makes === m.type)!;
   const icon = <Icon item={{ kind: 'machine', type: m.type }} size={28} />;
-  const rotate = (
-    <button onClick={() => game.rotatePanel()}>
-      Rotate (output faces {DIR_NAMES[m.facing]})
-    </button>
-  );
+  const rotate = <button onClick={() => game.rotatePanel()}>Rotate (output faces {DIR_NAMES[m.facing]})</button>;
+  const slot = (field: string, i = 0, label?: string) => <SlotView game={game} at={{ c: 'machine', field, i }} label={label} />;
+  const recipe = RECIPES.find((r) => r.makes.kind === 'machine' && r.makes.type === m.type);
+  const field = game.factory.field;
+  const inField = !!field.regionAt(x, y, z);
+  const notInField = <p className="callout">Not in a field: it does nothing until it stands among field plates, beside at least one of them.</p>;
 
-  if (m.type === 'extractor') {
-    const [dx, dz] = STEP[opposite(m.facing)];
-    const src = game.world.get(x + dx, y, z + dz);
-    return (
-      <Sheet title={title} game={game} icon={icon}>
-        <p>{recipe.does}</p>
-        {src?.kind === 'deposit' ? (
-          <div className="detail">
-            <Icon item={el(src.mv)} size={56} />
-            <div>
-              Drawing <b>{String(src.mv)}</b> from the deposit behind it, one every 1.5 s, out of its OUT side ({DIR_NAMES[m.facing]}).
+  let body: ReactNode = null;
+  switch (m.type) {
+    case 'store':
+      body = (
+        <div className="grid">
+          {m.slots.map((_, i) => (
+            <SlotView key={i} game={game} at={{ c: 'machine', field: 'slots', i }} />
+          ))}
+        </div>
+      );
+      break;
+    case 'press': {
+      const preview = game.pressPreview();
+      const bed = m.bed ? valueOf(m.bed) : null;
+      body = (
+        <>
+          <div className="press">
+            <div className="labelled">
+              {slot('bed', 0, 'bed')}
+              <small>Bed</small>
+            </div>
+            <div className="bed-card">{bed ? <svg viewBox="-24 -16 48 32"><GradeCard mv={bed} holes /></svg> : <span className="dim">put a multivector on the bed</span>}</div>
+            <div className="labelled">
+              {slot('plate', 0, 'plate')}
+              <small>Verb plate</small>
+            </div>
+            <div className="labelled">
+              {slot('blank', 0, 'blank')}
+              <small>Blank cards</small>
+            </div>
+            <span className="op-sym">→</span>
+            <div className="labelled">
+              <button className="slot big" disabled={!preview} onPointerDown={(e) => (e.preventDefault(), game.press(e.shiftKey))} aria-label="Press a card">
+                {preview && <Icon item={preview} />}
+              </button>
+              <small>Press</small>
             </div>
           </div>
-        ) : (
-          <p className="callout">No deposit behind it. Rotate it until its DEPOSIT side touches one.</p>
-        )}
-        {m.out && <p className="dim">Waiting to push {String(m.out.mv)} out: put a duct or machine in front of its OUT side.</p>}
-        <div className="row">{rotate}</div>
-      </Sheet>
-    );
-  }
-
-  if (m.type === 'collector') {
-    const total = m.stored.reduce((n, s) => n + s.count, 0);
-    return (
-      <Sheet title={title} game={game} icon={icon}>
-        <p>
-          {recipe.does} Holds {total} of {COLLECTOR_CAPACITY}.
-        </p>
-        <div className="stored">
-          {m.stored.length ? (
-            m.stored.map((s) => (
-              <div key={s.mv.key()} className="held-slot">
-                <Icon item={el(s.mv)} size={44} />
-                <span>
-                  {String(s.mv)} × {s.count}
-                </span>
+          <p className="dim">
+            {preview
+              ? `Pressing makes a ${itemName(preview)}: it does ${cardDoes(preview)} to whatever a Mill feeds it. The bed is used up${preview.mv ? '' : ' (Reverse needs nothing on it)'}; the plate stays.`
+              : 'A card needs a verb plate and a blank card, and a multivector on the bed for every verb but Reverse.'}
+          </p>
+        </>
+      );
+      break;
+    }
+    case 'mill': {
+      const [d1, d2] = decks(m);
+      const xv = m.x ? valueOf(m.x) : null;
+      const lamps = Math.min(9, m.lamps);
+      body = (
+        <>
+          <div className="mill">
+            {[0, 1].map((deck) => (
+              <div key={deck} className="deck">
+                <small>Deck {deck + 1}</small>
+                <div className="row">
+                  {[0, 1].map((k) => {
+                    const i = deck * 2 + k;
+                    const c = m.cards[i]?.item;
+                    return (
+                      <div key={i} className="labelled">
+                        {slot('cards', i, 'card')}
+                        {c?.kind === 'card' && c.verb === 'multiply' && (
+                          <button className="small" onClick={() => game.flipCard(i)}>
+                            {c.right ? 'From the right ⟵' : 'From the left'}
+                          </button>
+                        )}
+                        {c?.kind === 'card' && <small>{cardDoes(c)}</small>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <small className="dim">{deck === 0 ? 'side by side: outputs add' : 'runs on what deck 1 made'}</small>
               </div>
-            ))
-          ) : (
-            <span className="dim">Empty. Duct elements into any side.</span>
-          )}
-        </div>
-        <div className="row">
-          <button className="primary" disabled={!total} onClick={() => game.takeCollected()}>
-            Take everything
-          </button>
-        </div>
-      </Sheet>
-    );
-  }
-
-  if (m.type === 'duct' || m.type === 'plate') return null;
-
-  if (m.type === 'charge' || m.type === 'wire' || m.type === 'antenna' || m.type === 'probe') {
-    const field = game.factory.field;
-    const region = field.regionAt(x, y, z);
-    const where = region ? (
-      <p className="dim">Part of a field of {region.size} blocks.</p>
-    ) : (
-      <p className="callout">Not in a field: it does nothing until it stands among field plates, beside at least one of them.</p>
-    );
-    if (m.type === 'probe') {
-      const now = fieldText(field.at(x, y, z), 2);
-      return (
-        <Sheet title={title} game={game} icon={icon}>
-          <p>{recipe.does}</p>
-          {where}
-          <div className="detail">
-            <div>
-              Here now: E = <b>{now.e}</b>, IB = <b>{now.ib}</b>
+            ))}
+            <div className="deck">
+              <small>Live card from the side</small>
+              <div className="row wrap">
+                <button className={!m.live ? 'primary' : ''} onClick={() => game.setLive(null)}>
+                  Off
+                </button>
+                {(['join', 'meter', 'multiply', 'turn'] as Verb[]).map((v) => (
+                  <button key={v} className={m.live === v ? 'primary' : ''} onClick={() => game.setLive(v)}>
+                    {VERB_NAMES[v]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="machine-view">
-            <Held name="last reading" mv={m.reading && !m.reading.isZero() ? m.reading : null} note={region ? 'the field here is 0' : 'none'} />
-            <span className="op-sym">→</span>
-            <Held name="OUT (front)" mv={m.out} note="sent" />
-          </div>
-          <p className="dim">A reading’s vector part is E and its bivector part is IB. A field too weak to round to a half reads 0, which sends nothing.</p>
-          <div className="row">{rotate}</div>
-        </Sheet>
-      );
-    }
-    const isCharge = m.type === 'charge';
-    const value = isCharge ? m.charge : m.current;
-    const wants = isCharge ? 'a scalar' : 'a vector';
-    return (
-      <Sheet title={title} game={game} icon={icon}>
-        <p>{recipe.does}</p>
-        {where}
-        <div className="machine-view">
-          <Held name={isCharge ? 'charge' : 'current'} mv={value} note="none" />
-        </div>
-        {isCharge ? (
-          <p className="dim">{scalarPart(value) > 0 ? 'Positive: E points away from it.' : scalarPart(value) < 0 ? 'Negative: E points toward it.' : 'No charge, so no field. Give it a scalar (−1 is e₁₂ e₁₂).'}</p>
-        ) : (
-          <p className="dim">
-            {upPart(value) !== 0
-              ? `A current of ${upPart(value)} up the wire${m.type === 'antenna' ? ' at the peak of each swing' : ''}. While it runs up, B circles the wire anticlockwise, seen from above.`
-              : value
-                ? `${value} has no e₃ part, and only current along the wire flows.`
-                : 'No current. Give it a vector with an e₃ part, such as e₃ or −e₃.'}
-          </p>
-        )}
-        {m.type === 'antenna' && (
-          <>
-            <h3>Frequency</h3>
-            <div className="row">
-              {FREQUENCIES.map((f, i) => (
-                <button key={f} className={m.frequency === i ? 'primary' : ''} onClick={() => game.setFrequency(i)}>
-                  A swing every {1 / f} s (waves {WAVE_SPEED / f} blocks apart)
-                </button>
+            <div className="labelled">
+              {slot('x', 0)}
+              <small>Back</small>
+            </div>
+            {m.live && (
+              <div className="labelled">
+                {slot('side', 0)}
+                <small>Side</small>
+              </div>
+            )}
+            <div className="lamps" aria-label={`${lamps} lamps`}>
+              {Array.from({ length: 9 }, (_, i) => (
+                <span key={i} className={i < lamps ? (m.work > 0 && i < Math.floor((m.work / (m.lamps * 0.25)) * lamps) + 1 ? 'lamp on' : 'lamp') : 'lamp off'} />
               ))}
             </div>
-          </>
-        )}
-        <h3>Set it</h3>
-        <p className="dim">Pick {wants} from your elements, or duct them in from any side. Each new one replaces the last; one set here comes back to you when replaced.</p>
-        <Slots
-          game={game}
-          onPick={(i) => game.setSource(i)}
-          filter={(i) => {
-            const it = game.inventory.slots[i]?.item;
-            return it?.kind === 'element' && it.mv.grades().join() === (isCharge ? '0' : '1');
-          }}
-        />
-        <div className="row">{rotate}</div>
-      </Sheet>
-    );
-  }
-
-  if (m.type === 'splitter' || m.type === 'merger' || m.type === 'crossing') {
-    const sideName = (r: number) => ['front', 'left', 'back', 'right'][r];
-    const held =
-      m.type === 'splitter'
-        ? [{ name: 'holding', mv: m.item }]
-        : m.type === 'merger'
-          ? [1, 2, 3].map((r) => ({ name: `from the ${sideName(r)}`, mv: m.slots[r] }))
-          : ([0, 1, 2, 3] as Dir[]).map((d) => ({ name: `in from ${DIR_NAMES[d]}`, mv: m.slots[d] }));
-    return (
-      <Sheet title={title} game={game} icon={icon}>
-        <p>{recipe.does}</p>
-        <div className="machine-view">
-          {held.map((h) => (
-            <Held key={h.name} name={h.name} mv={h.mv} note="empty" />
-          ))}
-        </div>
-        {m.type === 'splitter' && <p className="dim">The next element goes out of its {sideName(SPLIT_ORDER[m.next])}. A side with nowhere to go is skipped.</p>}
-        {m.type === 'merger' && <p className="dim">Next it takes from the {sideName(MERGE_ORDER[m.next])}. An empty input is skipped.</p>}
-        {m.type === 'crossing' && <p className="dim">Its rotation doesn’t matter: every side goes straight across.</p>}
-        <div className="row">{rotate}</div>
-      </Sheet>
-    );
-  }
-
-  if (m.type === 'sorter') {
-    const modes: { id: SortMode; label: string }[] = [
-      { id: 'same', label: 'Same as the sample' },
-      { id: 'scalar', label: 'Scalars' },
-      { id: 'vector', label: 'Vectors' },
-      { id: 'bivector', label: 'Bivectors' },
-      { id: 'trivector', label: 'Trivectors' },
-      { id: 'state', label: 'Qubit states' },
-    ];
-    const sideWord = m.side === 1 ? 'left' : 'right';
-    return (
-      <Sheet title={title} game={game} icon={icon}>
-        <p>{recipe.does}</p>
-        <p>
-          Sends <b>{sortLabel(m.mode, m.filter)}</b> out of its {sideWord}; everything else goes out of its front.
-        </p>
-        <div className="machine-view">
-          <Held name="sample" mv={m.filter} note="none" />
-          <Held name="holding" mv={m.item} note="empty" />
-        </div>
-        <h3>Matches</h3>
-        <div className="row">
-          {modes.map((mode) => (
-            <button key={mode.id} className={m.mode === mode.id ? 'primary' : ''} onClick={() => game.setSorter({ mode: mode.id })}>
-              {mode.label}
-            </button>
-          ))}
-        </div>
-        <h3>Leave by</h3>
-        <div className="row">
-          <button className={m.side === 1 ? 'primary' : ''} onClick={() => game.setSorter({ side: 1 })}>
-            Left side
-          </button>
-          <button className={m.side === 3 ? 'primary' : ''} onClick={() => game.setSorter({ side: 3 })}>
-            Right side
-          </button>
-        </div>
-        <h3>Sample</h3>
-        <p className="dim">Pick one of your elements to sort by. The sorter only looks at it, so you keep it.</p>
-        <Slots game={game} onPick={(i) => game.setSorter({ sampleSlot: i })} filter={(i) => game.inventory.slots[i]?.item.kind === 'element'} />
-        <div className="row">{rotate}</div>
-      </Sheet>
-    );
-  }
-
-  if (m.type === 'bloch' || m.type === 'detector' || m.type === 'orrery') {
-    const v = m.a ? bloch(m.a) : null;
-    return (
-      <Sheet title={title} game={game} icon={icon}>
-        <p>{recipe.does} It takes A from any side but its front.</p>
-        <div className="machine-view">
-          <Held name="A (state)" mv={m.a} note="waiting" />
-          <span className="op-sym">→</span>
-          <Held name="OUT (front)" mv={m.out} note={m.a ? `working ${Math.round((100 * m.work) / WORK_TIME)}%` : 'nothing yet'} />
-        </div>
-        {m.a && !v && <p className="callout">{String(m.a)} isn’t a qubit state: a state is a scalar plus a bivector (a rotor). It will vanish.</p>}
-        {m.type === 'detector' && m.a && v && (
-          <p className="dim">
-            Up (e₃) with probability {String(Q.show(probUp(m.a)!))}, down (−e₃) otherwise.
-          </p>
-        )}
-        {m.type === 'orrery' && (
-          <>
-            <h3>Fibers shown</h3>
-            {m.seen.length ? (
-              <div className="stored">
-                {m.seen.map((r) => (
-                  <div key={r.key()} className="held-slot">
-                    <Icon item={el(r)} size={44} />
-                    <span>{String(r)}</span>
-                    <span className="dim">points {String(bloch(r))}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="dim">None yet. Each distinct state that passes through adds its Hopf fiber above the orrery; states with the same Bloch vector share a fiber and show as beads on it.</p>
-            )}
-            <div className="row">
-              <button disabled={!m.seen.length} onClick={() => game.clearOrrery()}>
-                Clear the fibers
-              </button>
+            <span className="op-sym">→</span>
+            <div className="labelled">
+              {slot('out', 0)}
+              <small>Out</small>
             </div>
-          </>
-        )}
-        <div className="row">{rotate}</div>
-      </Sheet>
-    );
-  }
-
-  const sandwich = m.type === 'sandwich';
-  const gateMachine = m.type === 'gate';
-  return (
-    <Sheet title={title} game={game} icon={icon}>
-      <p>
-        {recipe.does}{' '}
-        {sandwich ? 'A arrives at its back; B is the rotor or vector applied to it.' : gateMachine ? 'The state A arrives at its back; the gate B is set below or arrives at a side.' : 'A arrives at its back, B at either side.'}
-      </p>
-      <div className="machine-view">
-        {gateMachine ? (
-          <>
-            <Held name={m.preset ? `gate ${m.preset}` : m.fixed ? 'B (fixed)' : 'B (sides)'} mv={m.fixed ?? m.b} note="waiting" />
-            <span className="op-sym">{OP_SYMBOL.gate}</span>
-            <Held name="A (back)" mv={m.a} note="waiting" />
-          </>
-        ) : (
-          <>
-            <Held name="A (back)" mv={m.a} note="waiting" />
-            <span className="op-sym">{OP_SYMBOL[m.type]}</span>
-            <Held name={m.fixed ? 'B (fixed)' : 'B (sides)'} mv={m.fixed ?? m.b} note="waiting" />
-          </>
-        )}
-        <span className="op-sym">→</span>
-        <Held name="OUT (front)" mv={m.out} note={m.a && (m.fixed ?? m.b) ? `working ${Math.round((100 * m.work) / WORK_TIME)}%` : 'nothing yet'} />
-      </div>
-      {gateMachine && (
+          </div>
+          <p className="dim">
+            {xv
+              ? `${xv} becomes ${millOutput(d1, d2, xv)}${m.live ? ' (plus the live card, once the side delivers)' : ''}.`
+              : d1.length + d2.length
+                ? `With these cards, e₁ would become ${millOutput(d1, d2, Multivector.e(G3, '1'))}.`
+                : 'Put cards in the slots: an empty Mill passes things straight through.'}
+          </p>
+        </>
+      );
+      break;
+    }
+    case 'sorter':
+      body = (
         <>
-          <h3>Gate</h3>
-          <div className="gates">
-            {(Object.keys(GATES) as GateId[]).map((id) => (
-              <button key={id} className={m.preset === id ? 'primary' : ''} onClick={() => game.setGate(id)} title={GATES[id].does}>
-                <b>{id}</b>
-                <span className="dim">{GATES[id].does}</span>
+          <p>
+            Sends <b>{sortLabel(m.mode, m.filter)}</b> out of its {m.side === 1 ? 'left' : 'right'}; everything else goes out of its front.
+          </p>
+          <h3>Matches</h3>
+          <div className="row">
+            {(['same', 'scalar', 'vector', 'bivector', 'trivector', 'state'] as SortMode[]).map((mode) => (
+              <button key={mode} className={m.mode === mode ? 'primary' : ''} onClick={() => game.setSorter({ mode })}>
+                {mode === 'same' ? 'Multiples of the sample' : sortLabel(mode, null)}
               </button>
             ))}
           </div>
+          <h3>Leave by</h3>
+          <div className="row">
+            <button className={m.side === 1 ? 'primary' : ''} onClick={() => game.setSorter({ side: 1 })}>
+              Left side
+            </button>
+            <button className={m.side === 3 ? 'primary' : ''} onClick={() => game.setSorter({ side: 3 })}>
+              Right side
+            </button>
+          </div>
+          <h3>Sample</h3>
+          <div className="row">
+            <button disabled={game.cursor?.item.kind !== 'element'} onClick={() => game.setSorter({ sample: true })}>
+              Use the held element as the sample
+            </button>
+            {m.filter && <span>sample: {String(m.filter)}</span>}
+          </div>
+          <p className="dim">Pick up an element from your inventory, then press the button. The sorter only looks at it, so you keep it.</p>
         </>
-      )}
-      <h3>{gateMachine ? 'Or any rotor as the gate' : 'Fixed B'}</h3>
-      <p className="dim">
-        Set B to one of your elements and the machine uses it for every A, so a single duct of A is enough.
-        {sandwich ? ' For a sandwich press this is the rotor that turns everything passing through.' : ''}
-      </p>
-      {m.fixed && (
-        <div className="row">
-          <button onClick={() => game.setFixed(null)}>
-            {m.preset ? `Clear gate ${m.preset}` : `Clear fixed B (${String(m.fixed)} goes back to you)`}
-          </button>
+      );
+      break;
+    case 'charge':
+    case 'wire':
+    case 'antenna': {
+      const isCharge = m.type === 'charge';
+      body = (
+        <>
+          {!inField && notInField}
+          <div className="machine-view">
+            <div className="labelled">
+              {slot('slot', 0, isCharge ? 'scalar' : 'vector')}
+              <small>{isCharge ? 'Charge' : 'Current'}</small>
+            </div>
+          </div>
+          <p className="dim">
+            {isCharge
+              ? scalarPart(m.slot) > 0
+                ? 'Positive: E points away from it.'
+                : scalarPart(m.slot) < 0
+                  ? 'Negative: E points toward it.'
+                  : 'No charge. Put a scalar in the slot or duct some in (up to 8 either way; −1 is e₁₂ e₁₂).'
+              : upPart(m.slot)
+                ? `A current of ${upPart(m.slot)} up the wire${m.type === 'antenna' ? ' at the peak of each swing' : ''}. While it runs up, B circles the wire anticlockwise, seen from above.`
+                : 'No current. Put a vector with an e₃ part in the slot, such as e₃ or −e₃, or duct some in.'}
+          </p>
+          {m.type === 'antenna' && (
+            <>
+              <h3>Frequency</h3>
+              <div className="row">
+                {FREQUENCIES.map((f, i) => (
+                  <button key={f} className={m.frequency === i ? 'primary' : ''} onClick={() => game.setFrequency(i)}>
+                    A swing every {1 / f} s (waves {WAVE_SPEED / f} blocks apart)
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      );
+      break;
+    }
+    case 'probe': {
+      const now = fieldText(field.at(x, y, z), 2);
+      body = (
+        <>
+          {!inField && notInField}
+          <div className="detail">
+            Here now: E = <b>{now.e}</b>, IB = <b>{now.ib}</b>
+          </div>
+          <div className="machine-view">
+            <div className="labelled">
+              {slot('out', 0)}
+              <small>Last reading, waiting to leave</small>
+            </div>
+          </div>
+          <p className="dim">A reading is F = E + IB with each coefficient rounded to a half, recorded as its own item. A field too weak to round reads 0 and records nothing.</p>
+        </>
+      );
+      break;
+    }
+    case 'detector':
+    case 'orrery': {
+      const a = m.a ? valueOf(m.a) : null;
+      body = (
+        <>
+          <div className="machine-view">
+            <div className="labelled">
+              {slot('a', 0)}
+              <small>In</small>
+            </div>
+            <span className="op-sym">→</span>
+            <div className="labelled">
+              {slot('out', 0)}
+              <small>Out</small>
+            </div>
+          </div>
+          {m.type === 'detector' && a && probUp(a) && <p className="dim">Up (e₃) with probability {Q.show(probUp(a)!)}, down (−e₃) otherwise.</p>}
+          {m.type === 'orrery' && (
+            <>
+              <h3>Fibers shown</h3>
+              {m.seen.length ? (
+                <div className="stored">
+                  {m.seen.map((r) => (
+                    <div key={r.key()} className="held-slot">
+                      <Icon item={{ kind: 'element', mv: r }} size={44} />
+                      <span>{String(r)}</span>
+                      <span className="dim">points {String(bloch(r))}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="dim">None yet. Each distinct state that passes through adds its Hopf fiber above the orrery.</p>
+              )}
+              <div className="row">
+                <button disabled={!m.seen.length} onClick={() => game.clearOrrery()}>
+                  Clear the fibers
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      );
+      break;
+    }
+    case 'extractor':
+      body = (
+        <div className="machine-view">
+          <div className="labelled">
+            {slot('out', 0)}
+            <small>Waiting to leave</small>
+          </div>
         </div>
-      )}
-      <Slots game={game} onPick={(i) => game.setFixed(i)} filter={(i) => game.inventory.slots[i]?.item.kind === 'element'} />
-      <div className="row">{rotate}</div>
+      );
+      break;
+    case 'packer':
+      body = (
+        <>
+          <div className="machine-view">
+            {[1, 2, 3].map((r) => (
+              <div key={r} className="labelled">
+                {slot('slots', r)}
+                <small>{['', 'Left', 'Back', 'Right'][r]}</small>
+              </div>
+            ))}
+            <span className="op-sym">→</span>
+            <div className="labelled">
+              {slot('out', 0)}
+              <small>Out</small>
+            </div>
+          </div>
+          <p className="dim">It waits until every side that something feeds into has delivered, then adds them all.</p>
+        </>
+      );
+      break;
+    case 'unpacker':
+      body = <p className="dim">{m.queue.length ? `${m.queue.length} blade${m.queue.length === 1 ? '' : 's'} still to send.` : 'Waiting for a multivector at its back.'}</p>;
+      break;
+    case 'splitter':
+      body = <p className="dim">The next stack goes out of its {['front', 'left', 'back', 'right'][SPLIT_ORDER[m.next]]}. A side with nowhere to go is skipped.</p>;
+      break;
+    case 'merger':
+      body = <p className="dim">Next it takes from the {['front', 'left', 'back', 'right'][MERGE_ORDER[m.next]]}. An empty input is skipped.</p>;
+      break;
+    case 'crossing':
+      body = <p className="dim">Its rotation doesn’t matter: every side goes straight across.</p>;
+      break;
+  }
+
+  return (
+    <Sheet title={title} game={game} icon={icon}>
+      {recipe && <p>{recipe.does}</p>}
+      {body}
+      {outputs(m).length > 0 && m.type !== 'crossing' && <div className="row">{rotate}</div>}
+      <PlayerInventory game={game} />
     </Sheet>
   );
 }
 
-export function HubScreen({ game }: { game: Game }) {
-  const hub = game.factory.hub;
-  return (
-    <Sheet title="Hub orders" game={game}>
-      <p className="dim">Duct elements into any side of the hub. Only the current order’s element counts; each completed order adds 16 lattice to your items.</p>
-      <ol className="orders">
-        {ORDERS.map((o, i) => {
-          const state = i < hub.order ? 'done' : i === hub.order ? 'current' : 'later';
-          return (
-            <li key={i} className={state}>
-              <Icon item={el(o.want)} size={44} />
-              <div className="grow">
-                <b>
-                  {o.count} × {orderLabel(o)}
-                </b>
-                {state === 'done' && <span className="dim"> · delivered</span>}
-                {state === 'current' && (
-                  <>
-                    <span className="bar">
-                      <span style={{ width: `${(100 * hub.delivered) / o.count}%` }} />
-                      <em>
-                        {hub.delivered}/{o.count}
-                      </em>
-                    </span>
-                    <div className="dim">{o.hint}</div>
-                  </>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-    </Sheet>
-  );
-}
+// --- goals -------------------------------------------------------------------------------------
 
 const NODE_W = 188;
 const NODE_H = 78;
@@ -624,11 +707,11 @@ export function AchievementsScreen({ game }: { game: Game }) {
   const title = (id: string) => ACHIEVEMENTS.find((a) => a.id === id)!.title;
 
   return (
-    <Sheet title="Achievements" game={game}>
+    <Sheet title="Goals" game={game} slots={false}>
       <p className="dim">
-        These are optional, like Minecraft’s advancements: nothing is locked behind them. Each one is a small idea from geometric algebra or
-        the factory, and each branch reads left to right. New ones are named as you earn the ones before them. {earned.size} of {ACHIEVEMENTS.length}{' '}
-        earned.
+        A goal is met when the thing it names exists: in your inventory, in a Store, in a machine or placed in the world. Nothing is used up,
+        and nothing is locked behind a goal. Each branch reads left to right, and new goals are named as you meet the ones before them.{' '}
+        {earned.size} of {ACHIEVEMENTS.length} met.
       </p>
       {BRANCHES.map((br) => {
         const { nodes, edges, columns, rows } = layoutBranch(br.id);
@@ -673,7 +756,7 @@ export function AchievementsScreen({ game }: { game: Game }) {
                       onClick={() => setOpen(n.a)}
                     >
                       <b>{seen ? n.a.title : '?'}</b>
-                      {seen && <span className="dim goal">{done ? 'Earned' : n.a.goal}</span>}
+                      {seen && <span className="dim goal">{done ? 'Met' : n.a.goal}</span>}
                       {seen && n.outside.length > 0 && <span className="after">after {n.outside.map((o) => o.title).join(', ')}</span>}
                     </button>
                   );
@@ -687,7 +770,7 @@ export function AchievementsScreen({ game }: { game: Game }) {
         <div className="detail lesson">
           <div>
             <b>{open.title}</b>
-            <div className="dim">{earned.has(open.id) ? 'Earned' : `Goal: ${open.goal}`}</div>
+            <div className="dim">{earned.has(open.id) ? 'Met' : `Goal: ${open.goal}`}</div>
             {open.parents.length > 0 && <div className="dim">Follows: {open.parents.map(title).join(', ')}</div>}
             <p>{open.lesson}</p>
           </div>
@@ -697,3 +780,4 @@ export function AchievementsScreen({ game }: { game: Game }) {
     </Sheet>
   );
 }
+

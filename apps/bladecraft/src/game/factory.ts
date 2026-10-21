@@ -1,93 +1,69 @@
-// The factory: moves elements through extractors, ducts and machines, a fixed number of ticks per
+// The factory: moves stacks through extractors, ducts and machines, a fixed number of ticks per
 // second. It works on the world's blocks directly and knows nothing about drawing.
 //
-// Every machine faces one way and pushes what it makes out of its front into the block there. What
-// a block accepts depends on which side something arrives from:
-//   duct        anything, from any side but its front, one element at a time
-//   operation   from its back into input A, from its left or right into input B (unless B is fixed
-//               in its panel); when both are full it works for a second and outputs the result
-//   one-input   the Bloch projector, detector and orrery take A from any side but the front
+// Every machine faces one of four directions and pushes what it makes out of its front into the
+// block there. A duct carries one stack at a time, so a packed multivector rides as one crate. What a
+// block accepts depends on which side something arrives from:
+//   duct        anything, from any side but its front
+//   store       anything, from any side, while it has room
 //   splitter    from its back; deals out to its front, left and right in turn
 //   merger      from its back, left and right, one each; sends them out the front in turn
 //   sorter      from its back; matches go out one side, everything else straight on
 //   crossing    from any side, one per side; each leaves by the opposite side
-//   charge      a scalar, from any side, which becomes its charge
-//   wire        a vector, from any side; its e₃ part becomes the current up the wire
+//   packer      elements from its back, left and right; once every side that is fed has delivered,
+//               it adds them and sends the sum out the front
+//   unpacker    an element from its back; sends its blades out the front one at a time
+//   mill        an element X at its back, and at a side when its live lever is set; it applies its
+//               cards, one lamp of work per pair of blades, and sends the result out the front
+//   detector    a qubit state from any side but its front; sends e₃ or −e₃ by the Born rule
+//   orrery      anything from any side but its front, passed straight through, recording states
+//   charge      a scalar from any side, which adds to its charge (up to 8 either way)
+//   wire        a vector from any side, which adds to what it holds (up to 8); its e₃ part is the current
 //   antenna     the same, as the size of a current that swings up and down
-//   probe       nothing; once a second it outputs the field where it stands (field.ts)
-//   collector   anything, until full
-//   hub         anything; elements matching its order count toward it
-// Results of 0, sandwiches whose B has no inverse, non-states sent to qubit machines, elements of the
-// wrong kind sent to field sources, and readings of a zero field vanish (the orrery passes anything
-// through, recording only states).
-import type { Multivector } from '@codecraft/ga';
-import { loadMv, saveMv } from './items.ts';
-import { apply, type Op } from './ops.ts';
-import { ORDERS, type HubProgress, type Order } from './orders.ts';
-import { E3, bloch, isState, probUp, samePoint, sameState } from './qubit.ts';
-import { Field, PROBE_EVERY, isReading } from './field.ts';
-import { SINGLE_INPUT, STEP, opposite, type Block, type Carried, type Dir, type Machine, type SortMode, type World } from './world.ts';
-import { Q } from '@codecraft/ga';
+//   probe       nothing; once a second it records the field where it stands as a reading
+// Results of 0, and elements of the wrong kind sent to a machine that wants another, are not taken.
+import { Q, type Multivector } from '@codecraft/ga';
+import { card, lampCount, millOutput, type Card } from './cards.ts';
+import { Field, PROBE_EVERY } from './field.ts';
+import { canMerge, merge, num, sameItem, stackOf, valueOf, type Stack } from './items.ts';
+import { terms } from './products.ts';
+import { E3, isState, probUp, sameState } from './qubit.ts';
+import { addTo } from './slots.ts';
+import { STEP, opposite, type Block, type Carried, type Dir, type Machine, type SortMode, type World } from './world.ts';
 
 export const TICK = 1 / 20;
 export const DUCT_SPEED = 1.5; // blocks per second
-export const EXTRACT_EVERY = 1.5; // seconds per element
-export const WORK_TIME = 1; // seconds per operation
-export const COLLECTOR_CAPACITY = 256;
+export const EXTRACT_EVERY = 1.5; // seconds per blade
+export const WORK_TIME = 1; // seconds per measurement
+export const LAMP_TIME = 0.25; // seconds per pair of blades a Mill multiplies out
+export const PACK_TIME = 0.5;
+export const SOURCE_LIMIT = 8;
 export const ORRERY_MEMORY = 12;
 
-export const OPS: Record<'adder' | 'wedger' | 'multiplier' | 'sandwich' | 'gate', Op> = {
-  adder: 'add',
-  wedger: 'wedge',
-  multiplier: 'product',
-  sandwich: 'sandwich',
-  gate: 'product',
-};
-
 export interface FactoryEvents {
-  /** a machine combined two elements (result may be zero or null) */
-  craft?(op: Op, a: Multivector, b: Multivector, result: Multivector | null): void;
-  /** an element reached the hub */
-  deliver?(mv: Multivector, counted: boolean): void;
-  orderDone?(order: Order, next: Order | undefined): void;
-  /** a qubit machine acted on a state */
-  qubit?(kind: 'project' | 'gate' | 'measure', input: Multivector, result: Multivector): void;
-  /** an orrery's record of states changed */
-  orrery?(seen: Multivector[]): void;
-  /** a logistics block sent an element somewhere other than straight on */
-  route?(kind: 'split' | 'merge' | 'sort' | 'cross'): void;
-  /** a field source was set while standing in a field, or a probe made a reading */
-  field?(kind: 'charge' | 'wire' | 'antenna' | 'reading', mv: Multivector): void;
-}
-
-/** does a delivery count toward the order? state and phase orders accept any state on the wanted Bloch point */
-export function counts(order: Order, mv: Multivector, hub: HubProgress) {
-  if ((order.kind ?? 'exact') === 'exact') return mv.equals(order.want);
-  if (order.kind === 'reading') return isReading(mv) && mv.grades().join() === order.want.grades().join();
-  if (!isState(mv) || !samePoint(mv, order.want)) return false;
-  if (order.kind === 'state') return true;
-  return !(hub.seen ?? []).some((s) => sameState(loadMv(s), mv));
+  /** a probe recorded a reading */
+  reading?(mv: Multivector): void;
 }
 
 let nextId = 1;
 
+/** the cards in a Mill's two decks */
+export function decks(m: Extract<Machine, { type: 'mill' }>): [Card[], Card[]] {
+  const cardsIn = (i: number[]) => i.map((k) => m.cards[k]?.item).filter((c): c is Card => c?.kind === 'card');
+  return [cardsIn([0, 1]), cardsIn([2, 3])];
+}
+
 export class Factory {
   private carry = 0;
   private world: World;
-  hub: HubProgress;
   private events: FactoryEvents;
   private rng: () => number;
   readonly field = new Field();
 
-  constructor(world: World, hub: HubProgress, events: FactoryEvents = {}, rng: () => number = Math.random) {
+  constructor(world: World, events: FactoryEvents = {}, rng: () => number = Math.random) {
     this.world = world;
-    this.hub = hub;
     this.events = events;
     this.rng = rng;
-  }
-
-  get order(): Order | undefined {
-    return ORDERS[this.hub.order];
   }
 
   /** advance by real time; runs whole ticks */
@@ -112,7 +88,7 @@ export class Factory {
       case 'duct': {
         if (!m.item) return;
         m.item.t = Math.min(1, m.item.t + dt * DUCT_SPEED);
-        if (m.item.t >= 1 && this.push(x, y, z, m.facing, m.item.mv)) m.item = null;
+        if (m.item.t >= 1 && this.push(x, y, z, m.facing, m.item.stack)) m.item = null;
         return;
       }
       case 'extractor': {
@@ -122,30 +98,7 @@ export class Factory {
           m.timer += dt;
           if (m.timer >= EXTRACT_EVERY) {
             m.timer = 0;
-            m.out = { id: nextId++, mv: source.mv, t: 1, from: null };
-          }
-        }
-        if (m.out && this.push(x, y, z, m.facing, m.out.mv)) m.out = null;
-        return;
-      }
-      case 'collector':
-      case 'plate':
-      case 'charge':
-      case 'wire':
-      case 'antenna':
-        return;
-      case 'probe': {
-        if (!m.out && this.field.regionAt(x, y, z)) {
-          m.timer += dt;
-          if (m.timer >= PROBE_EVERY) {
-            m.timer = 0;
-            const r = this.field.read(x, y, z);
-            m.reading = r;
-            // a zero field gives nothing to send
-            if (!r.isZero()) {
-              m.out = r;
-              this.events.field?.('reading', r);
-            }
+            m.out = { item: { kind: 'element', mv: source.mv }, count: Q.ONE };
           }
         }
         if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
@@ -157,7 +110,6 @@ export class Factory {
         for (let k = 0; k < 3; k++) {
           const i = (m.next + k) % 3;
           if (this.push(x, y, z, rel(m.facing, SPLIT_ORDER[i]), m.item)) {
-            if (SPLIT_ORDER[i] !== 0) this.events.route?.('split');
             m.item = null;
             m.next = (i + 1) % 3;
             return;
@@ -170,10 +122,9 @@ export class Factory {
         for (let k = 0; k < 3; k++) {
           const i = (m.next + k) % 3;
           const side = MERGE_ORDER[i];
-          const mv = m.slots[side];
-          if (!mv) continue;
-          if (this.push(x, y, z, m.facing, mv)) {
-            if (side !== 2) this.events.route?.('merge');
+          const s = m.slots[side];
+          if (!s) continue;
+          if (this.push(x, y, z, m.facing, s)) {
             m.slots[side] = null;
             m.next = (i + 1) % 3;
           }
@@ -183,157 +134,178 @@ export class Factory {
       }
       case 'sorter': {
         if (!m.item) return;
-        const match = sortMatches(m.mode, m.filter, m.item);
-        if (this.push(x, y, z, match ? rel(m.facing, m.side) : m.facing, m.item)) {
-          if (match) this.events.route?.('sort');
-          m.item = null;
-        }
+        const dir = sortMatches(m.mode, m.filter, m.item) ? rel(m.facing, m.side) : m.facing;
+        if (this.push(x, y, z, dir, m.item)) m.item = null;
         return;
       }
       case 'crossing': {
-        // straight through: whatever came in on one side leaves by the opposite side
         for (const from of [0, 1, 2, 3] as Dir[]) {
-          const mv = m.slots[from];
-          if (mv && this.push(x, y, z, opposite(from), mv)) {
-            m.slots[from] = null;
-            this.events.route?.('cross');
-          }
+          const s = m.slots[from];
+          if (s && this.push(x, y, z, opposite(from), s)) m.slots[from] = null;
         }
         return;
       }
-      default: {
-        const single = SINGLE_INPUT.includes(m.type);
-        const b = m.fixed ?? m.b;
-        if (m.a && (single || b) && !m.out) {
+      case 'packer': {
+        if (!m.out) {
+          const fed = this.fedSides(m, x, y, z);
+          const ready = fed.length > 0 && fed.every((r) => m.slots[r]);
+          if (ready) {
+            const sum = fed.reduce((acc, r) => acc.add(valueOf(m.slots[r]!)!), E3.scale(0));
+            fed.forEach((r) => (m.slots[r] = null));
+            m.out = stackOf(sum);
+          }
+        }
+        if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
+        return;
+      }
+      case 'unpacker': {
+        if (!m.queue.length && m.item) {
+          m.queue = terms(valueOf(m.item)!).map((t) => stackOf(t)!);
+          m.item = null;
+        }
+        if (m.queue.length && this.push(x, y, z, m.facing, m.queue[0])) m.queue.shift();
+        return;
+      }
+      case 'mill': {
+        if (!m.out && m.x && (!m.live || m.side)) {
+          const x0 = valueOf(m.x)!;
+          const [d1, d2] = decks(m);
+          if (m.live && m.side) d1.push(card(m.live, valueOf(m.side)));
+          m.lamps = lampCount(d1, d2, x0);
           m.work += dt;
-          if (m.work >= WORK_TIME) {
-            const result = this.operate(m, m.a, b);
-            m.out = result && !result.isZero() ? result : null;
-            m.a = null;
-            if (!m.fixed) m.b = null;
+          if (m.work >= m.lamps * LAMP_TIME) {
+            m.out = stackOf(millOutput(d1, d2, x0));
+            m.x = null;
+            m.side = null;
             m.work = 0;
           }
         }
         if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
+        return;
       }
-    }
-  }
-
-  /** a source takes the element that fits it (a scalar for a charge, a vector for a wire or antenna); anything else vanishes */
-  setSource(b: Extract<Machine, { type: 'charge' | 'wire' | 'antenna' }>, x: number, y: number, z: number, mv: Multivector) {
-    const kind = b.type === 'charge' ? '0' : '1';
-    if (mv.grades().join() !== kind) return false;
-    if (b.type === 'charge') b.charge = mv;
-    else b.current = mv;
-    this.field.sync(this.world);
-    if (this.field.regionAt(x, y, z)) this.events.field?.(b.type, mv);
-    return true;
-  }
-
-  private operate(m: Extract<Machine, { a: unknown }>, a: Multivector, b: Multivector | null): Multivector | null {
-    switch (m.type) {
-      case 'bloch': {
-        const v = bloch(a);
-        if (v) this.events.qubit?.('project', a, v);
-        return v;
-      }
-      case 'detector': {
-        const p = probUp(a);
-        if (!p) return null;
-        const up = this.rng() < Q.toNumber(p);
-        const result = up ? E3 : E3.neg();
-        this.events.qubit?.('measure', a, result);
-        return result;
-      }
+      case 'detector':
       case 'orrery': {
-        if (isState(a) && !m.seen.some((s) => sameState(s, a))) {
-          m.seen = [...m.seen, a].slice(-ORRERY_MEMORY);
-          this.events.orrery?.(m.seen);
+        if (m.a && !m.out) {
+          m.work += dt;
+          if (m.work >= WORK_TIME) {
+            m.out = m.type === 'detector' ? this.measure(m.a) : this.watch(m, m.a);
+            m.a = null;
+            m.work = 0;
+          }
         }
-        return a;
+        if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
+        return;
       }
-      default: {
-        const op = OPS[m.type];
-        // the sandwich press applies B to A (B A B⁻¹), and a gate multiplies on the left (B A)
-        const [left, right] = op === 'sandwich' || m.type === 'gate' ? [b!, a] : [a, b!];
-        const result = apply(op, left, right);
-        this.events.craft?.(op, left, right, result);
-        if (m.type === 'gate' && result && isState(a) && isState(result)) this.events.qubit?.('gate', a, result);
-        return result;
+      case 'probe': {
+        if (!m.out && this.field.regionAt(x, y, z)) {
+          m.timer += dt;
+          if (m.timer >= PROBE_EVERY) {
+            m.timer = 0;
+            const r = this.field.read(x, y, z);
+            m.reading = r;
+            // a zero field records nothing
+            if (!r.isZero()) {
+              m.out = { item: { kind: 'reading', mv: r }, count: Q.ONE };
+              this.events.reading?.(r);
+            }
+          }
+        }
+        if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
+        return;
       }
+      default:
+        return;
     }
   }
 
-  /** offer an element to the block in front of (x, y, z) facing `dir` */
-  private push(x: number, y: number, z: number, dir: Dir, mv: Multivector) {
+  /** a detector finds the state up with probability (1 + z)/2 and sends e₃ or −e₃ */
+  private measure(s: Stack): Stack | null {
+    const p = probUp(valueOf(s)!);
+    if (!p) return null;
+    return stackOf(this.rng() < Q.toNumber(p) ? E3 : E3.neg());
+  }
+
+  /** an orrery records each distinct state that passes and lets everything through */
+  private watch(m: Extract<Machine, { type: 'orrery' }>, s: Stack) {
+    const mv = valueOf(s);
+    if (mv && isState(mv) && !m.seen.some((r) => sameState(r, mv))) m.seen = [...m.seen, mv].slice(-ORRERY_MEMORY);
+    return s;
+  }
+
+  /** the sides of a packer that something feeds into */
+  private fedSides(m: Machine, x: number, y: number, z: number) {
+    return [1, 2, 3].filter((r) => {
+      const d = rel(m.facing, r);
+      const [dx, dz] = STEP[d];
+      const n = this.world.get(x + dx, y, z + dz);
+      return n?.kind === 'machine' && outputs(n).includes(opposite(d));
+    });
+  }
+
+  /** offer a stack to the block in front of (x, y, z) facing `dir` */
+  private push(x: number, y: number, z: number, dir: Dir, s: Stack) {
     const [dx, dz] = STEP[dir];
-    return this.accept(x + dx, y, z + dz, mv, opposite(dir));
+    return this.accept(x + dx, y, z + dz, s, opposite(dir));
   }
 
-  /** the block at (x, y, z) is offered mv arriving from its side `from`; true if it took it */
-  accept(x: number, y: number, z: number, mv: Multivector, from: Dir): boolean {
+  /** the block at (x, y, z) is offered a stack arriving from its side `from`; true if it took all of it */
+  accept(x: number, y: number, z: number, s: Stack, from: Dir): boolean {
     const b: Block | undefined = this.world.get(x, y, z);
-    if (!b) return false;
-    if (b.kind === 'hub') {
-      const want = this.order;
-      const counted = !!want && counts(want, mv, this.hub);
-      if (counted) {
-        this.hub.delivered++;
-        if (want.kind === 'phases') this.hub.seen = [...(this.hub.seen ?? []), saveMv(mv)];
-        if (this.hub.delivered >= want.count) {
-          this.hub.order++;
-          this.hub.delivered = 0;
-          this.hub.seen = [];
-          this.events.orderDone?.(want, this.order);
-        }
-      }
-      this.events.deliver?.(mv, counted);
-      return true;
-    }
-    if (b.kind !== 'machine') return false;
+    if (b?.kind !== 'machine') return false;
+    const isElement = s.item.kind === 'element';
+    const side = relative(b.facing, from);
     switch (b.type) {
       case 'duct':
         if (b.item || b.facing === from) return false;
-        b.item = { id: nextId++, mv, t: 0, from } satisfies Carried;
+        b.item = { id: nextId++, stack: s, t: 0, from } satisfies Carried;
         return true;
-      case 'extractor':
-        return false;
-      case 'collector': {
-        const total = b.stored.reduce((n, s) => n + s.count, 0);
-        if (total >= COLLECTOR_CAPACITY) return false;
-        const s = b.stored.find((s) => s.mv.equals(mv));
-        if (s) s.count++;
-        else b.stored.push({ mv, count: 1 });
+      case 'store': {
+        const copy = [...b.slots];
+        if (addTo(copy, s)) return false;
+        b.slots = copy;
         return true;
       }
       case 'splitter':
-        if (b.item || relative(b.facing, from) !== 2) return false;
-        return (b.item = mv), true;
       case 'sorter':
-        if (b.item || relative(b.facing, from) !== 2) return false;
-        return (b.item = mv), true;
-      case 'merger': {
-        const side = relative(b.facing, from);
+        if (b.item || side !== 2) return false;
+        return (b.item = s), true;
+      case 'merger':
         if (side === 0 || b.slots[side]) return false;
-        return (b.slots[side] = mv), true;
-      }
+        return (b.slots[side] = s), true;
       case 'crossing':
         if (b.slots[from]) return false;
-        return (b.slots[from] = mv), true;
-      case 'plate':
-      case 'probe':
+        return (b.slots[from] = s), true;
+      case 'packer':
+        if (!isElement || side === 0 || b.slots[side]) return false;
+        return (b.slots[side] = s), true;
+      case 'unpacker':
+        if (!isElement || side !== 2 || b.item || b.queue.length) return false;
+        return (b.item = s), true;
+      case 'mill':
+        if (!isElement) return false;
+        if (side === 2 && !b.x) return (b.x = s), true;
+        if ((side === 1 || side === 3) && b.live && !b.side) return (b.side = s), true;
         return false;
+      case 'detector':
+        if (!isElement || side === 0 || b.a || !isState(valueOf(s)!)) return false;
+        return (b.a = s), true;
+      case 'orrery':
+        if (side === 0 || b.a) return false;
+        return (b.a = s), true;
       case 'charge':
       case 'wire':
-      case 'antenna':
-        this.setSource(b, x, y, z, mv);
+      case 'antenna': {
+        const grade = b.type === 'charge' ? '0' : '1';
+        if (!isElement || valueOf(s)!.grades().join() !== grade) return false;
+        if (!b.slot) return Math.abs(num(s.count)) <= SOURCE_LIMIT && ((b.slot = s), true);
+        if (!canMerge(b.slot, s, true)) return false;
+        const m = merge(b.slot, s);
+        if (m.rest || (m.target && Math.abs(num(m.target.count)) > SOURCE_LIMIT)) return false;
+        b.slot = m.target;
         return true;
-      default: {
-        const side = SINGLE_INPUT.includes(b.type) ? (from === b.facing ? null : 'a') : inputSide(b.facing, from);
-        if (side === 'a' && !b.a) return (b.a = mv), true;
-        if (side === 'b' && !b.b && !b.fixed) return (b.b = mv), true;
-        return false;
       }
+      default:
+        return false;
     }
   }
 }
@@ -345,10 +317,11 @@ export const rel = (facing: Dir, r: number) => ((facing + r) % 4) as Dir;
 export const SPLIT_ORDER = [0, 1, 3];
 export const MERGE_ORDER = [2, 1, 3];
 
-/** the sides a machine can push elements out of */
+/** the sides a machine can push things out of */
 export function outputs(m: Machine): Dir[] {
   switch (m.type) {
-    case 'collector':
+    case 'store':
+    case 'press':
     case 'plate':
     case 'charge':
     case 'wire':
@@ -365,17 +338,13 @@ export function outputs(m: Machine): Dir[] {
   }
 }
 
-/** does a sorter in this mode, with this sample, send mv to its side? */
-export function sortMatches(mode: SortMode, filter: Multivector | null, mv: Multivector) {
-  if (mode === 'same') return !!filter && mv.equals(filter);
+/** does a sorter in this mode, with this sample, send a stack to its side? Only elements ever match. */
+export function sortMatches(mode: SortMode, filter: Multivector | null, s: Stack) {
+  const mv = valueOf(s);
+  if (!mv) return false;
+  if (mode === 'same') return !!filter && sameItem(s.item, stackOf(filter)!.item);
   if (mode === 'state') return isState(mv);
   const g = mv.grades();
   const want = { scalar: 0, vector: 1, bivector: 2, trivector: 3 }[mode];
   return g.length === 1 && g[0] === want;
-}
-
-/** which input of an operation machine facing `facing` an arrival from side `from` feeds */
-export function inputSide(facing: Dir, from: Dir): 'a' | 'b' | null {
-  const rel = (from - facing + 4) % 4;
-  return rel === 2 ? 'a' : rel === 0 ? null : 'b';
 }
