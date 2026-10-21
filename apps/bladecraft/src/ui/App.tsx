@@ -123,7 +123,7 @@ function desktopActions(actions: string[]) {
     a
       .replace(/^Break:/, 'Left click:')
       .replace(/^Use:/, 'Right click:')
-      .replace(/^Place:/, canUse ? 'Shift + right click:' : 'Right click:'),
+      .replace(/^Place:/, canUse ? 'Shift + right click: place' : 'Right click: place'),
   );
 }
 

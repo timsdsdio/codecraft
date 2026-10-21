@@ -84,9 +84,10 @@ export class Game {
     this.resize();
     let last = performance.now();
     this.renderer.renderer.setAnimationLoop((now) => {
-      const dt = Math.min((now - last) / 1000, 0.05);
+      // the factory keeps real time on a slow device; movement steps are kept short so collisions hold
+      const elapsed = Math.min((now - last) / 1000, 0.25);
       last = now;
-      this.frame(dt, now);
+      this.frame(elapsed, now);
     });
   }
 
@@ -428,7 +429,8 @@ export class Game {
 
   // --- frame -----------------------------------------------------------------------------------
 
-  private frame(dt: number, now: number) {
+  private frame(elapsed: number, now: number) {
+    const dt = Math.min(elapsed, 0.05);
     if (this.screen === 'play') {
       const move = {
         forward: (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0) + this.stick.forward,
@@ -436,7 +438,7 @@ export class Game {
       };
       this.player.step(this.world, dt, move, this.keys.has('Space') || this.wantJump);
     }
-    this.factory.step(dt);
+    this.factory.step(elapsed);
     const eye = this.player.eye();
     this.renderer.camera.position.copy(eye);
     this.renderer.camera.lookAt(eye.clone().add(this.player.look()));
@@ -444,7 +446,8 @@ export class Game {
     this.renderer.select(this.target?.block ?? null);
     const p = this.screen === 'play' ? this.placement() : null;
     this.renderer.preview(p?.cell ?? null, p?.facing ?? null, p?.ok ?? false);
-    this.renderer.hubWants(HUB, this.factory.order?.want ?? null);
+    // a count that only goes up: orders completed and elements toward the current one
+    this.renderer.hubWants(HUB, this.factory.order?.want ?? null, this.factory.hub.order * 1000 + this.factory.hub.delivered);
     this.updatePrompt(p);
     this.renderer.sync(this.world);
     this.renderer.render(dt);

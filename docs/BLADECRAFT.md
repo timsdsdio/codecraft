@@ -71,6 +71,29 @@ quarter turn before you place it; a placed machine's panel can rotate it too. An
 itself so its DEPOSIT side is against the deposit you aimed at. A ghost outline shows where the block
 will go and which way it will face, red when it can't go there.
 
+## How machines look
+
+Machines are small steampunk contraptions built in code from primitives (`models.ts`): riveted iron
+cabinets with brass corner posts, copper pipe ports, and brass plates engraved with what each part
+is (A and B on the input ports, OUT over the output chute, the operation's symbol on top). A
+reflection map makes the brass, copper and iron read as metal. Each model animates from the state
+the factory leaves in its block, so you can see what a machine is doing without opening it:
+
+| Machine | Model | Moves when |
+|---|---|---|
+| Extractor | a brass pump with a flywheel, pressure gauge and chimney | its rod strokes and flywheel turns once per element drawn; it stops when there's no deposit or its output is blocked |
+| Duct | a conveyor belt on an iron frame | the belt runs the way it carries, at the speed elements ride it |
+| Adder | two meshing gears | they spin up while it works |
+| Wedger | a stamping press over an anvil | the ram rises while it works and stamps down as the operation completes |
+| Multiplier | a spoked flywheel with a ball governor | it spins up while it works, and the governor's balls fly out |
+| Sandwich press | two jaws over a turntable | the jaws close while it works and the turntable turns a quarter per operation |
+| Collector | a banded tank with a gauge window | the level in the window rises as it fills |
+| Hub | an iron pedestal with armillary rings | the rings turn around the element it wants, and its lamp flashes as one arrives |
+| Bench | a wooden workbench with a vice and a gear train | its gears turn slowly |
+
+Every operation machine has a pilot lamp in its own colour that glows while it works, a small stand
+holding its fixed B above it, and lets off a puff of steam each time it finishes an operation.
+
 ## Building machines
 
 Machines are built at the algebra bench from lattice and elements you made yourself, so doing an
