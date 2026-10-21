@@ -65,10 +65,10 @@ test('a goal is met by holding the thing it names, wherever it is', () => {
 test('learning a rule, placing machines and pressing cards meet their goals', () => {
   assert.ok(earns(holdings([], { learned: { join: true, meter: false, multiply: false } })).includes('learn-join'));
   assert.ok(earns(holdings([], { workbenchPlaced: true })).includes('workbench'));
-  const extractor = stack(machine('extractor'));
-  const placedStore = newMachine('store', 0);
-  assert.ok(earns(holdings([extractor], { machines: [placedStore] })).includes('built'), 'one carried and one placed');
-  assert.ok(!earns(holdings([extractor])).includes('built'));
+  assert.ok(earns(holdings([stack(machine('store'))])).includes('built'), 'a Store carried');
+  assert.ok(earns(holdings([], { machines: [newMachine('store', 0)] })).includes('built'), 'or placed');
+  assert.ok(!earns(holdings([stack(machine('generator'))])).includes('generator'), 'a Generator must be placed');
+  assert.ok(earns(holdings([], { machines: [newMachine('generator', 0)] })).includes('generator'));
   assert.ok(earns(holdings([stack(card('reverse', null))])).includes('backwards'));
   const quarter = scalar(1).add(e2.op(e1));
   assert.ok(earns(holdings([stack(card('turn', quarter))])).includes('turn'), 'a Turn card taking e₁ to e₂ and e₂ to −e₁');

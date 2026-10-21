@@ -2,7 +2,7 @@
 import type { MachineType } from './items.ts';
 
 export const MACHINE_LOOK: Record<MachineType, { colour: number; symbol: string }> = {
-  extractor: { colour: 0xff9a3c, symbol: 'EXTRACT' },
+  generator: { colour: 0xff9a3c, symbol: 'GENERATE' },
   duct: { colour: 0x00fff0, symbol: '' },
   store: { colour: 0x9ab8d0, symbol: 'STORE' },
   splitter: { colour: 0xffb347, symbol: 'SPLIT' },

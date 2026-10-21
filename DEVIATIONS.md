@@ -53,7 +53,7 @@ each with its reason. When one changes, edit its entry.
   plane and currents run along e₃, so the two halves of the field stay apart and the static half can
   be solved directly.
 - **A probe reading is its own kind of item.** A reading of e₁ would otherwise be the same as the e₁
-  from an extractor, and the field goals could be met without a field. As an item it records what
+  from a Generator, and the field goals could be met without a field. As an item it records what
   the field was, and survives saving.
 - **One programmable machine, the Mill, instead of a block per operation.** Every multivector is
   also an operation, so the operation is a card pressed from an element and a verb plate, and one
@@ -67,9 +67,10 @@ each with its reason. When one changes, edit its entry.
 - **Goals are possession, not delivery.** A goal is met when the thing it names exists anywhere: in
   the inventory, a Store, a machine, or placed. Nothing has to be delivered, so a factory can grow
   in any direction, as in Minecraft tech mods, rather than around one central block.
-- **A deposit breaks into 4 blades by hand, but an extractor never uses it up.** Breaking ore gives
-  a handful quickly, which keeps the start engaging, while the extractor, the guide's third step,
-  turns any deposit into an endless source, so hand mining never becomes the way to get blades in
+- **Deposits are finite ore; endless blades come later, from Generators.** A deposit breaks into 4
+  blades by hand and is gone, which keeps the start hands-on. A Generator makes the blade in its
+  sample slot forever and needs no deposit, but costs a rotor and a trivector, so it arrives once
+  hand work has taught the products, and from then on hand mining isn't the way to get blades in
   bulk.
 - **The Workbench grid is matrix multiplication.** One factor runs down the left edge and the other
   along the bottom, so each cell is one pair of blades and the result is their sum. The grid shows

@@ -1,9 +1,8 @@
 // The voxel world: a bounded grid of blocks.
 //   lattice     the inert building material the ground is made of
-//   deposit     a never-ending source of one unit blade (e₁, e₂, e₃ or the scalar 1); breaking it by
-//               hand gives one and leaves it in place, and an extractor draws on it forever
+//   deposit     ore of one unit blade (e₁, e₂, e₃ or the scalar 1); breaking it by hand gives a few
 //   workbench   hand work (the tray, the grid and the rail) and building things
-//   machine     everything with a facing: extractors, ducts, Stores, logistics, Mills, the Card Press,
+//   machine     everything with a facing: generators, ducts, Stores, logistics, Mills, the Card Press,
 //               qubit machines and field blocks; each holds what is passing through it (factory.ts)
 //
 // World axes follow three.js (x east, y up, z south); algebra axes are e₁ east, e₂ north, e₃ up, a
@@ -13,7 +12,7 @@ import {
   MACHINE_NAMES,
   el,
   loadMv,
-  loadStack,
+  loadKnownStack,
   saveMv,
   saveStack,
   scalar,
@@ -51,7 +50,7 @@ export const MILL_SLOTS = 4;
 
 export type MachineState =
   | { type: 'duct'; item: Carried | null }
-  | { type: 'extractor'; timer: number; out: Stack | null }
+  | { type: 'generator'; sample: Stack | null; timer: number; out: Stack | null }
   | { type: 'store'; slots: Slots }
   // logistics: these only move things around
   | { type: 'splitter'; item: Stack | null; next: number }
@@ -84,8 +83,8 @@ export function newMachine(type: MachineType, facing: Dir): Machine {
   switch (type) {
     case 'duct':
       return m({ type, item: null });
-    case 'extractor':
-      return m({ type, timer: 0, out: null });
+    case 'generator':
+      return m({ type, sample: null, timer: 0, out: null });
     case 'store':
       return m({ type, slots: empty(STORE_SLOTS) });
     case 'splitter':
@@ -138,7 +137,7 @@ export function blockName(b: Block) {
   return MACHINE_NAMES[b.type];
 }
 
-/** blades a deposit breaks into by hand; an extractor draws from one forever instead */
+/** blades a deposit breaks into by hand */
 export const DEPOSIT_BLADES = 4;
 
 /** what breaking a block gives */
@@ -181,7 +180,9 @@ export function contents(m: Machine): Stack[] {
     case 'antenna':
       all.push(m.slot);
       break;
-    case 'extractor':
+    case 'generator':
+      all.push(m.sample, m.out);
+      break;
     case 'probe':
       all.push(m.out);
       break;
@@ -251,8 +252,7 @@ export class World {
     for (let x = 0; x < SIZE; x++) for (let z = 0; z < SIZE; z++) for (let y = 0; y < GROUND; y++) w.set(x, y, z, { kind: 'lattice' });
 
     const [hx, hz] = HOME;
-    // one of each deposit a short walk from spawn, with room around them for an extractor and ducts;
-    // two high, so breaking the top for blades leaves the bottom for an extractor
+    // one of each deposit a short walk from spawn, two high
     const starters: [number, number, Multivector][] = [
       [hx - 5, hz, el('1')],
       [hx + 5, hz, el('2')],
@@ -281,7 +281,11 @@ export class World {
 
   static load(saved: ReturnType<World['save']>) {
     const w = new World();
-    for (const [x, y, z, b] of saved) w.set(x, y, z, loadBlock(b));
+    // a machine type the game no longer has is left out
+    for (const [x, y, z, b] of saved) {
+      const o = b as { kind: string; type?: string };
+      if (o.kind !== 'machine' || o.type! in MACHINE_NAMES) w.set(x, y, z, loadBlock(b));
+    }
     w.version = 0;
     return w;
   }
@@ -309,7 +313,7 @@ function decode(v: Json): unknown {
   if (v === null) return null;
   if (Array.isArray(v)) return v.map(decode);
   if (typeof v === 'object') {
-    if ('$stack' in v) return loadStack(v.$stack as unknown as SavedStack);
+    if ('$stack' in v) return loadKnownStack(v.$stack as unknown as SavedStack);
     if ('$mv' in v) return loadMv(v.$mv as unknown as SavedMv);
     return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, decode(x)]));
   }

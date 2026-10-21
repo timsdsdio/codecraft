@@ -12,7 +12,7 @@ import { G3, Multivector, Q, type Rational } from '@codecraft/ga';
 
 /** blocks with a facing, placed from the inventory */
 export type MachineType =
-  | 'extractor'
+  | 'generator'
   | 'duct'
   | 'store'
   | 'splitter'
@@ -65,7 +65,7 @@ export const machine = (type: MachineType): Item => ({ kind: 'machine', type });
 export const stack = (item: Item, count = 1): Stack => ({ item, count: Q.q(count) });
 
 export const MACHINE_NAMES: Record<MachineType, string> = {
-  extractor: 'Extractor',
+  generator: 'Generator',
   duct: 'Duct',
   store: 'Store',
   splitter: 'Splitter',
@@ -261,5 +261,11 @@ export function loadStack(s: SavedStack): Stack {
 }
 
 export const saveSlots = (slots: (Stack | null)[]) => slots.map((s) => (s ? saveStack(s) : null));
+/** a saved stack, or null when it holds a machine the game no longer has */
+export function loadKnownStack(s: SavedStack): Stack | null {
+  const raw = s.item as { kind: string; type?: string };
+  return raw.kind === 'machine' && !(raw.type! in MACHINE_NAMES) ? null : loadStack(s);
+}
+
 export const loadSlots = (saved: (SavedStack | null)[] | undefined, n: number) =>
-  Array.from({ length: n }, (_, i) => (saved?.[i] ? loadStack(saved[i]!) : null));
+  Array.from({ length: n }, (_, i) => (saved?.[i] ? loadKnownStack(saved[i]!) : null));

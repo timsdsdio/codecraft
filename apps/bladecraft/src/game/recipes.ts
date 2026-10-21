@@ -39,7 +39,7 @@ const ROTOR = one('a rotor: scalar + bivector (e.g. 1 + e₁₂)', (m) => grades
 export const RECIPES: Recipe[] = [
   { makes: { kind: 'workbench' }, count: 1, does: 'Hand work: the tray, the grid and the rail. Builds everything else.', needs: [lattice(4)] },
   { makes: machine('duct'), count: 4, does: 'Carries one stack at a time the way it points.', needs: [lattice(2)] },
-  { makes: machine('extractor'), count: 1, does: 'Placed against a deposit, draws its blade out every 1.5 s.', needs: [lattice(4), SCALAR] },
+  { makes: machine('generator'), count: 1, does: 'Makes the blade in its sample slot every 1.5 s, forever; the sample stays.', needs: [lattice(6), ROTOR, TRIVECTOR] },
   { makes: machine('store'), count: 1, does: 'Holds 27 stacks, put in by hand or by duct.', needs: [lattice(4)] },
   { makes: machine('packer'), count: 1, does: 'Adds what arrives at its back and sides into one multivector.', needs: [lattice(4), OFF_AXIS] },
   { makes: machine('unpacker'), count: 1, does: 'Splits a multivector into its blades, one stack each.', needs: [lattice(4), OFF_AXIS] },

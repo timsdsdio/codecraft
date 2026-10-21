@@ -349,23 +349,10 @@ export class Game {
     const cell = t.before;
     const ok = !this.world.solid(...cell) && !this.player.occupies(...cell) && cell[1] < 31;
     if (item.kind !== 'machine') return { cell, facing: null, ok };
-    return { cell, facing: this.facingFor(item.type, cell), ok };
+    return { cell, facing: this.facingFor(), ok };
   }
 
-  private facingFor(type: string, cell: [number, number, number]): Dir {
-    if (type === 'extractor') {
-      // back against a deposit: the one aimed at first, then any neighbour
-      const [bx, , bz] = this.target!.block;
-      const candidates: Dir[] = [0, 1, 2, 3];
-      for (const d of candidates) {
-        const [dx, dz] = STEP[d];
-        if (cell[0] + dx === bx && cell[2] + dz === bz && this.world.get(bx, cell[1], bz)?.kind === 'deposit') return opposite(d);
-      }
-      for (const d of candidates) {
-        const [dx, dz] = STEP[d];
-        if (this.world.get(cell[0] + dx, cell[1], cell[2] + dz)?.kind === 'deposit') return opposite(d);
-      }
-    }
+  private facingFor(): Dir {
     return ((this.player.facing() + this.turn) % 4) as Dir;
   }
 
@@ -422,7 +409,11 @@ export class Game {
       case 'wire':
       case 'antenna':
         return [{ field: 'slot', label: 'Current', size: 1, rule: { accepts: ofGrade('1') } }];
-      case 'extractor':
+      case 'generator':
+        return [
+          { field: 'sample', label: 'Sample', size: 1, rule: { accepts: (i) => i.kind === 'element' && i.mv.terms.size === 1 } },
+          { field: 'out', label: 'Out', size: 1, rule: out },
+        ];
       case 'probe':
         return [{ field: 'out', label: 'Out', size: 1, rule: out }];
       case 'detector':
@@ -849,10 +840,8 @@ function machineNote(m: Machine, world: World, [x, y, z]: [number, number, numbe
   const inField = !!field.regionAt(x, y, z);
   const holds = (s: Stack | null) => (s ? (s.item.kind === 'element' ? String(valueOf(s)) : itemName(s.item)) : 'nothing');
   switch (m.type) {
-    case 'extractor': {
-      const [dx, dz] = STEP[opposite(m.facing)];
-      return world.get(x + dx, y, z + dz)?.kind === 'deposit' ? '' : ' · no deposit behind it';
-    }
+    case 'generator':
+      return m.sample ? ` · makes ${holds({ item: m.sample.item, count: Q.q(Math.sign(m.sample.count.n)) })}` : ' · no sample';
     case 'store':
       return ` · ${m.slots.filter(Boolean).length} of ${m.slots.length} slots used`;
     case 'sorter':

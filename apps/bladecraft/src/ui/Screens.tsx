@@ -640,14 +640,25 @@ export function MachineScreen({ game }: { game: Game }) {
       );
       break;
     }
-    case 'extractor':
+    case 'generator':
       body = (
-        <div className="machine-view">
-          <div className="labelled">
-            {slot('out', 0)}
-            <small>Waiting to leave</small>
+        <>
+          <div className="machine-view">
+            <div className="labelled">
+              {slot('sample', 0, 'blade')}
+              <small>Sample</small>
+            </div>
+            <span className="op-sym">→</span>
+            <div className="labelled">
+              {slot('out', 0)}
+              <small>Waiting to leave</small>
+            </div>
           </div>
-        </div>
+          <p className="dim">
+            Put one blade in the sample slot, such as e₁ or −e₁₂: the Generator makes another of it every 1.5 s and keeps the sample. A
+            multivector of more than one blade won’t go in; pack generated blades with a Packer instead.
+          </p>
+        </>
       );
       break;
     case 'packer':

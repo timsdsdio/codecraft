@@ -19,10 +19,11 @@ const val = (s: Stack | null) => (s ? String(valueOf(s)) : 'empty');
 const store = (w: World, x: number, z: number) => w.get(x, Y, z) as Extract<Machine, { type: 'store' }>;
 const held = (w: World, x: number, z: number) => store(w, x, z).slots.filter((s): s is Stack => !!s).map(val);
 
-test('an extractor on a deposit ducts blades into a Store, where they stack into one growing weight', () => {
+test('a Generator makes its sample’s blade forever, keeping the sample, and a Store stacks them into one growing weight', () => {
   const w = new World();
-  w.set(0, Y, 0, { kind: 'deposit', mv: e1 });
-  w.set(1, Y, 0, newMachine('extractor', E));
+  const gen = newMachine('generator', E) as Extract<Machine, { type: 'generator' }>;
+  gen.sample = stackOf(e1.scale(3));
+  w.set(1, Y, 0, gen);
   w.set(2, Y, 0, newMachine('duct', E));
   w.set(3, Y, 0, newMachine('store', E));
   const f = new Factory(w);
@@ -31,6 +32,20 @@ test('an extractor on a deposit ducts blades into a Store, where they stack into
   assert.equal(got.length, 1, 'one slot');
   assert.match(got[0], /^\d+e₁$/);
   assert.ok(Number(got[0].replace('e₁', '')) >= 5);
+  assert.equal(val(gen.sample), '3e₁', 'the sample stays');
+});
+
+test('a Generator with a negative sample makes −1 of it, and one with no sample makes nothing', () => {
+  const w = new World();
+  const gen = newMachine('generator', E) as Extract<Machine, { type: 'generator' }>;
+  w.set(0, Y, 0, gen);
+  w.set(1, Y, 0, newMachine('store', E));
+  const f = new Factory(w);
+  run(f, 4);
+  assert.deepEqual(held(w, 1, 0), []);
+  gen.sample = stackOf(e1.op(e2).scale(-2));
+  run(f, 4);
+  assert.match(held(w, 1, 0)[0], /^−\d*e₁₂$/);
 });
 
 test('a Store takes a stack only when all of it fits', () => {
@@ -126,13 +141,19 @@ test('a Mill with no cards passes things straight through', () => {
   assert.deepEqual(held(w, 1, 0), ['e₁ + e₂']);
 });
 
-test('a deposit breaks into 4 blades by hand, while an extractor draws from it without using it up', () => {
-  const deposit = { kind: 'deposit' as const, mv: e1 };
-  assert.equal(val(drop(deposit)), '4e₁');
+test('a deposit breaks into 4 blades by hand', () => {
+  assert.equal(val(drop({ kind: 'deposit', mv: e1 })), '4e₁');
+});
+
+test('loading a world leaves out machines the game no longer has, along with their items', () => {
   const w = new World();
-  w.set(0, Y, 0, deposit);
-  w.set(1, Y, 0, newMachine('extractor', E));
-  w.set(2, Y, 0, newMachine('store', E));
-  run(new Factory(w), 20);
-  assert.equal(w.get(0, Y, 0)?.kind, 'deposit');
+  const s = newMachine('store', E) as Extract<Machine, { type: 'store' }>;
+  s.slots[0] = stackOf(e1);
+  w.set(0, Y, 0, s);
+  const saved = w.save() as unknown as [number, number, number, Record<string, unknown>][];
+  saved.push([1, Y, 0, { kind: 'machine', type: 'extractor', facing: 0, timer: 0, out: null }]);
+  (saved[0][3].slots as unknown[])[1] = { $stack: { item: { kind: 'machine', type: 'extractor' }, count: [1, 1] } };
+  const back = World.load(saved as unknown as ReturnType<World['save']>);
+  assert.equal(back.get(1, Y, 0), undefined);
+  assert.deepEqual(held(back, 0, 0), ['e₁']);
 });

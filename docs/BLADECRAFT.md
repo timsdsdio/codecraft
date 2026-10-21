@@ -65,13 +65,12 @@ or two high, stand further out. Every block says
 what it is on its faces: deposits carry their element in large letters, and machines show their
 symbol on top and their ports on their sides.
 
-Breaking a deposit by hand breaks it into 4 of its blade and it is gone, which is enough to get
-started. An extractor placed against a deposit draws from it forever without using it up, so it is
-the lasting source of blades, and it is the third thing the guide has you build; that's why the
-starting deposits are two high, leaving the bottom block for an extractor once you have broken the
-top. Breaking anything else picks it up, along with whatever it holds; breaking the ground gives
-lattice. You start with a Workbench and 32 lattice. The world,
-inventory, factory and goals are saved in the browser.
+Breaking a deposit by hand breaks it into 4 of its blade and it is gone. Deposits are the only
+source of blades until the Generator, which makes blades forever but costs a rotor and a
+trivector, so the early game is hand mining and hand work. Breaking anything else picks it up,
+along with whatever it holds; breaking the ground gives lattice. You start with a Workbench and 32
+lattice. The world, inventory, factory and goals are saved in the browser, and a save that holds a
+machine the game no longer has loads without it.
 
 ## The Workbench
 
@@ -115,8 +114,8 @@ you haven't done yourself:
 |---|---|
 | Workbench | 4 lattice |
 | 4 ducts | 2 lattice |
-| Extractor | 4 lattice, the scalar 1 |
 | Store | 4 lattice |
+| Generator | 6 lattice, a rotor, a trivector |
 | Packer, Unpacker | 4 lattice, a vector off the axes (e₁ + e₂) |
 | Splitter, Merger | 6 lattice |
 | Sorter | 6 lattice, the scalar 1 |
@@ -162,7 +161,7 @@ What a block takes depends on the side something arrives from (`factory.ts`):
 
 | Block | Takes | Does |
 |---|---|---|
-| Extractor | nothing | with a deposit behind it, draws that blade out every 1.5 s |
+| Generator | a blade in its sample slot, set in its panel | makes another of that blade, weight +1 or −1 as the sample's sign, every 1.5 s, and keeps the sample |
 | Duct | anything, from any side but its front, one stack at a time | carries it the way it points, 1.5 blocks a second |
 | Store | anything, from any side, when all of the stack fits | holds 27 stacks; open it to take them by hand |
 | Packer | an element at its back, left and right | waits until every side that something feeds has delivered, then sends their sum as one multivector |
@@ -197,8 +196,7 @@ A blocked output waits, and everything behind it backs up, so nothing is ever lo
 sends nothing.
 
 Placing a duct or machine points it the way you face, and Rotate (R on a keyboard) turns it a
-quarter turn before you place it; a placed machine's panel can rotate it too. An extractor turns
-itself so its back is against the deposit you aimed at. A ghost outline shows where the block will
+quarter turn before you place it; a placed machine's panel can rotate it too. A ghost outline shows where the block will
 go and which way it will face, red when it can't go there.
 
 ## Qubits and the Hopf fibration
@@ -276,7 +274,7 @@ state the factory leaves in its block, so you can see what a machine is doing wi
 
 | Machine | Model | Moves when |
 |---|---|---|
-| Extractor | a brass pump with a flywheel, pressure gauge and chimney | its rod strokes and flywheel turns once per blade drawn; it stops when there's no deposit or its output is blocked |
+| Generator | a brass pump with a flywheel, pressure gauge and chimney, and a glass jar at the back holding its sample | its rod strokes and flywheel turns once per blade made; it stops when it has no sample or its output is blocked |
 | Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed stacks ride it; stacks coming in from a side ride round the bend |
 | Store | a banded tank with a gauge window | the level in the window rises as it fills |
 | Packer | a low iron box with a copper hopper and a + plate | the lid drops as a sum leaves |
@@ -297,12 +295,12 @@ state the factory leaves in its block, so you can see what a machine is doing wi
 | Workbench | a wooden workbench with a vice and a gear train | its gears turn slowly |
 
 The Mill and the detector have a pilot lamp in their own colour that glows while they work. They,
-the orrery and the extractor let off a puff of steam each time they finish.
+the orrery and the Generator let off a puff of steam each time they finish.
 
 ## The guide
 
-A card in the corner says what to do next. It walks through five first steps: take the scalar 1,
-place the Workbench, build an extractor, place it on the e₁ deposit, and duct it into a Store.
+A card in the corner says what to do next. It walks through four first steps: break the e₁ and e₂
+deposits, place the Workbench, add e₁ and e₂ on the tray, and build a Store.
 After that it suggests the next goal from the tree. Each step is worked out from the state of the
 world (`guide.ts`), so it always matches what the player has done. Tapping the card hides or shows
 the hint.
@@ -325,8 +323,8 @@ another branch says so on its card ("after Volume").
 - **The algebra** starts from a vector and the three axes, then a heavy stack, a vector off the
   axes, learning Join, a bivector and a negative one, a trivector, learning Meter, −1, a rotor,
   learning Multiply, a Multiply card from a trivector (duality) and a Reverse card.
-- **The factory** starts with placing the Workbench: an extractor and a Store, stacks of 64 blades
-  and of 16(e₁ + e₂), all four logistics blocks, a pressed card, a Mill, 16 rotors in one stack, and
+- **The factory** starts with placing the Workbench: a Store, a Generator (once you can make a
+  rotor), stacks of 64 blades and of 16(e₁ + e₂), all four logistics blocks, a pressed card, a Mill, 16 rotors in one stack, and
   cards that turn and mirror.
 - **Qubits** grows from rotors: |1⟩, |+⟩, |+i⟩, a new phase and the Born rule (8e₃ and −8e₃ from a
   detector), then the Hopf fibration in an orrery: one state's fiber, four phases round it, and the

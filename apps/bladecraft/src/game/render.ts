@@ -310,10 +310,10 @@ export class Renderer {
 
   private noticeFinished(s: Shown, m: Machine) {
     const work = 'work' in m ? m.work : 0;
-    const timer = m.type === 'extractor' ? m.timer : 0;
-    // an operation that just finished resets its work; an extractor that just drew resets its timer
+    const timer = m.type === 'generator' ? m.timer : 0;
+    // an operation that just finished resets its work; a generator that just made a blade resets its timer
     const finished = (s.last.work > 0.5 && work === 0) || (s.last.timer > 0.5 && timer < s.last.timer);
-    if (finished) this.steam.puff(s.model.group.localToWorld(s.model.chimney.clone()), m.type === 'extractor' ? 3 : 6);
+    if (finished) this.steam.puff(s.model.group.localToWorld(s.model.chimney.clone()), m.type === 'generator' ? 3 : 6);
     s.last = { work, timer };
   }
 
@@ -325,7 +325,8 @@ export class Renderer {
       if (mv && !mv.isZero()) want.set(slot, mv);
     };
     switch (m.type) {
-      case 'extractor':
+      case 'generator':
+        put('sample', m.sample);
         put('out', m.out);
         break;
       case 'detector':

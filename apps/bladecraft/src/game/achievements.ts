@@ -224,19 +224,29 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'built',
     branch: 'factory',
-    title: 'Built to last',
-    goal: 'Build an Extractor and a Store.',
-    lesson: 'An extractor against a deposit draws out one blade every 1.5 seconds, forever. Ducts carry one stack at a time the way they point, and wait when the next block is full, so nothing is lost.',
+    title: 'Somewhere to keep it',
+    goal: 'Build a Store.',
+    lesson: 'A Store holds 27 stacks, put in by hand or by duct. Ducts carry one stack at a time the way they point, and wait when the next block is full, so nothing is lost.',
     parents: ['workbench'],
-    test: (h) => owned(h, 'extractor') && owned(h, 'store'),
+    test: (h) => owned(h, 'store'),
+  },
+  {
+    id: 'generator',
+    branch: 'factory',
+    title: 'Never run dry',
+    goal: 'Place a Generator.',
+    lesson:
+      'Deposits break into a few blades and are gone. A Generator makes the blade in its sample slot every 1.5 seconds, forever, and keeps the sample: one e₁ in, endless e₁ out. It costs a rotor and a trivector, so it comes once you can make both by hand.',
+    parents: ['built', 'quarter-turn'],
+    test: (h) => placed(h, 'generator'),
   },
   {
     id: 'stockpile',
     branch: 'factory',
     title: 'Stockpile',
     goal: 'Have a stack of 64e₁ (or any other unit blade).',
-    lesson: 'Duct an extractor into a Store and the stack grows by itself: the Store adds every blade that arrives onto the stack it already holds, because multiples stack.',
-    parents: ['built'],
+    lesson: 'Duct a Generator into a Store and the stack grows by itself: the Store adds every blade that arrives onto the stack it already holds, because multiples stack.',
+    parents: ['generator'],
     test: (h) => heavy(h, (b) => b.terms.size === 1, 64),
   },
   {
@@ -255,7 +265,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     goal: 'Have a Splitter, a Merger, a Sorter and a Crossing.',
     lesson:
       'A splitter deals out to three sides in turn, a merger takes three inputs in turn, a sorter sends matches to one side (multiples of a sample, or one grade, or qubit states), and a crossing lets two lines pass through one block.',
-    parents: ['stockpile'],
+    parents: ['built'],
     test: (h) => (['splitter', 'merger', 'sorter', 'crossing'] as const).every((t) => owned(h, t)),
   },
   {
