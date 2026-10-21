@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACHIEVEMENTS, Achievements, BRANCHES, layoutBranch } from './achievements.ts';
-import { el, scalar } from './items.ts';
-import { ORDERS } from './orders.ts';
+import { ACHIEVEMENTS, Achievements, BRANCHES, layoutBranch, type Holdings } from './achievements.ts';
+import { card } from './cards.ts';
+import { el, machine, scalar, stack, stackOf, type Stack } from './items.ts';
+import { newMachine } from './world.ts';
 
 test('every achievement has a unique id, a known branch and parents that exist, with no cycles', () => {
   const ids = new Set(ACHIEVEMENTS.map((a) => a.id));
@@ -37,24 +38,52 @@ test('each branch lays out with no two nodes in one place, and parents to the le
   }
 });
 
-const earns = (e: Parameters<Achievements['notice']>[0]) => new Achievements().notice(e).map((a) => a.id);
+const holdings = (stacks: Stack[], extra: Partial<Holdings> = {}): Holdings => ({
+  stacks,
+  machines: [],
+  workbenchPlaced: false,
+  learned: { join: false, meter: false, multiply: false },
+  ...extra,
+});
+const earns = (h: Holdings) => new Achievements().check(h).map((a) => a.id);
+const e1 = el('1');
+const e2 = el('2');
+const e3 = el('3');
 
-test('the new algebra goals: contraction, reverse and duality', () => {
-  const e1 = el('1');
-  const e12 = el('1').op(el('2'));
-  assert.ok(earns({ type: 'craft', by: 'hand', op: 'contract', a: e1, b: e12, result: e1.lc(e12) }).includes('whats-left'));
-  assert.ok(earns({ type: 'craft', by: 'hand', op: 'reverse', a: e12, b: null, result: e12.reverse() }).includes('backwards'));
-  const I = e12.op(el('3'));
-  assert.ok(earns({ type: 'craft', by: 'hand', op: 'product', a: I, b: el('3'), result: I.gp(el('3')) }).includes('right-angles'));
-  assert.ok(!earns({ type: 'craft', by: 'hand', op: 'reverse', a: scalar(2), b: null, result: scalar(2) }).includes('backwards'));
+test('a goal is met by holding the thing it names, wherever it is', () => {
+  assert.ok(earns(holdings([stackOf(e1)!])).includes('direction'));
+  assert.ok(!earns(holdings([stackOf(e1)!])).includes('three-axes'));
+  assert.ok(earns(holdings([stackOf(e1)!, stackOf(e2)!, stackOf(e3)!])).includes('three-axes'));
+  assert.ok(earns(holdings([stackOf(e1.scale(8))!])).includes('count-up'), 'a stack of weight 8 counts');
+  assert.ok(!earns(holdings([stackOf(e1.scale(7))!])).includes('count-up'));
+  assert.ok(earns(holdings([stackOf(e1.op(e2))!])).includes('oriented-area'));
+  assert.ok(earns(holdings([stackOf(e1.add(e2))!])).includes('head-to-tail'));
+  assert.ok(earns(holdings([stackOf(scalar(-1))!])).includes('minus-one'));
+  assert.ok(!earns(holdings([stackOf(scalar(1))!])).includes('minus-one'));
 });
 
-test('logistics goals and finishing each tier of orders', () => {
-  assert.deepEqual(earns({ type: 'route', kind: 'split' }), ['fork']);
-  assert.deepEqual(earns({ type: 'route', kind: 'cross' }), ['crossroads']);
-  const last = (kinds: string[]) => ORDERS.reduce((n, o, i) => (kinds.includes(o.kind ?? 'exact') ? i : n), -1);
-  assert.ok(earns({ type: 'order', index: last(['exact']) }).includes('algebra-delivered'));
-  assert.ok(earns({ type: 'order', index: last(['state', 'phases']) }).includes('qubits-delivered'));
-  assert.ok(earns({ type: 'order', index: ORDERS.length - 1 }).includes('every-order'));
-  assert.ok(!earns({ type: 'order', index: 0 }).includes('algebra-delivered'));
+test('learning a rule, placing machines and pressing cards meet their goals', () => {
+  assert.ok(earns(holdings([], { learned: { join: true, meter: false, multiply: false } })).includes('learn-join'));
+  assert.ok(earns(holdings([], { workbenchPlaced: true })).includes('workbench'));
+  const extractor = stack(machine('extractor'));
+  const placedStore = newMachine('store', 0);
+  assert.ok(earns(holdings([extractor], { machines: [placedStore] })).includes('built'), 'one carried and one placed');
+  assert.ok(!earns(holdings([extractor])).includes('built'));
+  assert.ok(earns(holdings([stack(card('reverse', null))])).includes('backwards'));
+  const quarter = scalar(1).add(e2.op(e1));
+  assert.ok(earns(holdings([stack(card('turn', quarter))])).includes('turn'), 'a Turn card taking e₁ to e₂ and e₂ to −e₁');
+});
+
+test('readings count only as readings, not as elements', () => {
+  const r = stack({ kind: 'reading', mv: e1 });
+  const met = earns(holdings([r]));
+  assert.ok(met.includes('gauss'));
+  assert.ok(!met.includes('direction'));
+});
+
+test('a met goal stays met once the thing is gone, and is reported once', () => {
+  const a = new Achievements();
+  assert.ok(a.check(holdings([stackOf(e1)!])).some((g) => g.id === 'direction'));
+  assert.ok(!a.check(holdings([])).some((g) => g.id === 'direction'));
+  assert.ok(a.earned.has('direction'));
 });

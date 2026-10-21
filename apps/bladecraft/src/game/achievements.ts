@@ -1,28 +1,27 @@
-// Achievements: an optional tree of milestones that teaches geometric algebra by doing it. Like
-// Minecraft's advancements, nothing is locked behind them; an achievement can be earned at any time,
-// and the tree only shows how the ideas build on each other. It is drawn in four branches (the
-// algebra, the factory, qubits and the field), each read left to right. A node is named once one of
-// its parents is earned, so the next ideas come into view as you go.
+// Achievements: an optional tree of goals that teaches geometric algebra by doing it. Like a tech
+// mod's quest book, a goal is met when the thing it names exists somewhere: in your inventory, in a
+// Store, in a machine, or placed in the world. Nothing is delivered or used up, so a factory can be
+// rebuilt and extended without losing progress, and nothing is locked behind a goal. Learning a rule
+// on the Workbench's rail counts too: that knowledge is yours to keep.
+//
+// The tree is drawn in four branches (the algebra, the factory, qubits and the field), each read left
+// to right. A goal is named once one of its parents is met, so the next ideas come into view as you go.
 import { G3, Multivector } from '@codecraft/ga';
-import type { MachineType } from './items.ts';
-import type { Op } from './ops.ts';
-import type { Block } from './world.ts';
-import { ORDERS } from './orders.ts';
+import { applyCard, type Card } from './cards.ts';
+import { num, valueOf, type Stack } from './items.ts';
+import type { Rule } from './products.ts';
+import { bloch, isState, sameState, samePoint } from './qubit.ts';
+import type { Machine } from './world.ts';
 
-export type GameEvent =
-  | { type: 'break'; block: Block }
-  | { type: 'inventory'; elements: Multivector[] }
-  | { type: 'craft'; by: 'hand' | 'machine'; op: Op; a: Multivector; b: Multivector | null; result: Multivector }
-  | { type: 'build'; machine: MachineType }
-  | { type: 'place'; block: Block }
-  | { type: 'deliver'; mv: Multivector }
-  | { type: 'order'; index: number }
-  | { type: 'qubit'; kind: 'project' | 'gate' | 'measure'; input: Multivector; result: Multivector }
-  | { type: 'orrery'; seen: Multivector[] }
-  /** a source set while standing in a field, or a probe's reading */
-  | { type: 'field'; kind: 'charge' | 'wire' | 'antenna' | 'reading'; mv: Multivector }
-  /** a logistics block sent an element somewhere other than straight on */
-  | { type: 'route'; kind: 'split' | 'merge' | 'sort' | 'cross' };
+/** everything a goal can look at */
+export interface Holdings {
+  /** stacks in the inventory, in Stores and inside machines */
+  stacks: Stack[];
+  /** placed machines */
+  machines: Machine[];
+  workbenchPlaced: boolean;
+  learned: Record<Rule, boolean>;
+}
 
 /** the bands the tree is drawn in */
 export type Branch = 'algebra' | 'factory' | 'qubits' | 'field';
@@ -37,432 +36,386 @@ export interface Achievement {
   id: string;
   branch: Branch;
   title: string;
-  /** what to do, shown before it's earned */
+  /** what to do, shown before it's met */
   goal: string;
-  /** the idea it teaches, shown once it's earned (and on request before) */
+  /** the idea it teaches, shown once it's met (and on request before) */
   lesson: string;
   parents: string[];
-  test: (e: GameEvent) => boolean;
+  test: (h: Holdings) => boolean;
 }
 
-const isVector = (m: Multivector) => !m.isZero() && m.grades().join() === '1';
-const isBivector = (m: Multivector) => !m.isZero() && m.grades().join() === '2';
-const isRotor = (m: Multivector) => m.grades().join() === '0,2';
-const isEven = (m: Multivector) => !m.isZero() && m.grades().every((k) => k % 2 === 0);
-/** in span{1, e₁₂} with some e₁₂: a phase */
-const isPhase = (m: Multivector) => m.terms.has(3) && [...m.terms.keys()].every((b) => b === 0 || b === 3);
-const pointKey = (r: Multivector) => r.sandwich(el3)?.key() ?? '';
-const el3 = Multivector.e(G3, '3');
-const onAxis = (m: Multivector) => m.terms.size === 1;
-const isTrivector = (m: Multivector) => !m.isZero() && m.grades().join() === '3';
-/** the index of the last order of each tier, so finishing a tier can be noticed */
-const lastOf = (test: (kind: string) => boolean) => ORDERS.reduce((last, o, i) => (test(o.kind ?? 'exact') ? i : last), -1);
-const LAST_ALGEBRA = lastOf((k) => k === 'exact');
-const LAST_QUBIT = lastOf((k) => k === 'state' || k === 'phases');
-const LAST_FIELD = lastOf((k) => k === 'reading');
-const negativeOnly = (m: Multivector) => [...m.terms.values()].every((c) => c.n < 0);
+const e = (...l: string[]) => Multivector.e(G3, ...l);
+const E1 = e('1');
+const E2 = e('2');
+const E3 = e('3');
+const grades = (m: Multivector) => m.grades().join();
+
+/** every element held, as the multivector each stack holds */
+const elements = (h: Holdings) => h.stacks.flatMap((s) => (s.item.kind === 'element' ? [valueOf(s)!] : []));
+/** element stacks with their weight */
+const elementStacks = (h: Holdings) => h.stacks.filter((s) => s.item.kind === 'element');
+const readings = (h: Holdings) => h.stacks.flatMap((s) => (s.item.kind === 'reading' ? [s.item.mv] : []));
+const cards = (h: Holdings): Card[] => h.stacks.flatMap((s) => (s.item.kind === 'card' ? [s.item] : []));
+const has = (h: Holdings, test: (m: Multivector) => boolean) => elements(h).some(test);
+const placed = (h: Holdings, type: Machine['type']) => h.machines.some((m) => m.type === type);
+const owned = (h: Holdings, type: Machine['type']) =>
+  placed(h, type) || h.stacks.some((s) => s.item.kind === 'machine' && s.item.type === type);
+/** a stack of this base weighing at least n */
+const heavy = (h: Holdings, test: (base: Multivector) => boolean, n: number) =>
+  elementStacks(h).some((s) => s.item.kind === 'element' && test(s.item.mv) && num(s.count) >= n);
+/** a state whose Bloch vector points the same way as v */
+const pointsAlong = (v: Multivector) => (m: Multivector) => {
+  const b = isState(m) ? bloch(m) : null;
+  return !!b && !b.isZero() && b.op(v).isZero() && b.lc(v).scalarPart().n > 0;
+};
+const turnsTo = (c: Card, from: Multivector, to: Multivector) => applyCard(c, from)?.equals(to) ?? false;
 
 export const ACHIEVEMENTS: Achievement[] = [
-  {
-    id: 'break-ground',
-    branch: 'factory',
-    title: 'Break ground',
-    goal: 'Break any block.',
-    lesson:
-      'The world is a lattice with deposits in it, each labelled with its element: e₁ (red), e₂ (green), e₃ (blue) and the scalar 1 (pale). Breaking a deposit gives you one and leaves it standing; an extractor draws on it forever. Everything else is made from these.',
-    parents: [],
-    test: (e) => e.type === 'break',
-  },
+  // --- the algebra ---------------------------------------------------------------------------
   {
     id: 'direction',
     branch: 'algebra',
     title: 'A sense of direction',
-    goal: 'Collect a vector from a deposit.',
+    goal: 'Take a vector from a deposit.',
     lesson:
-      'A vector is a direction with a length. e₁ points east, e₂ north and e₃ up, each one block long. Its arrow is drawn the same way in your hand, in your inventory and in the world.',
-    parents: ['break-ground'],
-    test: (e) => e.type === 'inventory' && e.elements.some(isVector),
+      'A vector is a direction with a length. e₁ points east, e₂ north and e₃ up, each one block long. Its arrow is drawn the same way in your hand, in your inventory and in the world. Deposits never run out: breaking one gives you one blade and leaves it standing.',
+    parents: [],
+    test: (h) => has(h, (m) => grades(m) === '1'),
   },
   {
     id: 'three-axes',
     branch: 'algebra',
     title: 'Three axes',
-    goal: 'Hold e₁, e₂ and e₃ at the same time.',
-    lesson:
-      'e₁, e₂ and e₃ are a basis: every vector in this space is some amount of each, like 2e₁ + e₂ − e₃. Three numbers, one per axis, describe any vector.',
+    goal: 'Have e₁, e₂ and e₃.',
+    lesson: 'e₁, e₂ and e₃ are a basis: every vector in this space is some amount of each, like 2e₁ + e₂ − e₃. Three numbers, one per axis, describe any vector.',
     parents: ['direction'],
-    test: (e) => e.type === 'inventory' && ['1', '2', '4'].every((b) => e.elements.some((m) => m.terms.size === 1 && m.terms.has(Number(b)) && m.terms.get(Number(b))!.n === 1 && m.terms.get(Number(b))!.d === 1)),
+    test: (h) => [E1, E2, E3].every((v) => elementStacks(h).some((s) => s.item.kind === 'element' && s.item.mv.equals(v) && s.count.n > 0)),
+  },
+  {
+    id: 'count-up',
+    branch: 'algebra',
+    title: 'Count up',
+    goal: 'Have 8e₁ or more in one stack.',
+    lesson:
+      'Things stack when one is a multiple of the other, and stacking adds them. Eight unit e₁s stacked are 8e₁: the number on a slot is the weight of what it holds. A stack of rotors is a bigger rotor, and putting −e₁ on e₁ cancels them.',
+    parents: ['direction'],
+    test: (h) => heavy(h, (b) => b.equals(E1), 8),
   },
   {
     id: 'head-to-tail',
     branch: 'algebra',
     title: 'Head to tail',
-    goal: 'Add two vectors into one that lies off the axes.',
-    lesson:
-      'Adding vectors puts them head to tail: e₁ + e₂ points north-east. Adding works coefficient by coefficient, so it never mixes up which axis is which.',
+    goal: 'Have a vector off the axes, such as e₁ + e₂. Add them on the Workbench tray.',
+    lesson: 'Adding vectors puts them head to tail: e₁ + e₂ points north-east. Adding works blade by blade, so it never mixes up which axis is which. A sum of blades is one multivector, carried as one item.',
     parents: ['three-axes'],
-    test: (e) => e.type === 'craft' && e.op === 'add' && isVector(e.result) && !onAxis(e.result),
+    test: (h) => has(h, (m) => grades(m) === '1' && m.terms.size > 1),
   },
   {
-    id: 'squares-to-a-number',
+    id: 'learn-join',
     branch: 'algebra',
-    title: 'Squares to a number',
-    goal: 'Multiply a vector by itself with the geometric product (AB).',
+    title: 'Learn to join',
+    goal: 'On the Workbench, sort three cells by hand under the Join rule.',
     lesson:
-      'The geometric product of a vector with itself is its length squared, a plain number: e₁e₁ = 1 and (e₁ + e₂)(e₁ + e₂) = 2. This is the one rule the whole algebra is built from.',
-    parents: ['direction'],
-    test: (e) => e.type === 'craft' && e.op === 'product' && !!e.b && isVector(e.a) && e.a.equals(e.b),
+      'Multiplying two blades means laying their factors in a row and sorting them: swapping two neighbours flips the sign, so e₂e₁ = −e₁e₂. Join (∧) allows no cancelling: if two factors match, the result is 0, so e₁ ∧ e₁ = 0.',
+    parents: ['three-axes'],
+    test: (h) => h.learned.join,
   },
   {
     id: 'oriented-area',
     branch: 'algebra',
     title: 'Oriented area',
-    goal: 'Wedge two vectors into a bivector (A ∧ B).',
+    goal: 'Have a bivector, such as e₁ ∧ e₂.',
     lesson:
       'a ∧ b is the piece of plane swept out by a and b: its size is the area of their parallelogram, and its ring of arrows runs from a toward b. e₁ ∧ e₂ = e₁₂ is the floor plane, one block in area, turning east-to-north.',
-    parents: ['three-axes'],
-    test: (e) => e.type === 'craft' && e.op === 'wedge' && isBivector(e.result),
+    parents: ['learn-join'],
+    test: (h) => has(h, (m) => grades(m) === '2'),
   },
   {
     id: 'order-matters',
     branch: 'algebra',
     title: 'Order matters',
-    goal: 'Wedge two vectors in the other order and get a negative bivector.',
-    lesson: 'b ∧ a = −(a ∧ b). Swapping the order flips the orientation: e₂ ∧ e₁ = −e₁₂ is the same plane turning the other way.',
+    goal: 'Have a negative bivector, such as −e₁₂.',
+    lesson: 'b ∧ a = −(a ∧ b). Swapping the order flips the orientation: e₂ ∧ e₁ = −e₁₂ is the same plane turning the other way. On the grid, the Join cells mirror across the diagonal with their signs flipped.',
     parents: ['oriented-area'],
-    test: (e) => e.type === 'craft' && e.op === 'wedge' && isBivector(e.result) && negativeOnly(e.result),
-  },
-  {
-    id: 'nothing-at-all',
-    branch: 'algebra',
-    title: 'Nothing at all',
-    goal: 'Wedge a vector with itself.',
-    lesson: 'a ∧ a = 0. A vector with itself sweeps out no area, and neither do any two vectors that point the same or opposite ways.',
-    parents: ['oriented-area'],
-    test: (e) => e.type === 'craft' && e.op === 'wedge' && isVector(e.a) && !!e.b && isVector(e.b) && e.result.isZero(),
-  },
-  {
-    id: 'two-grades',
-    branch: 'algebra',
-    title: 'Two grades at once',
-    goal: 'Take the geometric product of two different vectors that are neither parallel nor at right angles.',
-    lesson:
-      'For vectors, ab = a·b + a∧b: a number saying how much they agree plus a bivector saying how much they turn. e₁(e₁ + e₂) = 1 + e₁₂. Things with mixed grades are fine; they add like anything else.',
-    parents: ['squares-to-a-number', 'oriented-area'],
-    test: (e) => e.type === 'craft' && e.op === 'product' && e.result.grades().join() === '0,2',
-  },
-  {
-    id: 'square-root-of-minus-one',
-    branch: 'algebra',
-    title: 'A real √−1',
-    goal: 'Multiply a bivector like e₁₂ by itself.',
-    lesson:
-      'e₁₂e₁₂ = e₁e₂e₁e₂ = −e₁e₁e₂e₂ = −1. The unit bivector squares to −1, which is why complex numbers describe rotation: i is the floor plane.',
-    parents: ['oriented-area'],
-    test: (e) => e.type === 'craft' && e.op === 'product' && !!e.b && isBivector(e.a) && e.a.equals(e.b) && e.result.isScalar(),
+    test: (h) => has(h, (m) => grades(m) === '2' && [...m.terms.values()].every((c) => c.n < 0)),
   },
   {
     id: 'volume',
     branch: 'algebra',
     title: 'Volume',
-    goal: 'Wedge a bivector with a third vector into a trivector.',
+    goal: 'Have a trivector.',
     lesson:
-      'e₁ ∧ e₂ ∧ e₃ = e₁₂₃ is a unit of oriented volume, the biggest thing in three dimensions. It also squares to −1, and multiplying by it swaps a plane for the direction at right angles to it.',
+      'e₁ ∧ e₂ ∧ e₃ = e₁₂₃ is a unit of oriented volume, the biggest thing in three dimensions. Call it I. It squares to −1, and multiplying by it swaps a direction for the plane at right angles to it.',
     parents: ['oriented-area'],
-    test: (e) => e.type === 'craft' && e.result.grades().join() === '3',
+    test: (h) => has(h, (m) => grades(m) === '3'),
+  },
+  {
+    id: 'learn-meter',
+    branch: 'algebra',
+    title: 'Learn to measure',
+    goal: 'Sort three cells by hand under the Meter rule.',
+    lesson:
+      'Meter (⌋) needs every factor of the left blade to cancel: e₁ ⌋ e₁₂ = e₂, what is left of the plane once e₁ is taken out. For two vectors it is the dot product, a number saying how much they agree: e₁ ⌋ (e₁ + e₂) = 1.',
+    parents: ['learn-join'],
+    test: (h) => h.learned.meter,
+  },
+  {
+    id: 'minus-one',
+    branch: 'algebra',
+    title: 'A real √−1',
+    goal: 'Have a negative scalar, such as −1.',
+    lesson:
+      'e₁₂ e₁₂ = e₁e₂e₁e₂ = −e₁e₁e₂e₂ = −1: one swap, then two cancels. The unit bivector squares to −1, which is why complex numbers describe rotation: i is the floor plane. Meter gives it too: e₁₂ ⌋ e₁₂ = −1.',
+    parents: ['learn-meter'],
+    test: (h) => has(h, (m) => grades(m) === '0' && m.scalarPart().n < 0),
   },
   {
     id: 'quarter-turn',
     branch: 'algebra',
-    title: 'Quarter turn',
-    goal: 'Make a rotor: a scalar plus a bivector, such as 1 + e₁₂.',
+    title: 'Both halves',
+    goal: 'Have a rotor: a scalar plus a bivector, such as 1 + e₁₂.',
     lesson:
-      'A scalar plus a bivector is a rotor. The product ba of two vectors is the rotor that turns by twice the angle from a to b, in their plane. 1 + e₁₂ turns a quarter turn.',
-    parents: ['two-grades'],
-    test: (e) => e.type === 'craft' && isRotor(e.result),
+      'Put e₁ + e₂ against e₁ on the grid under Meter, then under Join, and add the results on the tray: 1 and e₁₂. For vectors that sum is the geometric product, ab = a · b + a ∧ b: the diagonal of the grid from Meter, the rest from Join. A scalar plus a bivector is a rotor, and 1 + e₁₂ turns things a quarter turn.',
+    parents: ['learn-meter', 'oriented-area'],
+    test: (h) => has(h, (m) => grades(m) === '0,2'),
   },
   {
-    id: 'sandwich',
+    id: 'learn-multiply',
     branch: 'algebra',
-    title: 'Sandwich',
-    goal: 'Apply a rotor to a vector with A B A⁻¹ (A the rotor, B the vector).',
+    title: 'The middle grade',
+    goal: 'Sort three cells by hand under the Multiply rule.',
     lesson:
-      'R v R⁻¹ turns v. The same sandwich turns anything, bivectors and trivectors included, so one rule handles every kind of object. Try (1 + e₁₂) on e₁ and on e₂.',
+      'Join and Meter make the whole product only for vectors. Sort e₁₂ against e₂₃: the e₂ pair cancels, so Join gives 0; e₁ never cancels, so Meter gives 0; yet e₁₂ e₂₃ = e₁₃. Multiply lets anything cancel, and that middle grade is what the two halves miss.',
     parents: ['quarter-turn'],
-    test: (e) => e.type === 'craft' && e.op === 'sandwich' && isRotor(e.a) && !!e.b && isVector(e.b),
-  },
-  {
-    id: 'mirror',
-    branch: 'algebra',
-    title: 'Mirror',
-    goal: 'Apply a vector to a vector with A B A⁻¹.',
-    lesson:
-      'n v n⁻¹ reflects v across the line of n, and −n v n⁻¹ reflects it across the plane at right angles to n. Two reflections make a rotation, which is why a rotor is a product of two vectors.',
-    parents: ['squares-to-a-number'],
-    test: (e) => e.type === 'craft' && e.op === 'sandwich' && isVector(e.a) && !!e.b && isVector(e.b),
-  },
-  {
-    id: 'whats-left',
-    branch: 'algebra',
-    title: 'What’s left',
-    goal: 'Contract a vector into a bivector (A ⌋ B).',
-    lesson:
-      'a ⌋ B takes a out of B: e₁ ⌋ e₁₂ = e₂, what is left of the floor plane once e₁ is taken out. Contracting a vector into a vector gives their dot product, a number. The wedge raises grade and the contraction lowers it.',
-    parents: ['oriented-area'],
-    test: (e) => e.type === 'craft' && e.op === 'contract' && isVector(e.a) && !!e.b && isBivector(e.b) && isVector(e.result),
-  },
-  {
-    id: 'backwards',
-    branch: 'algebra',
-    title: 'Backwards',
-    goal: 'Reverse a bivector (Ã).',
-    lesson:
-      'The reverse writes every product backwards: e₁e₂ becomes e₂e₁ = −e₁₂. Scalars and vectors stay as they are, while bivectors and trivectors change sign. The reverse of a rotor turns the other way, so R R̃ is a plain number and R̃ undoes R.',
-    parents: ['order-matters'],
-    test: (e) => e.type === 'craft' && e.op === 'reverse' && e.a.grades().includes(2),
+    test: (h) => h.learned.multiply,
   },
   {
     id: 'right-angles',
     branch: 'algebra',
     title: 'At right angles',
-    goal: 'Multiply a vector by a trivector with the geometric product.',
+    goal: 'Have a Multiply card pressed from a trivector.',
     lesson:
-      'e₁₂₃ e₃ = e₁₂: multiplying by the unit volume I = e₁₂₃ swaps a direction for the plane at right angles to it, and a plane for the direction at right angles to it. This is duality, and it is how the magnetic field B, a direction, becomes the plane IB in the field F = E + IB.',
-    parents: ['volume'],
-    test: (e) => e.type === 'craft' && e.op === 'product' && !!e.b && ((isTrivector(e.a) && isVector(e.b)) || (isVector(e.a) && isTrivector(e.b))),
+      'An I card turns every vector into the plane at right angles to it: e₁ becomes e₂₃. Duality is nothing more than using I as an operation. It is how the magnetic field B, a direction, becomes the plane IB in the field F = E + IB.',
+    parents: ['volume', 'learn-multiply'],
+    test: (h) => cards(h).some((c) => c.verb === 'multiply' && !!c.mv && grades(c.mv) === '3'),
+  },
+  {
+    id: 'backwards',
+    branch: 'algebra',
+    title: 'Backwards',
+    goal: 'Have a Reverse card.',
+    lesson:
+      'The reverse writes every product backwards: e₁e₂ becomes e₂e₁ = −e₁₂. Scalars and vectors stay as they are; bivectors and trivectors change sign. A rotor times its reverse is a plain number, so the reverse undoes a turn.',
+    parents: ['learn-multiply'],
+    test: (h) => cards(h).some((c) => c.verb === 'reverse'),
+  },
+
+  // --- the factory ---------------------------------------------------------------------------
+  {
+    id: 'workbench',
+    branch: 'factory',
+    title: 'A place to work',
+    goal: 'Place the Workbench.',
+    lesson:
+      'The Workbench is where hand work happens: the tray adds and splits multivectors, the grid multiplies them, and the rail shows how any cell of the grid is worked out. Its Build tab makes everything else.',
+    parents: [],
+    test: (h) => h.workbenchPlaced,
   },
   {
     id: 'built',
     branch: 'factory',
     title: 'Built to last',
-    goal: 'Build a machine at the bench.',
-    lesson:
-      'Machines are made from elements. An extractor costs the scalar 1, a wedger costs a bivector, a multiplier a rotor: to automate an operation, you first do it by hand.',
-    parents: ['break-ground'],
-    test: (e) => e.type === 'build',
+    goal: 'Build an Extractor and a Store.',
+    lesson: 'An extractor against a deposit draws out one blade every 1.5 seconds, forever. Ducts carry one stack at a time the way they point, and wait when the next block is full, so nothing is lost.',
+    parents: ['workbench'],
+    test: (h) => owned(h, 'extractor') && owned(h, 'store'),
   },
   {
-    id: 'delivery',
+    id: 'stockpile',
     branch: 'factory',
-    title: 'Special delivery',
-    goal: 'Get an element to the hub by duct.',
-    lesson:
-      'Ducts carry one element at a time the way they point, and wait when the next block is full, so nothing is ever lost. The hub takes anything, but only elements matching its order count.',
+    title: 'Stockpile',
+    goal: 'Have a stack of 64e₁ (or any other unit blade).',
+    lesson: 'Duct an extractor into a Store and the stack grows by itself: the Store adds every blade that arrives onto the stack it already holds, because multiples stack.',
     parents: ['built'],
-    test: (e) => e.type === 'deliver',
+    test: (h) => heavy(h, (b) => b.terms.size === 1, 64),
   },
   {
-    id: 'order-filled',
+    id: 'packed',
     branch: 'factory',
-    title: 'Order filled',
-    goal: 'Complete an order at the hub.',
-    lesson: 'Each order asks for an element one operation further along. Its hint says which machine makes it and what to feed it.',
-    parents: ['delivery'],
-    test: (e) => e.type === 'order',
+    title: 'Two lines into one',
+    goal: 'Have 16(e₁ + e₂) or more in one stack.',
+    lesson: 'A Packer adds whatever arrives at its back and sides into one multivector. Feed it e₁ and e₂ and it sends out e₁ + e₂; send those into a Store and they stack into 16(e₁ + e₂) and beyond.',
+    parents: ['stockpile'],
+    test: (h) => heavy(h, (b) => grades(b) === '1' && b.terms.size > 1, 16),
   },
   {
-    id: 'hands-off',
-    branch: 'factory',
-    title: 'Hands off',
-    goal: 'Have a machine combine two elements.',
-    lesson:
-      'A machine takes A from its back and B from its sides, or uses a fixed B set in its panel. With a fixed B, a wedger becomes "wedge everything with e₃" and a sandwich press "turn everything by this rotor".',
-    parents: ['built'],
-    test: (e) => e.type === 'craft' && e.by === 'machine',
-  },
-  {
-    id: 'fork',
+    id: 'logistics',
     branch: 'factory',
     title: 'Fork in the road',
-    goal: 'Have a splitter send an element out of one of its sides.',
+    goal: 'Have a Splitter, a Merger, a Sorter and a Crossing.',
     lesson:
-      'A splitter deals what arrives at its back to its front, left and right in turn, skipping any side with nowhere to go. One extractor can then feed both inputs of a machine, or three machines at once.',
-    parents: ['delivery'],
-    test: (e) => e.type === 'route' && e.kind === 'split',
+      'A splitter deals out to three sides in turn, a merger takes three inputs in turn, a sorter sends matches to one side (multiples of a sample, or one grade, or qubit states), and a crossing lets two lines pass through one block.',
+    parents: ['stockpile'],
+    test: (h) => (['splitter', 'merger', 'sorter', 'crossing'] as const).every((t) => owned(h, t)),
   },
   {
-    id: 'two-into-one',
+    id: 'press',
     branch: 'factory',
-    title: 'Two into one',
-    goal: 'Have a merger send on an element that came in at one of its sides.',
+    title: 'Item into action',
+    goal: 'Press a card.',
     lesson:
-      'A merger takes from its back, left and right in turn and sends everything out of its front, so no input crowds out the others. Several lines can then share one duct to the hub.',
-    parents: ['fork'],
-    test: (e) => e.type === 'route' && e.kind === 'merge',
+      'Every multivector is also an operation. On the Card Press it unfolds into its grade card, and a verb plate says what it will do: Join, Meter, Multiply, Turn, Reverse or Sieve. The card is punched where the multivector has blades, so you can read it off the holes.',
+    parents: ['built', 'learn-join'],
+    test: (h) => cards(h).length > 0,
   },
   {
-    id: 'sorted',
+    id: 'mill',
     branch: 'factory',
-    title: 'Sorted',
-    goal: 'Have a sorter send a match out of its side.',
+    title: 'The Mill',
+    goal: 'Place a Mill.',
     lesson:
-      'A sorter looks at each element: those matching its sample, or of the kind it is set to (scalars, vectors, bivectors, trivectors or qubit states), leave by one side and the rest go straight on. Sorting by grade is sorting by what kind of object something is.',
-    parents: ['fork'],
-    test: (e) => e.type === 'route' && e.kind === 'sort',
+      'A Mill applies its cards to what arrives at its back. Cards side by side add their outputs; the second deck works on what the first one made. Its face lights one lamp per pair of blades it multiplies, the Workbench grid made of brass.',
+    parents: ['press'],
+    test: (h) => placed(h, 'mill'),
   },
   {
-    id: 'crossroads',
+    id: 'halves-automated',
     branch: 'factory',
-    title: 'Crossroads',
-    goal: 'Send an element through a crossing.',
-    lesson: 'A crossing lets two lines pass through one block: whatever comes in on one side leaves by the opposite side, so the lines never mix.',
-    parents: ['fork'],
-    test: (e) => e.type === 'route' && e.kind === 'cross',
+    title: 'Both halves, automated',
+    goal: 'Have 16 rotors or more in one stack.',
+    lesson: 'A Join card and a Meter card pressed from the same vector, side by side in one Mill, make the geometric product: aX = a ⌋ X + a ∧ X for any vector a. Feed it e₁ + e₂ with e₁ cards and out comes 1 + e₁₂.',
+    parents: ['mill', 'quarter-turn'],
+    test: (h) => heavy(h, (b) => grades(b) === '0,2', 16),
   },
   {
-    id: 'algebra-delivered',
+    id: 'turn',
     branch: 'factory',
-    title: 'Algebra delivered',
-    goal: 'Fill the hub’s first seven orders, up to the sandwich press.',
+    title: 'Quarter turn',
+    goal: 'Have a card that turns e₁ into e₂ and e₂ into −e₁.',
     lesson:
-      'From two vectors you have made a sum, a bivector of each orientation, a rotor, a volume and a rotation, each by a machine. Every element of G(3) can be reached this way: sums of products of e₁, e₂ and e₃.',
-    parents: ['order-filled'],
-    test: (e) => e.type === 'order' && e.index === LAST_ALGEBRA,
+      'A Turn card pressed from 1 − e₁₂ does R X R̃ / (R R̃): a quarter turn about e₃. So does one pressed from 2 − 2e₁₂, because a turn forgets the size of its rotor. Two decks of Multiply cards, 1 − e₁₂ then 1 + e₁₂ from the right, turn too, at twice the size.',
+    parents: ['mill', 'learn-multiply'],
+    test: (h) => cards(h).some((c) => turnsTo(c, E1, E2) && turnsTo(c, E2, E1.neg())),
   },
+  {
+    id: 'mirror',
+    branch: 'factory',
+    title: 'Mirror',
+    goal: 'Have a card that swaps e₁ and e₂.',
+    lesson:
+      'A Turn card pressed from a vector reflects: n X n⁻¹ mirrors across the line of n, so e₁ + e₂ swaps e₁ and e₂. It agrees with the quarter turn on e₁ and disagrees on e₂: an operation is pinned down by what it does to more than one thing. Two mirrors make a turn, which is why a rotor is a product of two vectors.',
+    parents: ['turn'],
+    test: (h) => cards(h).some((c) => turnsTo(c, E1, E2) && turnsTo(c, E2, E1)),
+  },
+
+  // --- qubits --------------------------------------------------------------------------------
   {
     id: 'qubit',
     branch: 'qubits',
     title: 'A qubit',
-    goal: 'Send a rotor through a Bloch projector.',
+    goal: 'Have |1⟩: a state pointing down.',
     lesson:
-      'A rotor is a qubit state. R e₃ R⁻¹ is where it points, its Bloch vector: the scalar 1 points up (|0⟩), e₂₃ points down (|1⟩), and e₂₃ + e₁₂ points along e₁ (|+⟩). Its length never matters, so states stay exact.',
+      'A rotor is a qubit state. R e₃ R̃ is where it points, its Bloch vector: the scalar 1 points up (|0⟩) and e₂₃ points down (|1⟩). Its size never matters, so states stay exact. A Mill with a live Turn card at its side and e₃ at its back shows where each state points.',
     parents: ['quarter-turn'],
-    test: (e) => e.type === 'qubit' && e.kind === 'project',
+    test: (h) => has(h, pointsAlong(E3.neg())),
   },
   {
-    id: 'quantum-gate',
+    id: 'plus',
     branch: 'qubits',
-    title: 'Quantum gate',
-    goal: 'Have a gate machine act on a state.',
-    lesson:
-      'A gate is a rotor multiplied on the left, G R, and it turns the Bloch vector by the rotation G stands for: X is a half turn about e₁, H a half turn about the e₁ + e₃ diagonal, S a quarter turn about e₃.',
+    title: 'Superposition',
+    goal: 'Have |+⟩: a state pointing along e₁.',
+    lesson: 'A gate is a rotor multiplied on the left. A Multiply card pressed from H = e₂₃ + e₁₂ is a half turn about the e₁ + e₃ diagonal: it turns |0⟩ into |+⟩ = e₂₃ + e₁₂, an even mix of up and down.',
     parents: ['qubit'],
-    test: (e) => e.type === 'qubit' && e.kind === 'gate',
+    test: (h) => has(h, pointsAlong(E1)),
+  },
+  {
+    id: 'plus-i',
+    branch: 'qubits',
+    title: 'A quarter more',
+    goal: 'Have |+i⟩: a state pointing along e₂.',
+    lesson: 'S = 1 − e₁₂ is a quarter turn about e₃. A card of it after an H card turns |0⟩ to |+⟩ and then to |+i⟩: two decks, two gates.',
+    parents: ['plus'],
+    test: (h) => has(h, pointsAlong(E2)),
+  },
+  {
+    id: 'phase',
+    branch: 'qubits',
+    title: 'A new phase',
+    goal: 'Have two different states that point the same way.',
+    lesson:
+      'e₁₂ commutes with e₃, so R(1 + e₁₂) points where R points: the state has moved without the point it shows moving. A Multiply card from 1 + e₁₂, turned end to end to multiply from the right, is a phase shifter.',
+    parents: ['qubit'],
+    test: (h) => {
+      const states = elements(h).filter(isState);
+      return states.some((a, i) => states.some((b, j) => j > i && samePoint(a, b) && !sameState(a, b)));
+    },
   },
   {
     id: 'born-rule',
     branch: 'qubits',
     title: 'Born rule',
-    goal: 'Measure a state with a detector.',
+    goal: 'Have 8e₃ and 8 of −e₃ from a detector.',
     lesson:
-      'A detector finds a state up with probability (1 + z) / 2, z being its Bloch vector’s e₃ part: |0⟩ always, |1⟩ never, |+⟩ half the time. Only the Bloch vector matters, not the phase.',
+      'A detector finds a state up with probability (1 + z) / 2, z being its Bloch vector’s e₃ part: |0⟩ always, |1⟩ never, |+⟩ half the time. Sort its outputs into two Stores and they fill at those rates.',
     parents: ['qubit'],
-    test: (e) => e.type === 'qubit' && e.kind === 'measure',
-  },
-  {
-    id: 'new-phase',
-    branch: 'qubits',
-    title: 'A new phase',
-    goal: 'Multiply a state on the right by a phase such as 1 + e₁₂.',
-    lesson:
-      'e₁₂ commutes with e₃, so R(1 + e₁₂) has the same Bloch vector as R: the state has moved without the point it shows moving. On the left, the same element would be a gate and turn the point.',
-    parents: ['qubit'],
-    test: (e) => e.type === 'craft' && e.op === 'product' && !!e.b && isEven(e.a) && isPhase(e.b) && isEven(e.result),
-  },
-  {
-    id: 'hopf-fiber',
-    branch: 'qubits',
-    title: 'Hopf fiber',
-    goal: 'Show an orrery two different states with the same Bloch vector.',
-    lesson:
-      'All the phases of one state form a circle in the 3-sphere of unit rotors, and R ↦ R e₃ R⁻¹ squashes each circle to one point of the Bloch sphere. That is the Hopf fibration; the orrery draws the circles, projected into 3D.',
-    parents: ['new-phase'],
-    test: (e) => {
-      if (e.type !== 'orrery') return false;
-      const keys = e.seen.map(pointKey);
-      return keys.some((k, i) => keys.indexOf(k) !== i);
-    },
+    test: (h) => placed(h, 'detector') && heavy(h, (b) => b.equals(E3), 8) && elementStacks(h).some((s) => s.item.kind === 'element' && s.item.mv.equals(E3) && num(s.count) <= -8),
   },
   {
     id: 'linked',
     branch: 'qubits',
     title: 'Linked rings',
-    goal: 'Show an orrery states on two different Bloch points.',
+    goal: 'Show an orrery two states that point different ways.',
     lesson:
-      'The fibers of two different points never meet, yet every pair is linked: you can’t pull one ring off another without cutting it. The whole 3-sphere is filled with such rings, one for each point of the Bloch sphere.',
-    parents: ['hopf-fiber'],
-    test: (e) => e.type === 'orrery' && new Set(e.seen.map(pointKey)).size >= 2,
+      'All the phases of one state form a circle in the 3-sphere of unit rotors, and R ↦ R e₃ R̃ squashes each circle to one point. That is the Hopf fibration. Circles of different points never meet, yet every pair is linked.',
+    parents: ['phase'],
+    test: (h) =>
+      h.machines.some((m) => {
+        if (m.type !== 'orrery') return false;
+        const points = m.seen.map((r) => bloch(r)?.key() ?? '');
+        return new Set(points).size >= 2;
+      }),
   },
-  {
-    id: 'qubits-delivered',
-    branch: 'qubits',
-    title: 'Qubits delivered',
-    goal: 'Fill every qubit order.',
-    lesson:
-      'Up, down, |+⟩ in four phases and |+i⟩: you have pointed a qubit along every axis of the Bloch sphere using nothing but rotors, and moved it round its fiber without moving the point it shows.',
-    parents: ['quantum-gate'],
-    test: (e) => e.type === 'order' && e.index === LAST_QUBIT,
-  },
-  // the field: Maxwell's four equations are the four grades of one, (∂ₜ + ∇)F = ρ − j
+
+  // --- the field -----------------------------------------------------------------------------
   {
     id: 'a-field',
     branch: 'field',
     title: 'A field',
     goal: 'Lay a field plate.',
     lesson:
-      'A field gives every point a value. The electromagnetic field gives each point one multivector, F = E + IB with I = e₁₂₃: the electric field E is its vector part, and the magnetic field B, times I, is its bivector part, a small plane at right angles to the way B points. Plates draw E as an orange arrow and IB as a blue disc. Maxwell’s four equations are the four grades of one: (∂ₜ + ∇)F = ρ − j, with ∇ = e₁∂₁ + e₂∂₂ + e₃∂₃.',
+      'A field gives every point a value. The electromagnetic field gives each point one multivector, F = E + IB: the electric field E is its vector part, and the magnetic field B, times I, is its bivector part. Plates draw E as an orange arrow and IB as a blue disc. Maxwell’s four equations are the four grades of one: (∂ₜ + ∇)F = ρ − j.',
     parents: ['right-angles'],
-    test: (e) => e.type === 'place' && e.block.kind === 'machine' && e.block.type === 'plate',
+    test: (h) => placed(h, 'plate'),
   },
   {
     id: 'gauss',
     branch: 'field',
     title: 'Gauss’s law',
-    goal: 'Give a charge standing in a field a scalar.',
+    goal: 'Have a reading of an electric field: a vector and nothing else.',
     lesson:
-      'The scalar part of (∂ₜ + ∇)F = ρ − j is ∇·E = ρ: electric field spreads out from charge, away from a positive one and toward a negative one. The plates are one layer, so the field acts as if each charge were a long rod running straight up, and it falls off as 1/r. A field’s edge is earthed, which pulls the field toward it.',
+      'The scalar part of (∂ₜ + ∇)F = ρ − j is ∇ · E = ρ: electric field spreads out from charge, away from a positive one and toward a negative one. The plates are one layer, so each charge acts like a long rod running up, and its field falls off as 1/r.',
     parents: ['a-field'],
-    test: (e) => e.type === 'field' && e.kind === 'charge' && !e.mv.isZero(),
+    test: (h) => readings(h).some((r) => grades(r) === '1'),
   },
   {
     id: 'ampere',
     branch: 'field',
     title: 'Ampère’s law',
-    goal: 'Run a current up a wire standing in a field.',
+    goal: 'Have a reading of a magnetic field: a bivector and nothing else.',
     lesson:
-      'The vector part is ∂ₜE = ∇×B − j: a current makes the magnetic field circle it. Current up a wire (along e₃) makes B run anticlockwise round it, seen from above. IB is the plane at right angles to B, so round a wire the discs stand upright and fan out from it, like the pages of an open book.',
+      'The vector part is ∂ₜE = ∇ × B − j: a current makes B circle it, anticlockwise seen from above when it runs up. The trivector part, ∇ · B = 0, says those circles never start or end: there is no magnetic charge. Round a wire the IB discs stand upright like the pages of an open book.',
     parents: ['a-field'],
-    test: (e) => e.type === 'field' && e.kind === 'wire' && e.mv.terms.has(4),
-  },
-  {
-    id: 'faraday',
-    branch: 'field',
-    title: 'Faraday’s law',
-    goal: 'Run an antenna in a field.',
-    lesson:
-      'The bivector part is ∂ₜB = −∇×E: a changing magnetic field makes an electric field curl round it. Together with the vector part, a changing E makes B and a changing B makes E, so the field carries itself away from a swinging current as a wave, at the speed of light: 4 blocks a second here.',
-    parents: ['ampere'],
-    test: (e) => e.type === 'field' && e.kind === 'antenna' && e.mv.terms.has(4),
-  },
-  {
-    id: 'no-monopoles',
-    branch: 'field',
-    title: 'No monopoles',
-    goal: 'Have a probe read a magnetic field.',
-    lesson:
-      'The trivector part is ∇·B = 0: magnetic field has no sources, because there is no magnetic charge. Round a wire B runs in closed loops with no start or end, where E from a charge starts at the charge.',
-    parents: ['ampere'],
-    test: (e) => e.type === 'field' && e.kind === 'reading' && e.mv.grades().includes(2),
+    test: (h) => readings(h).some((r) => grades(r) === '2'),
   },
   {
     id: 'one-equation',
     branch: 'field',
     title: 'One equation',
-    goal: 'Have a probe read E and IB together.',
+    goal: 'Have a reading with E and IB together.',
     lesson:
-      'A reading is the whole field at a point as one multivector: E + IB, a vector plus a bivector. In a wave E and B are at right angles and equally strong, so F² = E² − B² + 2I E·B is 0: light is a field whose square vanishes.',
-    parents: ['gauss', 'faraday'],
-    test: (e) => e.type === 'field' && e.kind === 'reading' && e.mv.grades().join() === '1,2',
-  },
-  {
-    id: 'every-order',
-    branch: 'field',
-    title: 'Every order filled',
-    goal: 'Fill the hub’s last order.',
-    lesson:
-      'Vectors, planes and volumes; rotations and reflections; qubits and their fibers; and Maxwell’s equations as one. All of it came from one rule, that a vector times itself is its length squared.',
-    parents: ['one-equation'],
-    test: (e) => e.type === 'order' && e.index === LAST_FIELD,
+      'The bivector part is Faraday’s law, ∂ₜB = −∇ × E. With the vector part, a changing E makes B and a changing B makes E, so an antenna’s swinging current sends out waves at 4 blocks a second. In a wave E and B are at right angles and equally strong, so F² = 0: light is a field whose square vanishes.',
+    parents: ['gauss', 'ampere'],
+    test: (h) => readings(h).some((r) => grades(r) === '1,2'),
   },
 ];
 
@@ -520,11 +473,11 @@ export function layoutBranch(branch: Branch) {
 export class Achievements {
   earned = new Map<string, number>();
 
-  /** returns the achievements this event newly earned */
-  notice(e: GameEvent) {
+  /** marks every goal the holdings now meet; returns the ones newly met */
+  check(h: Holdings) {
     const fresh: Achievement[] = [];
     for (const a of ACHIEVEMENTS) {
-      if (this.earned.has(a.id) || !a.test(e)) continue;
+      if (this.earned.has(a.id) || !a.test(h)) continue;
       this.earned.set(a.id, Date.now());
       fresh.push(a);
     }
@@ -534,6 +487,11 @@ export class Achievements {
   /** shown in the tree: earned, or with an earned parent, or a root */
   visible(a: Achievement) {
     return this.earned.has(a.id) || !a.parents.length || a.parents.some((p) => this.earned.has(p));
+  }
+
+  /** the goals worth suggesting next: visible and not yet met, in tree order */
+  next() {
+    return ACHIEVEMENTS.filter((a) => !this.earned.has(a.id) && this.visible(a));
   }
 
   save() {

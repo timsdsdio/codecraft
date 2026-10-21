@@ -1,5 +1,5 @@
 // Draws the world. Lattice and deposits go into one merged mesh of their visible faces, rebuilt
-// whenever blocks change. Machines, the bench and the hub are animated models (models.ts), driven
+// whenever blocks change. Machines and the Workbench are animated models (models.ts), driven
 // every frame by what the factory left in their blocks. Elements riding belts and waiting in machines
 // are drawn as their glyphs, and finished operations let off steam. A duct fed only from one side
 // is drawn as a corner, and elements coming in from a side ride round the bend.
@@ -13,6 +13,7 @@ import { FieldView } from './fieldview';
 import type { Field } from './field';
 import { Steam, buildModel, curvePoint, scrollBelts, type Model, type ModelKind } from './models';
 import { STEP, opposite, type Block, type Dir, type Machine, type World } from './world';
+import { valueOf, type Stack } from './items';
 
 const PX = 128;
 
@@ -121,13 +122,11 @@ export class Renderer {
   readonly camera = new THREE.PerspectiveCamera(75, 1, 0.05, 200);
   private terrain = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ map: atlas(), vertexColors: true }));
   private shown = new Map<string, Shown>();
-  private riders = new Map<number, Glyph>();
+  private riders = new Map<number, Rider>();
   private selection: THREE.LineSegments;
   private ghost: THREE.Group;
   private ghostBox: THREE.LineSegments;
   private ghostArrow: THREE.Mesh;
-  private beacon: { key: string; glyph: Glyph } | null = null;
-  private hubDelivered = -1;
   private steam: Steam;
   private fieldView: FieldView;
   private world: World | null = null;
@@ -185,28 +184,6 @@ export class Renderer {
     const colour = ok ? 0x7dff6a : 0xff4d6a;
     (this.ghostBox.material as THREE.LineBasicMaterial).color.setHex(colour);
     (this.ghostArrow.material as THREE.MeshBasicMaterial).color.setHex(colour);
-  }
-
-  /** the element the hub's current order wants, turning inside its rings; a flash and steam when one arrives */
-  hubWants(pos: [number, number, number], want: Multivector | null, delivered: number) {
-    const hub = this.shown.get(at(...pos));
-    if (delivered > this.hubDelivered && this.hubDelivered >= 0 && hub) {
-      hub.model.pulse?.();
-      this.steam.puff(new THREE.Vector3(pos[0] + 0.5, pos[1] + 0.9, pos[2] + 0.5), 3);
-    }
-    this.hubDelivered = delivered;
-    const key = want?.key() ?? '';
-    if (this.beacon?.key === key) return;
-    if (this.beacon) {
-      this.scene.remove(this.beacon.glyph);
-      this.beacon.glyph.dispose();
-      this.beacon = null;
-    }
-    if (!want) return;
-    const glyph = new Glyph(want, 1);
-    glyph.position.set(pos[0] + 0.5, pos[1] + 1.5, pos[2] + 0.5);
-    this.scene.add(glyph);
-    this.beacon = { key, glyph };
   }
 
   sync(world: World, field: Field) {
@@ -267,7 +244,7 @@ export class Renderer {
     s.held.forEach((h) => h.glyph.dispose());
   }
 
-  /** the model for a machine, the bench or the hub; rebuilt when its type changes, turned when its facing does */
+  /** the model for a machine or the Workbench; rebuilt when its type changes, turned when its facing does */
   private show(x: number, y: number, z: number, b: Block, world: World) {
     // plates are drawn all together by the field view
     const kind: ModelKind | null =
@@ -277,7 +254,7 @@ export class Renderer {
           : b.type === 'duct'
             ? ductKind(world, x, y, z, b.facing)
             : b.type
-        : b.kind === 'hub' || b.kind === 'bench'
+        : b.kind === 'workbench'
           ? b.kind
           : null;
     const key = at(x, y, z);
@@ -312,7 +289,7 @@ export class Renderer {
         riding.add(b.item.id);
         let g = this.riders.get(b.item.id);
         if (!g) {
-          g = new Glyph(b.item.mv, 0.5);
+          g = riderFor(b.item.stack);
           this.riders.set(b.item.id, g);
           this.scene.add(g);
         }
@@ -340,26 +317,62 @@ export class Renderer {
     s.last = { work, timer };
   }
 
-  /** small glyphs at a machine's ports: A at the back, B at a side, the output at the front, a fixed B above */
+  /** small glyphs of what a machine holds, at its ports: what came in at the back and sides, what waits at the front */
   private syncHeld(s: Shown, m: Machine) {
     const want = new Map<string, Multivector>();
-    if (m.type === 'extractor' && m.out) want.set('out', m.out.mv);
-    if ('a' in m) {
-      if (m.a) want.set('a', m.a);
-      if (m.b) want.set('b', m.b);
-      if (m.out) want.set('out', m.out);
-      if (m.fixed) want.set('fixed', m.fixed);
+    const put = (slot: string, st: Stack | null | undefined) => {
+      const mv = st ? shownMv(st) : null;
+      if (mv && !mv.isZero()) want.set(slot, mv);
+    };
+    switch (m.type) {
+      case 'extractor':
+        put('out', m.out);
+        break;
+      case 'detector':
+      case 'orrery':
+        put('a', m.a);
+        put('out', m.out);
+        break;
+      case 'mill':
+        put('a', m.x);
+        put('side', m.side);
+        put('out', m.out);
+        break;
+      case 'packer':
+        m.slots.forEach((st, r) => put(`s${r}`, st));
+        put('out', m.out);
+        break;
+      case 'unpacker':
+        put('item', m.item ?? m.queue[0]);
+        break;
+      case 'press':
+        put('bed', m.bed);
+        break;
+      case 'splitter':
+        put('item', m.item);
+        break;
+      case 'sorter':
+        put('item', m.item);
+        if (m.filter) want.set('filter', m.filter);
+        break;
+      case 'probe':
+        // the last reading floats above it
+        if (m.reading && !m.reading.isZero()) want.set('reading', m.reading);
+        put('out', m.out);
+        break;
+      case 'charge':
+      case 'wire':
+      case 'antenna':
+        put('fixed', m.slot);
+        break;
+      // merger slots are kept by side relative to its facing, crossing slots by the side they came in from
+      case 'merger':
+        m.slots.forEach((st, r) => put(`s${r}`, st));
+        break;
+      case 'crossing':
+        m.slots.forEach((st, d) => put(`s${relative(m.facing, d as Dir)}`, st));
+        break;
     }
-    if ((m.type === 'splitter' || m.type === 'sorter') && m.item) want.set('item', m.item);
-    if (m.type === 'sorter' && m.filter) want.set('filter', m.filter);
-    // a probe shows its last reading above it, and holds the one it's waiting to send
-    if (m.type === 'probe') {
-      if (m.reading && !m.reading.isZero()) want.set('reading', m.reading);
-      if (m.out) want.set('out', m.out);
-    }
-    // merger slots are kept by side relative to its facing, crossing slots by the side they came in from
-    if (m.type === 'merger') m.slots.forEach((mv, r) => mv && want.set(`s${r}`, mv));
-    if (m.type === 'crossing') m.slots.forEach((mv, d) => mv && want.set(`s${relative(m.facing, d as Dir)}`, mv));
     for (const [slot, h] of s.held) {
       const mv = want.get(slot);
       if (mv && mv.key() === h.key) continue;
@@ -370,7 +383,7 @@ export class Renderer {
     for (const [slot, mv] of want) {
       if (s.held.has(slot)) continue;
       const glyph = new Glyph(mv, slot === 'fixed' ? 0.6 : slot === 'filter' ? 0.3 : 0.42);
-      glyph.position.copy(s.model.anchors[slot]);
+      glyph.position.copy(s.model.anchors[slot] ?? s.model.anchors.out);
       s.model.group.add(glyph);
       s.held.set(slot, { key: mv.key(), glyph });
     }
@@ -385,10 +398,6 @@ export class Renderer {
       for (const h of s.held.values()) h.glyph.tick(dt);
     }
     for (const g of this.riders.values()) g.tick(dt);
-    if (this.beacon) {
-      this.beacon.glyph.tick(dt);
-      this.beacon.glyph.rotation.y += dt * 0.8;
-    }
     this.steam.update(dt);
     this.renderer.render(this.scene, this.camera);
   }
@@ -430,4 +439,30 @@ function ridePosition(x: number, y: number, z: number, facing: Dir, from: Dir | 
   }
   const k = t - 0.5;
   return c.add(new THREE.Vector3(ox * k, 0, oz * k));
+}
+
+/** the multivector to draw for a stack: an element's value, a reading or a card's multivector */
+function shownMv(s: Stack): Multivector | null {
+  if (s.item.kind === 'element') return valueOf(s);
+  if (s.item.kind === 'reading') return s.item.mv;
+  if (s.item.kind === 'card') return s.item.mv;
+  return null;
+}
+
+type Rider = THREE.Object3D & { tick(dt: number): void; dispose(): void };
+
+/** what rides a duct: the glyph of its multivector, or a small brass crate for anything else */
+function riderFor(s: Stack): Rider {
+  const mv = shownMv(s);
+  if (mv) return new Glyph(mv, 0.5);
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.8, roughness: 0.4 }));
+  return Object.assign(crate, {
+    tick(dt: number) {
+      crate.rotation.y += dt;
+    },
+    dispose() {
+      crate.geometry.dispose();
+      (crate.material as THREE.Material).dispose();
+    },
+  });
 }

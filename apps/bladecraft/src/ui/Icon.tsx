@@ -1,9 +1,11 @@
-// Item icons: the same pictures as the 3D glyphs (glyph.ts), drawn in a fixed isometric view so
-// e₁ (east) runs to the lower right, e₂ (north) to the upper right and e₃ straight up.
+// Item icons. A single blade is drawn like its 3D glyph (glyph.ts), in a fixed isometric view so e₁
+// (east) runs to the lower right, e₂ (north) to the upper right and e₃ straight up. A multivector of
+// several blades is drawn as a small grade card: the 2×4 layout with scalar and vectors on top and
+// their duals below, a dot lit for each blade it holds. Cards show their holes in the same layout.
 import type { ReactNode } from 'react';
 import type { Multivector } from '@codecraft/ga';
 import { parts, vectorColour } from '../game/glyph';
-import type { Item, MachineType } from '../game/items';
+import type { Item, MachineType, Verb } from '../game/items';
 import { MACHINE_LOOK, hex } from '../game/looks';
 
 type V3 = [number, number, number];
@@ -16,21 +18,100 @@ const norm = (v: V3): V3 => {
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const fit = (x: number, max: number) => (max * x) / (1 + x);
 
+/** the grade-card layout: blade numbers by position, scalar and vectors on top, their duals below */
+export const GRADE_CARD = [
+  [0, 1, 2, 4],
+  [7, 6, 5, 3],
+];
+const DOT_COLOUR: Record<number, string> = { 0: '#fff6d0', 1: '#ff5a5a', 2: '#5aff8a', 4: '#5aa8ff', 3: '#00fff0', 5: '#00fff0', 6: '#00fff0', 7: '#ffd25a' };
+const VERB_MARK: Record<Verb, string> = { join: '∧', meter: '⌋', multiply: '×', turn: '↻', reverse: '~', sieve: '⟨⟩' };
+
 export function Icon({ item, size = 44 }: { item: Item; size?: number }) {
   return (
     <svg viewBox="-24 -24 48 48" width={size} height={size} aria-hidden="true">
       {item.kind === 'lattice' && <Cube colour="#00fff0" fill="#06131c" />}
-      {item.kind === 'bench' && (
+      {item.kind === 'workbench' && (
         <>
-          <Cube colour="#ffd25a" fill="#0b1420" />
-          <text x="0" y="5" textAnchor="middle" fontSize="13" fill="#ffd25a" fontWeight="700">
-            ∧
+          <Cube colour="#ffd25a" fill="#2a1a0c" />
+          <text x="0" y="5" textAnchor="middle" fontSize="12" fill="#ffd25a" fontWeight="700">
+            ∧⌋
           </text>
         </>
       )}
-      {item.kind === 'element' && <ElementIcon mv={item.mv} />}
+      {item.kind === 'element' && (item.mv.terms.size > 1 ? <GradeCard mv={item.mv} /> : <ElementIcon mv={item.mv} />)}
       {item.kind === 'machine' && <MachineIcon type={item.type} />}
+      {item.kind === 'card' && <CardIcon mv={item.mv} verb={item.verb} right={item.right} />}
+      {item.kind === 'plate' && <PlateIcon verb={item.verb} />}
+      {item.kind === 'blank' && <CardIcon mv={null} verb={null} right={false} />}
+      {item.kind === 'reading' && <ReadingIcon mv={item.mv} />}
     </svg>
+  );
+}
+
+/** a multivector of several blades: the grade card with a dot lit per blade */
+export function GradeCard({ mv, holes = false }: { mv: Multivector; holes?: boolean }) {
+  return (
+    <g>
+      <rect x="-21" y="-14" width="42" height="28" rx="4" fill={holes ? '#6b5426' : '#13202c'} stroke="#ffd25a" strokeWidth="1.4" />
+      {GRADE_CARD.map((row, r) =>
+        row.map((blade, c) => {
+          const c0 = mv.terms.get(blade);
+          const x = -15 + c * 10;
+          const y = -6 + r * 12;
+          if (!c0) return <circle key={blade} cx={x} cy={y} r="3" fill="none" stroke={holes ? '#3a2a10' : '#2c4256'} strokeWidth="1" />;
+          return holes ? (
+            <circle key={blade} cx={x} cy={y} r="3.4" fill="#05080d" />
+          ) : (
+            <circle key={blade} cx={x} cy={y} r="3.6" fill={c0.n < 0 ? 'none' : DOT_COLOUR[blade]} stroke={DOT_COLOUR[blade]} strokeWidth="1.4" />
+          );
+        }),
+      )}
+    </g>
+  );
+}
+
+function CardIcon({ mv, verb, right }: { mv: Multivector | null; verb: Verb | null; right: boolean }) {
+  return (
+    <g transform="rotate(-8)">
+      <rect x="-20" y="-15" width="40" height="30" rx="3" fill="#b8913f" stroke="#ffe08a" strokeWidth="1.2" />
+      <path d="M-20,-9 L-14,-15" stroke="#5a4418" strokeWidth="1.2" />
+      {mv &&
+        GRADE_CARD.map((row, r) =>
+          row.map((blade, c) => (mv.terms.has(blade) ? <circle key={blade} cx={-12 + c * 8} cy={-6 + r * 8} r="2.6" fill="#05080d" /> : null)),
+        )}
+      {verb && (
+        <text x="0" y="14" textAnchor="middle" fontSize="8" fontWeight="700" fill="#2a1a08">
+          {VERB_MARK[verb]}
+          {right ? ' ⟵' : ''}
+        </text>
+      )}
+    </g>
+  );
+}
+
+function PlateIcon({ verb }: { verb: Verb }) {
+  return (
+    <g>
+      <rect x="-19" y="-11" width="38" height="22" rx="2" fill="#2f3a44" stroke="#c9d3dc" strokeWidth="1.4" />
+      <rect x="-15" y="-7" width="30" height="14" rx="1" fill="#e2bf68" />
+      <text x="0" y="5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#2a1a08">
+        {VERB_MARK[verb]}
+      </text>
+    </g>
+  );
+}
+
+function ReadingIcon({ mv }: { mv: Multivector }) {
+  return (
+    <g>
+      <path d="M-17,-18 L13,-18 L17,-14 L17,18 L-17,18 z" fill="#efe6cc" stroke="#7a6a40" strokeWidth="1.2" />
+      <g transform="translate(0,2) scale(0.72)">
+        <GradeCard mv={mv} />
+      </g>
+      <text x="0" y="-9" textAnchor="middle" fontSize="6" fontWeight="700" fill="#3a2a10">
+        F = E + IB
+      </text>
+    </g>
   );
 }
 
@@ -72,7 +153,7 @@ function Cube({ colour, fill }: { colour: string; fill: string }) {
   );
 }
 
-function ElementIcon({ mv }: { mv: Multivector }) {
+export function ElementIcon({ mv }: { mv: Multivector }) {
   const p = parts(mv);
   const s = 20;
   const out: ReactNode[] = [];

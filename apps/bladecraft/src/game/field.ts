@@ -12,6 +12,7 @@
 // resistance in the outermost cells so waves are mostly absorbed there rather than echoing back.
 // Sources are scaled by 2π so a charge q gives E ≈ q/r and a current I gives B ≈ I/r.
 import { G3, Multivector, Q } from '@codecraft/ga';
+import { valueOf, type Stack } from './items.ts';
 import type { Block, Machine, World } from './world.ts';
 
 export const WAVE_SPEED = 4; // blocks per second
@@ -66,14 +67,14 @@ export function fieldText(v: FieldValue, digits = 1) {
   return { e: terms(v.e, ['e₁', 'e₂', 'e₃']), ib: terms(v.b, ['e₂₃', 'e₃₁', 'e₁₂']) };
 }
 
-/** readings made by probes, so the hub can tell them from elements made any other way */
-const readings = new WeakSet<Multivector>();
-export const isReading = (mv: Multivector) => readings.has(mv);
-
-/** the e₃ coefficient of an element: the current a wire or antenna carries */
-export const upPart = (mv: Multivector | null) => (mv ? Q.toNumber(mv.terms.get(4) ?? Q.ZERO) : 0);
-/** the scalar part of an element: a charge */
-export const scalarPart = (mv: Multivector | null) => (mv ? Q.toNumber(mv.terms.get(0) ?? Q.ZERO) : 0);
+/** the e₃ coefficient of what a source holds: the current a wire or antenna carries */
+export const upPart = (s: Stack | null) => coefficient(s, 4);
+/** the scalar part of what a source holds: a charge */
+export const scalarPart = (s: Stack | null) => coefficient(s, 0);
+function coefficient(s: Stack | null, blade: number) {
+  const mv = s ? valueOf(s) : null;
+  return mv ? Q.toNumber(mv.terms.get(blade) ?? Q.ZERO) : 0;
+}
 
 class Region {
   readonly keys: string[] = [];
@@ -251,10 +252,10 @@ export class Field {
     for (const r of this.regions) {
       r.cells.forEach(([x, y, z], i) => {
         const b = world.get(x, y, z);
-        const rho = b?.kind === 'machine' && b.type === 'charge' ? 2 * Math.PI * scalarPart(b.charge) : 0;
+        const rho = b?.kind === 'machine' && b.type === 'charge' ? 2 * Math.PI * scalarPart(b.slot) : 0;
         if (rho !== r.rho[i]) r.settled = false;
         r.rho[i] = rho;
-        const target = b?.kind === 'machine' && (b.type === 'wire' || b.type === 'antenna') ? 2 * Math.PI * upPart(b.current) : 0;
+        const target = b?.kind === 'machine' && (b.type === 'wire' || b.type === 'antenna') ? 2 * Math.PI * upPart(b.slot) : 0;
         r.amp[i] += (target - r.amp[i]) * Math.min(1, RAMP * dt);
         r.j3[i] = b?.kind === 'machine' && b.type === 'antenna' ? r.amp[i] * Math.sin(2 * Math.PI * FREQUENCIES[b.frequency] * this.time) : r.amp[i];
       });
@@ -271,10 +272,8 @@ export class Field {
     return w ? w[0].value(w[1]) : ZERO_VALUE;
   }
 
-  /** what a probe at (x, y, z) reads now, marked as a reading */
+  /** what a probe at (x, y, z) reads now */
   read(x: number, y: number, z: number) {
-    const mv = reading(this.at(x, y, z));
-    readings.add(mv);
-    return mv;
+    return reading(this.at(x, y, z));
   }
 }

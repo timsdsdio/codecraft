@@ -1,21 +1,22 @@
 # Bladecraft
 
-A single-player factory game in the spirit of Minecraft with a tech mod, or shapez, minus the
-nature: no trees, animals or weather. The things you extract, carry and deliver are elements of a
-geometric algebra, and machines combine them. The name comes from *blades*, the basis elements of
-the algebra (e₁, e₁₂, e₁₂₃, …).
+A single-player factory game in the spirit of Minecraft with a tech mod, minus the nature: no
+trees, animals or weather. The things you extract, carry and store are elements of a geometric
+algebra, and machines combine them. The name comes from *blades*, the basis elements of the
+algebra (e₁, e₁₂, e₁₂₃, …).
 
 The game is also a way to learn geometric algebra, and through it quantum states and
 electromagnetism: a rotor is a qubit, the Hopf fibration is something you build and watch, and
-Maxwell's four equations are one equation for one multivector field that you lay out on the floor. Every idea it uses is something you build
-with, and the hub's orders and an optional achievement tree walk through the ideas in order.
+Maxwell's four equations are one equation for one multivector field that you lay out on the floor.
+Nothing does algebra for you until you have done it by hand: you learn each product by sorting
+blades on the Workbench, and only then can you press it into a card for a machine.
 
 ## The algebra
 
-Elements are from G(3), the geometric algebra of 3D space. An element is a sum of a scalar, a
-vector (e₁, e₂, e₃), a bivector (e₁₂, e₁₃, e₂₃) and a trivector (e₁₂₃), each with a coefficient.
-Coefficients are exact rationals (`packages/ga`), because elements only stack with exactly equal
-elements and the hub only counts exact matches; floating point would split them.
+Elements are from G(3), the geometric algebra of 3D space. The eight blades are 1, e₁, e₂, e₃, e₂₃,
+e₁₃, e₁₂ and e₁₂₃, and every element is a sum of blades, each with a weight. Weights are exact
+rationals (`packages/ga`), because things stack only when one is an exact multiple of the other;
+floating point would split them.
 
 The algebra axes are tied to the world: e₁ points east, e₂ north and e₃ up. An e₁ is drawn as an
 arrow pointing east wherever it appears. These three form a right-handed set, so the orientation of
@@ -30,64 +31,171 @@ Every element is drawn by grade, layered when it mixes grades (`glyph.ts`, `Icon
 | bivector | a square of plane with a ring of arrows for its orientation, turning slowly in its own plane |
 | trivector | a wire cube, gold for +e₁₂₃, magenta for −e₁₂₃ |
 
+An element of more than one blade is shown in inventory slots as its *grade card*: a brass card
+with one hole for each of the eight blades, laid out by grade, punched where the element has a
+weight.
+
 `packages/ga` handles any signature, so the projective algebra G(3,0,1) (points, lines, planes and
 every rigid motion) is already available to the game.
 
+## Items and stacks
+
+Inventory works the way it does in Minecraft (`slots.ts`): 27 storage slots and a hotbar of 9, a
+stack carried on the cursor, left click to pick up or put down a whole stack, right click to take
+half or put down one, shift click to move a stack across the screen, a drag to spread a stack over
+several slots, and a number key over a slot to swap it with that hotbar slot. On a touch screen a
+tap is a left click, a long press a right click and a double tap a shift click.
+
+One rule decides what stacks (`items.ts`): two things stack when one is a multiple of the other,
+and stacking adds them. An element's slot holds a base with whole, coprime weights (its first
+weight positive) and a count that is the element's overall weight, so 3e₁ is a stack of 3 on e₁,
+2e₁ + 4e₂ is a stack of 2 on e₁ + 2e₂, and ½e₁ is a stack of ½. Putting −e₁ on e₁ cancels them. The
+count is a rational, so the number on a slot can read −2 or ½. A stack holds up to 64.
+
+Other items stack the usual way: lattice, machines, blank cards, verb plates, cards and probe
+readings. A probe reading is its own kind of item, not an element, so it records what the field
+was without becoming an ingredient.
+
 ## The world
 
-A 64 × 64 grid of lattice, three blocks deep. The hub stands just north of spawn, with one deposit
-of each raw element a few steps away: e₁ (red) and e₂ (green) beside the hub, the scalar 1 (pale)
-and e₃ (blue) beside spawn. More deposits stand further out. Every block says what it is on its
-faces: deposits carry their element in large letters, and machines show their symbol on top and
-OUT, A, B or DEPOSIT on their sides.
+A 64 × 64 grid of lattice, three blocks deep. Spawn is in the middle, with one deposit of each raw
+element a few steps away: e₁ (red) to the left, e₂ (green) to the right, and the scalar 1 (pale)
+and e₃ (blue) a little further back on each side. More deposits stand further out. Every block says
+what it is on its faces: deposits carry their element in large letters, and machines show their
+symbol on top and their ports on their sides.
 
 Deposits never run out. Breaking one by hand gives one of its element and leaves it standing, so
 no world can be stuck without a source. Breaking anything else picks it up, along with whatever it
-holds. You start with an algebra bench and 32 lattice; each delivered order adds 16 more. The world,
-inventory, factory and achievements are saved in the browser.
+holds; breaking the ground gives lattice. You start with a Workbench and 32 lattice. The world,
+inventory, factory and goals are saved in the browser.
+
+## The Workbench
+
+The Workbench is where you do algebra by hand and build everything else. Its Hand work tab has
+three parts.
+
+- **The tray** adds. Drop elements on it and they add into one multivector, laid out on the grade
+  card: the scalar, the three vectors, the three bivectors and the trivector each in their own cell.
+  Clicking a cell takes that blade back out (right click takes one), and Take all packs the whole sum
+  into one item. This is how e₁ and e₂ become e₁ + e₂.
+- **The grid** multiplies. One factor goes in the slot at the top of the left edge and its blades
+  run down the column; the other goes in the slot at the end of the bottom edge and its blades run
+  along the row. Each cell is one blade of the left factor times one blade of the right, as in
+  matrix multiplication, and the result is every cell added up. Make takes both factors, whole
+  stacks and all, so 2e₁ by 3e₂ under Join makes 6e₁₂; put down one with a right click to multiply
+  just one.
+- **The rail** shows one cell worked out. The two blades are laid out as tiles, e₁, e₂ and e₃ each
+  in its axis colour, left-factor tiles first and outlined. Tap ⇄ to swap two neighbours, which
+  flips the sign, or × to cancel two matching tiles, until the row is in order. What is left is the
+  cell's blade and sign.
+
+The grid has three rules, and they differ only in which cancellations they allow (`products.ts`):
+
+| Rule | Symbol | A pair may cancel | e₁ by e₁ | e₁ by e₁₂ | e₁₂ by e₁ |
+|---|---|---|---|---|---|
+| Join | ∧ | never: a cell that needs to cancel is 0 | 0 | 0 | 0 |
+| Meter | ⌋ | always, and every left-factor tile must cancel | 1 | e₂ | 0 |
+| Multiply | (none) | always | 1 | e₂ | −e₂ |
+
+Join is the outer product, Meter the left contraction and Multiply the geometric product, and the
+rail shows why Multiply is Meter and Join together. A rule starts out unknown: its cells show ? and
+Make does nothing. Sorting three cells by hand under a rule learns it (a cell that opens already in
+order doesn't count), after which the grid fills in by itself and the rail can sort for you. Join is
+learnable from the start, Meter once Join is learned, and Multiply once Meter is.
+
+The Build tab lists recipes (`recipes.ts`). Each costs lattice and elements you could only have
+made by hand, and each verb plate also needs its rule learned, so a machine can never do anything
+you haven't done yourself:
+
+| Builds | Costs |
+|---|---|
+| Workbench | 4 lattice |
+| 4 ducts | 2 lattice |
+| Extractor | 4 lattice, the scalar 1 |
+| Store | 4 lattice |
+| Packer, Unpacker | 4 lattice, a vector off the axes (e₁ + e₂) |
+| Splitter, Merger | 6 lattice |
+| Sorter | 6 lattice, the scalar 1 |
+| Crossing | 4 lattice |
+| Card Press | 6 lattice, a bivector |
+| 4 blank cards | 2 lattice |
+| Mill | 6 lattice, a trivector |
+| Join plate | 2 lattice, a bivector; Join learned |
+| Meter plate | 2 lattice, the scalar 1; Meter learned |
+| Sieve plate | 2 lattice, a vector off the axes; Meter learned |
+| Multiply plate | 2 lattice, a rotor; Multiply learned |
+| Reverse plate | 2 lattice, a bivector; Multiply learned |
+| Turn plate | 2 lattice, 2 rotors; Multiply learned |
+| Detector | 4 lattice, 2 × e₃ |
+| Fibration orrery | 4 lattice, a rotor, a trivector |
+| 8 field plates | 4 lattice, a trivector |
+| Charge | 4 lattice, the scalar 1 |
+| Wire | 4 lattice, e₃ |
+| Antenna | 4 lattice, e₃, a rotor |
+| Field probe | 4 lattice, a vector, a bivector |
+
+## Cards
+
+Every multivector is also an operation. The Card Press turns one into a card (`cards.ts`): put the
+multivector M on its bed, a verb plate in its plate slot and blank cards in its blank slot, and
+press. The bed is used up, one blank is used, and the plate stays. The card is durable: a Mill runs
+it forever.
+
+| Verb | The card does to X | Notes |
+|---|---|---|
+| Join | M ∧ X | |
+| Meter | M ⌋ X | |
+| Multiply | M X | a Mill can turn it end to end to do X M |
+| Turn | M X M̃ / (M M̃) | turns X for a rotor M, mirrors it for a vector M; the size of M doesn't matter |
+| Reverse | X̃ | needs nothing on the bed |
+| Sieve | the grades of X that M has | M = e₁ + e₂ keeps the vector part |
 
 ## The factory
 
-Every machine faces one of four directions and pushes what it makes out of its front (OUT) into the
-block there. What a block takes depends on the side something arrives from (`factory.ts`):
+Every machine faces one of four directions and pushes what it makes out of its front into the
+block there. Ducts and machines carry whole stacks, so a stack of 5e₁ rides a duct as one item.
+What a block takes depends on the side something arrives from (`factory.ts`):
 
 | Block | Takes | Does |
 |---|---|---|
-| Extractor | nothing | with a deposit behind its DEPOSIT side, draws that element out every 1.5 s |
-| Duct | anything, from any side but its front, one at a time | carries it the way it points, 1.5 blocks a second |
-| Adder, Wedger, Multiplier | A from its back, B from either side | when A and B are both there, works for a second and outputs A + B, A ∧ B or A B |
-| Sandwich press | A from its back, B from either side | outputs B A B⁻¹: B turns (a rotor) or reflects (a vector) A |
-| Gate | A from its back, B from either side, or a preset gate | outputs B A: the gate B applied to the qubit state A |
-| Bloch projector | A from any side but its front | outputs A e₃ A⁻¹, the state's Bloch vector |
-| Detector | A from any side but its front | measures the state: outputs e₃ or −e₃ by the Born rule |
-| Fibration orrery | A from any side but its front | passes it through, drawing the Hopf fiber of each distinct state |
-| Splitter | anything, from its back | deals elements out of its front, left and right in turn, skipping a side that can't take one |
-| Merger | one element at a time from each of its back, left and right | sends them out of its front, taking each input in turn so none starves the others |
+| Extractor | nothing | with a deposit behind it, draws that blade out every 1.5 s |
+| Duct | anything, from any side but its front, one stack at a time | carries it the way it points, 1.5 blocks a second |
+| Store | anything, from any side, when all of the stack fits | holds 27 stacks; open it to take them by hand |
+| Packer | an element at its back, left and right | waits until every side that something feeds has delivered, then sends their sum as one multivector |
+| Unpacker | a multivector at its back | sends each of its blades out on its own |
+| Mill | an element at its back, and at either side when a live card is set | runs it through its cards (below) |
+| Detector | a qubit state, from any side but its front | measures it: sends e₃ or −e₃ by the Born rule |
+| Fibration orrery | anything, from any side but its front | passes it through, drawing the Hopf fiber of each distinct state |
+| Splitter | anything, from its back | deals stacks out of its front, left and right in turn, skipping a side that can't take one |
+| Merger | one stack at a time from each of its back, left and right | sends them out of its front, taking each input in turn so none starves the others |
 | Sorter | anything, from its back | sends matches out of one side (left or right, set in its panel) and everything else out of its front |
-| Crossing | one element at a time from each side | sends each out of the side opposite where it came in, so two lines can cross |
-| Charge | a scalar, from any side | in a field, holds that scalar as its charge |
+| Crossing | one stack at a time from each side | sends each out of the side opposite where it came in, so two lines can cross |
+| Charge | a scalar, from any side | in a field, holds that scalar as its charge, up to 8 either way |
 | Wire | a vector, from any side | in a field, carries a current up along e₃ as big as the vector's e₃ part |
 | Antenna | a vector, from any side | in a field, carries a current that swings up and down, as big as the vector's e₃ part at its peak |
-| Field probe | nothing | in a field, outputs a reading of the field where it stands once a second |
-| Collector | anything, up to 256 | stores it; its panel gives everything to you |
-| Hub | anything, from any side | counts elements that match its current order |
+| Field probe | nothing | in a field, sends a reading of the field where it stands once a second |
 
-A sorter matches either elements equal to a sample, picked in its panel from your elements and not
-used up, or every element of one kind: scalars, vectors, bivectors, trivectors or qubit states.
+**The Mill** holds four cards in two decks of two. Cards side by side in deck 1 each work on what
+arrives and their outputs add; deck 2 works on what deck 1 made, and its two cards add too. So
+Join with e₃ beside Multiply with e₁ makes e₃ ∧ X + e₁ X, and a Multiply card from 1 − e₁₂ in deck
+1 followed by a Multiply card from 1 + e₁₂, turned to multiply from the right, in deck 2 is a quarter
+turn about e₃ at twice the size. A Mill with no cards passes things straight through. A *live card* makes a Mill take
+two inputs: set it to a verb in the panel, and the Mill waits for an element at its side, presses it
+into a card of that verb on the spot, and adds it to deck 1. A Mill with a live Join card is a
+wedger of whatever two lines feed it. The Mill takes a quarter of a second per pair of blades it
+multiplies out, shown by a grid of lamps on its side that light one by one.
 
-A blocked output waits, and everything behind it backs up, so elements are never lost. Results of 0
-(e₁ ∧ e₁), sandwiches whose B has no inverse, anything that isn't a state sent to the projector or
-detector, and anything but a scalar sent to a charge or a vector sent to a wire or antenna vanish.
+A sorter matches either multiples of a sample, picked up in its panel from the element on your
+cursor and not used up, or every element of one kind: scalars, vectors, bivectors, trivectors or
+qubit states.
 
-An operation machine's panel can fix B to one of your elements. The machine then uses it for every
-A, so one duct of A is enough: a wedger with B fixed to e₃ wedges everything with e₃, and a sandwich
-press with B fixed to a rotor turns everything that passes through. Setting a fixed B takes one of
-that element from you; clearing it gives it back.
+A blocked output waits, and everything behind it backs up, so nothing is ever lost. A result of 0
+sends nothing.
 
 Placing a duct or machine points it the way you face, and Rotate (R on a keyboard) turns it a
 quarter turn before you place it; a placed machine's panel can rotate it too. An extractor turns
-itself so its DEPOSIT side is against the deposit you aimed at. A ghost outline shows where the block
-will go and which way it will face, red when it can't go there.
+itself so its back is against the deposit you aimed at. A ghost outline shows where the block will
+go and which way it will face, red when it can't go there.
 
 ## Qubits and the Hopf fibration
 
@@ -97,14 +205,15 @@ multiple of the other.
 
 - **Bloch vector.** R e₃ R⁻¹ is where the state points: the scalar 1 is |0⟩ (up, +e₃), e₂₃ is |1⟩
   (down), e₂₃ + e₁₂ is |+⟩ (along e₁). The map R ↦ R e₃ R⁻¹ from the 3-sphere of unit rotors to the
-  2-sphere of directions is the Hopf fibration, and the Bloch projector is that map as a machine.
+  2-sphere of directions is the Hopf fibration. A Turn card pressed from R does exactly this to e₃,
+  so a Mill with a live Turn card, fed the state at its side and e₃ at its back, finds it.
 - **Phase.** e₁₂ commutes with e₃, so R(1 + e₁₂) points the same way as R. Multiplying on the right by
-  a phase moves the state round a circle, its Hopf fiber, while its Bloch vector stays put. A
-  multiplier with B fixed to 1 + e₁₂ is a phase shifter.
-- **Gates.** A rotor on the left, G R, turns the Bloch vector by the rotation G stands for. A gate
-  machine's panel sets one of five presets, which cost nothing: X ∝ e₂₃ (half turn about e₁),
-  Y ∝ e₃₁, Z ∝ e₁₂, H ∝ e₂₃ + e₁₂ (half turn about the e₁ + e₃ diagonal) and S ∝ 1 − e₁₂ (quarter
-  turn about e₃). None needs a square root, because the length of a state doesn't matter.
+  a phase moves the state round a circle, its Hopf fiber, while its Bloch vector stays put. A Mill
+  with a Multiply card from 1 + e₁₂, turned to multiply from the right, is a phase shifter.
+- **Gates.** A rotor on the left, G R, turns the Bloch vector by the rotation G stands for, so a
+  gate is a Multiply card: X ∝ e₂₃ (half turn about e₁), Y ∝ e₃₁, Z ∝ e₁₂, H ∝ e₂₃ + e₁₂ (half turn
+  about the e₁ + e₃ diagonal) and S ∝ 1 − e₁₂ (quarter turn about e₃). None needs a square root,
+  because the length of a state doesn't matter.
 - **Measurement.** The detector finds a state up with probability (1 + z)/2, z being its Bloch
   vector's e₃ part, and outputs e₃ or −e₃.
 - **The orrery.** It draws the fiber of each distinct state that passes through: all of that state's
@@ -145,37 +254,35 @@ for example, is an edge too.
 
 The field is computed in floating point, not exactly, because it changes smoothly in time. A probe
 turns it back into an element: its reading is F with each coefficient rounded to the nearest half,
-such as e₁ + ½e₂₃. A field too weak to round to a half reads 0, which a probe doesn't send. The hub
-can tell a probe's readings from equal elements made any other way.
+such as e₁ + ½e₂₃. A field too weak to round to a half reads 0, which a probe doesn't send. A
+reading is its own kind of item, so it can't be passed off as an element made any other way.
 
 Each plate draws E as an orange arrow and IB as a translucent blue disc lying in the plane of the
 bivector, and glows brighter where the field holds more energy (E² + B²). Around a charge the arrows
 point out like spines; around a wire the discs stand upright and fan out from it like the pages of an
 open book; an antenna sends rings of glow outward. The line under the crosshair gives a plate's E
-and IB to one decimal place. A source's panel sets it from one of your elements, as well as by duct.
+and IB to one decimal place. A source takes its element by duct or by hand, in its panel's slot.
 
 ## How machines look
 
 Machines are small steampunk contraptions built in code from primitives (`models.ts`): riveted iron
 cabinets with brass corner posts, copper pipe ports, and brass plates engraved with what each part
-is (A and B on the input ports, OUT over the output chute, the operation's symbol on top). A
-reflection map makes the brass, copper and iron read as metal. Each model animates from the state
-the factory leaves in its block, so you can see what a machine is doing without opening it:
+is. A reflection map makes the brass, copper and iron read as metal. Each model animates from the
+state the factory leaves in its block, so you can see what a machine is doing without opening it:
 
 | Machine | Model | Moves when |
 |---|---|---|
-| Extractor | a brass pump with a flywheel, pressure gauge and chimney | its rod strokes and flywheel turns once per element drawn; it stops when there's no deposit or its output is blocked |
-| Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed elements ride it; elements coming in from a side ride round the bend |
-| Splitter | a low iron box with belts out of three sides and a brass pointer on a gear | the pointer turns to the side the next element will go out of |
+| Extractor | a brass pump with a flywheel, pressure gauge and chimney | its rod strokes and flywheel turns once per blade drawn; it stops when there's no deposit or its output is blocked |
+| Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed stacks ride it; stacks coming in from a side ride round the bend |
+| Store | a banded tank with a gauge window | the level in the window rises as it fills |
+| Packer | a low iron box with a copper hopper and a + plate | the lid drops as a sum leaves |
+| Unpacker | the same box with a brass comb wheel | the wheel turns while blades are still to send |
+| Splitter | the same box with belts out of three sides and a brass pointer on a gear | the pointer turns to the side the next stack will go out of |
 | Merger | the same box with a copper hopper and a pointer | the pointer turns to the input whose turn it is |
-| Sorter | the same box with a glass jar holding its sample, a flap, and a lamp on each side | the flap swings toward the side the element in hand is going; the lit lamp marks the side matches leave by |
+| Sorter | the same box with a glass jar holding its sample, a flap, and a lamp on each side | the flap swings toward the side the stack in hand is going; the lit lamp marks the side matches leave by |
 | Crossing | two belts crossing under a brass turntable plate | the belts run |
-| Adder | two meshing gears | they spin up while it works |
-| Wedger | a stamping press over an anvil | the ram rises while it works and stamps down as the operation completes |
-| Multiplier | a spoked flywheel with a ball governor | it spins up while it works, and the governor's balls fly out |
-| Sandwich press | two jaws over a turntable | the jaws close while it works and the turntable turns a quarter per operation |
-| Gate | a cabinet with a valve handwheel and a plate showing the gate's letter | the wheel turns through the gate's angle (a half turn, or a quarter for S) each operation |
-| Bloch projector | a glass globe with brass meridians on a column | its pointer swings to the Bloch vector of the last state |
+| Card Press | a ram over a brass bed punched in the grade-card layout, with a plate naming its verb | the ram hovers low and trembles when a plate and blanks are loaded |
+| Mill | an iron cabinet with four brass cards standing in slots, a lamp grid on its side and a lever | the cards in its slots show; the lever is up when a live card is set; the lamps light one by one as it works |
 | Detector | a Stern–Gerlach magnet (a wedge pole over a trough pole) with two lamps | the up or down lamp flashes with each measurement |
 | Fibration orrery | a brass tripod and crown | the Hopf fibers of the states it has seen turn slowly above it |
 | Charge | a brass ball on a ceramic insulator | it glows red when positive and blue when negative, brighter for more charge |
@@ -183,117 +290,59 @@ the factory leaves in its block, so you can see what a machine is doing without 
 | Antenna | a coil and a mast with a crossbar and a spark ball | its beads rock up and down with the current, and the ball sparks at each peak |
 | Field probe | a glass bulb at the field's height, a gauge and a spout | the bulb flashes with each reading, the needle shows how strong it is, and the reading floats above it |
 | Field plate | a steel slab with a brass border | it glows with the field's energy, under the field's arrows and discs |
-| Collector | a banded tank with a gauge window | the level in the window rises as it fills |
-| Hub | an iron pedestal with armillary rings | the rings turn around the element it wants, and its lamp flashes as one arrives |
-| Bench | a wooden workbench with a vice and a gear train | its gears turn slowly |
+| Workbench | a wooden workbench with a vice and a gear train | its gears turn slowly |
 
-Every operation machine has a pilot lamp in its own colour that glows while it works, a small stand
-holding its fixed B above it, and lets off a puff of steam each time it finishes an operation.
-
-## Building machines
-
-Machines are built at the algebra bench from lattice and elements you made yourself, so doing an
-operation by hand once is what lets you automate it (`recipes.ts`):
-
-| Machine | Costs |
-|---|---|
-| 4 ducts | 2 lattice |
-| Extractor | 4 lattice, the scalar 1 |
-| Collector | 4 lattice |
-| Adder | 4 lattice, a vector off the axes (e₁ + e₂) |
-| Wedger | 4 lattice, a bivector (e₁ ∧ e₂) |
-| Multiplier | 4 lattice, a rotor (scalar + bivector, such as e₁(e₁ + e₂)) |
-| Sandwich press | 4 lattice, a rotor, a trivector (e₁ ∧ e₂ ∧ e₃) |
-| Gate | 4 lattice, a rotor |
-| Bloch projector | 4 lattice, e₃, a rotor |
-| Detector | 4 lattice, 2 × e₃ |
-| Fibration orrery | 4 lattice, a rotor, a trivector |
-| Splitter, Merger | 6 lattice |
-| Sorter | 6 lattice, the scalar 1 |
-| Crossing | 4 lattice |
-| 8 field plates | 4 lattice, a trivector |
-| Charge | 4 lattice, the scalar 1 |
-| Wire | 4 lattice, e₃ |
-| Antenna | 4 lattice, e₃, a rotor |
-| Field probe | 4 lattice, a vector, a bivector |
-
-The bench's other tab combines elements by hand. It has two inputs, A and B, and shows the result
-of every operation at once, so you can compare them before making one: A + B, A − B, A ∧ B, A B,
-A ⌋ B (left contraction), A B A⁻¹ (A applied to B) and Ã (reverse). Making something uses one A
-and one B; a result of 0 uses nothing.
-
-## Hub orders
-
-The hub's orders run in sequence (`orders.ts`), and each hint names the machine and inputs that make
-the element. The first seven want exactly one element. The qubit orders want *states*: any state
-pointing the right way counts, whatever its phase, and the fiber order wants states in different
-phases. The field orders want probe readings of a given kind. Above the hub floats the element it
-wants, or for a state order the Bloch vector it should point along, or for a field order an example
-reading.
-
-1. e₁: an extractor and ducts
-2. e₁ + e₂: an adder
-3. e₁₂: a wedger
-4. −e₁₂: a wedger with its inputs swapped
-5. 1 + e₁₂: a multiplier, e₁ times e₁ + e₂
-6. e₁₂₃: two wedgers in a row
-7. −e₁ + e₂: a sandwich press with B fixed to 1 − e₁₂, fed e₁ + e₂
-8. 8 states pointing up (|0⟩): the scalar 1, in any phase
-9. 8 states pointing down (|1⟩): a gate set to X, fed |0⟩
-10. 8 states along e₁ (|+⟩): a gate set to H
-11. |+⟩ in 4 different phases: multipliers with B fixed to 1 + e₁₂, ideally watched by an orrery
-12. 8 states along e₂ (|+i⟩): H, then S
-13. 4 readings of an electric field (a vector): a charge and a probe in a field
-14. 4 readings of a magnetic field (a bivector): a wire and a probe
-15. 4 readings of a wave (a vector and a bivector together): an antenna and a probe
+The Mill and the detector have a pilot lamp in their own colour that glows while they work. They,
+the orrery and the extractor let off a puff of steam each time they finish.
 
 ## The guide
 
-A card in the corner says what to do next. Until the first element reaches the hub it walks through
-the first steps: take the scalar 1, place the bench, build an extractor, place it on the e₁ deposit,
-build ducts, duct e₁ to the hub. After that it shows the hub's current order with its progress and
-hint. Each step is worked out from the state of the world (`guide.ts`), so it always matches what
-the player has done. Tapping the card hides or shows the hint.
+A card in the corner says what to do next. It walks through five first steps: take the scalar 1,
+place the Workbench, build an extractor, place it on the e₁ deposit, and duct it into a Store.
+After that it suggests the next goal from the tree. Each step is worked out from the state of the
+world (`guide.ts`), so it always matches what the player has done. Tapping the card hides or shows
+the hint.
 
-## Achievements
+## Goals
 
-Achievements are optional. Like Minecraft's advancements they don't lock anything; they are
-milestones arranged as a tree, where an achievement's parents are the ideas it builds on. Any
-achievement can be earned at any time, and the algebra ones count whether the operation happens at
-the bench or in a machine. An achievement appears in the tree once one of its parents is earned.
-Each has a goal and a lesson, and the lesson can be read at any time (`achievements.ts`).
+Goals are milestones in the style of Minecraft tech mods: a goal is met when the thing it names
+exists, in your inventory, on your cursor, in a Store, inside a machine, or placed in the world
+(`achievements.ts`). The game looks every second. Nothing is used up, nothing is delivered, and
+nothing is locked behind a goal, so a factory can be laid out however suits it. A met goal stays
+met.
 
-The tree has four branches, each drawn as its own band read left to right, with lines from each
-idea to the ones that build on it and a count of how many are earned. An idea that follows one in
+Goals are arranged as a tree, where a goal's parents are the ideas it builds on. A goal appears
+once one of its parents is met. Each has a goal and a lesson, and the lesson can be read at any
+time. The tree has four branches, each drawn as its own band read left to right, with lines from
+each idea to the ones that build on it and a count of how many are met. An idea that follows one in
 another branch says so on its card ("after Volume").
 
-- **The algebra** starts from a vector and the three axes, and branches into adding vectors,
-  squaring a vector and the outer product. It leads through orientation, a vector wedged with itself,
-  the reverse, bivectors squaring to −1, contraction, mixed grades, rotors, applying rotors,
-  reflections, volume and duality (multiplying by e₁₂₃).
-- **The factory** starts with breaking ground: building a machine, having a machine do an
-  operation, delivering to the hub and filling an order, then each logistics block (a splitter
-  sending to a side, a merger passing a side input, a sorter sending a match aside, a crossing) and
-  finishing the algebra orders.
-- **Qubits** grows from rotors: projecting a state, a gate, the Born rule, a new phase, a Hopf fiber,
-  linked rings, and finishing the qubit orders.
-- **The field** grows from duality, one achievement per grade of Maxwell's equation: a field,
-  Gauss's law, Ampère's law, Faraday's law, no monopoles, and one equation, for a reading with E and
-  IB together. Filling the hub's last order ends it.
+- **The algebra** starts from a vector and the three axes, then a heavy stack, a vector off the
+  axes, learning Join, a bivector and a negative one, a trivector, learning Meter, −1, a rotor,
+  learning Multiply, a Multiply card from a trivector (duality) and a Reverse card.
+- **The factory** starts with placing the Workbench: an extractor and a Store, stacks of 64 blades
+  and of 16(e₁ + e₂), all four logistics blocks, a pressed card, a Mill, 16 rotors in one stack, and
+  cards that turn and mirror.
+- **Qubits** grows from rotors: |1⟩, |+⟩, |+i⟩, a new phase, the Born rule (8e₃ and −8e₃ from a
+  detector) and linked rings in an orrery.
+- **The field** grows from duality (a Multiply card from the trivector): a field plate, then one
+  reading per grade of Maxwell's equation that a probe can see: E alone, IB alone, and E and IB
+  together.
 
 ## Controls
 
 - **Desktop:** WASD moves, the mouse looks (pointer lock), space jumps. Left click breaks (or takes
-  from a deposit). Right click uses the bench, a machine or the hub, and otherwise places; shift +
+  from a deposit). Right click opens the Workbench or a machine, and otherwise places; shift +
   right click always places. R rotates what you're about to place, 1–9 or the wheel pick a hotbar
-  slot, E opens your items, L the achievements. Esc frees the mouse to click the buttons on screen
+  slot, E opens your inventory, L the goals. Esc frees the mouse to click the buttons on screen
   while the game carries on, and clicking the world takes it back. The line under the crosshair
   names the block and what each click would do to it.
 - **Touch:** the left side is a joystick wherever the thumb lands; the right side drags to look.
   Buttons on the right appear when they apply: Break (Take on a deposit), Use, Place, Rotate when
-  holding a machine, and Jump.
-- **Items:** tap a hotbar slot to hold it; tap the held slot again to open your items. There, tap
-  an item to see what it is and move it between the hotbar and storage, or swap it with another slot.
+  holding a machine, and Jump. Tap a hotbar slot to hold it; tap the held slot again to open your
+  inventory.
+- **Inventory and panels:** as in Minecraft, described under Items and stacks. Every panel shows
+  your inventory below its own slots, so shift click moves a stack between the two.
 
 ## Open questions
 
@@ -304,6 +353,5 @@ another branch says so on its card ("after Volume").
 - Should several qubits come next, through the tensor product, with entangling gates?
 - Should projective GA arrive as a second tier of orders, with points, lines and planes as
   elements and translations as machines?
-- How should larger coefficients be made: an adder looping back on itself, or a scaling machine?
-- Should the hub's orders keep going after the last one, generated from the elements the player has
-  already made?
+- What should power machines: steam from a boiler that burns scalars, or nothing at all?
+- Should a Store be able to send its stacks out by duct, so it can buffer a line?
