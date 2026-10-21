@@ -21,6 +21,10 @@ each with its reason. When one changes, edit its entry.
 - **Elements are from G(3), not projective GA.** Vectors are arrows and bivectors are planes, the
   usual way geometric algebra is taught. In projective GA a vector is a plane, which is a confusing
   first step.
+- **Machine models are built from primitives in code, with no model files.** Boxes, cylinders,
+  tori, extruded gears and canvas-textured plates keep the bundle small, need no loaders, and give
+  every moving part a name the animation can drive directly from the factory's state. Geometry and
+  materials are shared between all copies of a machine.
 - **One block per operation.** An adder, a wedger and a multiplier look different and are told apart
   at a glance, which a single machine with a chosen operation would not allow.
 - **Machines cost elements you made by hand**, so the bench's hand operations are the tech tree: a

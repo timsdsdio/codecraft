@@ -1,19 +1,20 @@
-// Draws the world. Static blocks (lattice, deposits, the bench) go into one merged mesh of their
-// visible faces, rebuilt whenever blocks change. Machines, ducts and the hub are their own objects,
-// with faces that say what they are: a symbol on top, OUT on the output side, A and B on the inputs.
-// Elements riding ducts and waiting in machines are drawn as their glyphs every frame.
+// Draws the world. Lattice and deposits go into one merged mesh of their visible faces, rebuilt
+// whenever blocks change. Machines, the bench and the hub are animated models (models.ts), driven
+// every frame by what the factory left in their blocks. Elements riding belts and waiting in machines
+// are drawn as their glyphs, and finished operations let off steam.
 import * as THREE from 'three';
 import type { Multivector } from '@codecraft/ga';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Glyph, parts } from './glyph';
-import type { MachineType } from './items';
-import { MACHINE_LOOK, hex } from './looks';
+import { hex } from './looks';
+import { Steam, buildModel, scrollBelts, type Model } from './models';
 import { STEP, opposite, type Block, type Dir, type Machine, type World } from './world';
 
 const PX = 128;
 
 // --- static block faces ------------------------------------------------------------------------
 
-const TILES = ['lattice', 'e1', 'e2', 'e3', 'one', 'other', 'bench', 'benchTop'] as const;
+const TILES = ['lattice', 'e1', 'e2', 'e3', 'one', 'other'] as const;
 type Tile = (typeof TILES)[number];
 const tileIndex = (t: Tile) => TILES.indexOf(t);
 
@@ -66,12 +67,6 @@ function atlas() {
   }
   x = tileIndex('other') * PX;
   frame(g, x, '#202020', '#ffffff', 8);
-  x = tileIndex('bench') * PX;
-  frame(g, x, '#0b1420', '#ffd25a', 8);
-  label(g, 'BENCH', x + PX / 2, PX / 2, 24, '#ffd25a');
-  x = tileIndex('benchTop') * PX;
-  frame(g, x, '#0b1420', '#ffd25a', 8);
-  label(g, '∧ +', x + PX / 2, PX / 2 + 2, 48, '#ffd25a');
   const tex = new THREE.CanvasTexture(cv);
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -90,11 +85,7 @@ const depositTile = (mv: Multivector): Tile => {
   return 'other';
 };
 
-function faceTile(b: Block, normalY: number): Tile {
-  if (b.kind === 'deposit') return depositTile(b.mv);
-  if (b.kind === 'bench') return normalY === 1 ? 'benchTop' : 'bench';
-  return 'lattice';
-}
+const faceTile = (b: Block): Tile => (b.kind === 'deposit' ? depositTile(b.mv) : 'lattice');
 
 // each face: its normal and its four corners (counter-clockwise seen from outside)
 const FACES: { n: [number, number, number]; c: [number, number, number][] }[] = [
@@ -106,63 +97,19 @@ const FACES: { n: [number, number, number]; c: [number, number, number][] }[] = 
   { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]] },
 ];
 
-const isStatic = (b: Block) => b.kind === 'lattice' || b.kind === 'deposit' || b.kind === 'bench';
-
-// --- machine faces -----------------------------------------------------------------------------
-
-const faceCache = new Map<string, THREE.MeshLambertMaterial>();
-
-/** a face texture: a frame in the machine's colour with a word or symbol, and optionally an arrow */
-function face(colour: number, text: string, opts: { size?: number; arrow?: boolean; dim?: boolean } = {}) {
-  const key = `${colour}|${text}|${opts.size}|${opts.arrow}|${opts.dim}`;
-  let m = faceCache.get(key);
-  if (m) return m;
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = PX;
-  const g = cv.getContext('2d')!;
-  frame(g, 0, opts.dim ? '#05090f' : '#0a1722', hex(colour), 8);
-  if (opts.arrow) {
-    // an arrow pointing toward the texture's right edge, which faces the output on the top face
-    g.fillStyle = hex(colour);
-    g.globalAlpha = 0.35;
-    g.beginPath();
-    g.moveTo(PX - 14, PX / 2);
-    g.lineTo(PX - 44, PX / 2 - 26);
-    g.lineTo(PX - 44, PX / 2 + 26);
-    g.closePath();
-    g.fill();
-    g.globalAlpha = 1;
-  }
-  if (text) label(g, text, PX / 2, PX / 2 + 3, opts.size ?? 40, hex(colour));
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  m = new THREE.MeshLambertMaterial({ map: tex });
-  faceCache.set(key, m);
-  return m;
-}
-
-/** materials for a box in BoxGeometry order (+x, −x, +y, −y, +z, −z), local +x being the output */
-function machineFaces(type: MachineType) {
-  const { colour, symbol } = MACHINE_LOOK[type];
-  const top = face(colour, symbol, { size: symbol.length > 4 ? 26 : 40, arrow: type !== 'collector' });
-  const plain = face(colour, '', { dim: true });
-  if (type === 'extractor') return [face(colour, 'OUT ▶', { size: 34 }), face(colour, 'DEPOSIT', { size: 22 }), top, plain, plain, plain];
-  if (type === 'collector') {
-    const side = face(colour, 'IN', { size: 40 });
-    return [side, side, top, plain, side, side];
-  }
-  const b = face(colour, 'B', { size: 64 });
-  return [face(colour, 'OUT ▶', { size: 34 }), face(colour, 'A', { size: 64 }), top, plain, b, b];
-}
+const isStatic = (b: Block) => b.kind === 'lattice' || b.kind === 'deposit';
 
 // --- the renderer ------------------------------------------------------------------------------
 
 interface Shown {
-  group: THREE.Group;
+  model: Model;
   /** small glyphs for what a machine holds, by slot */
   held: Map<string, { key: string; glyph: Glyph }>;
+  /** the last state seen, to notice an operation finishing */
+  last: { work: number; timer: number };
 }
+
+const at = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
 export class Renderer {
   readonly renderer: THREE.WebGLRenderer;
@@ -176,6 +123,9 @@ export class Renderer {
   private ghostBox: THREE.LineSegments;
   private ghostArrow: THREE.Mesh;
   private beacon: { key: string; glyph: Glyph } | null = null;
+  private hubDelivered = -1;
+  private steam: Steam;
+  private world: World | null = null;
   private builtVersion = -1;
   private time = 0;
 
@@ -184,10 +134,15 @@ export class Renderer {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.scene.background = new THREE.Color(0x03070f);
     this.scene.fog = new THREE.Fog(0x03070f, 24, 70);
-    this.scene.add(new THREE.HemisphereLight(0xcff6ff, 0x0a1420, 1.8));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    // a soft room to reflect, so brass and copper read as metal
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.8;
+    this.scene.add(new THREE.HemisphereLight(0xcff6ff, 0x0a1420, 1.5));
+    const sun = new THREE.DirectionalLight(0xfff0d8, 1.6);
     sun.position.set(0.4, 1, 0.25);
     this.scene.add(sun, this.terrain);
+    this.steam = new Steam(this.scene);
 
     this.selection = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.01, 1.01, 1.01)), new THREE.LineBasicMaterial({ color: 0xffffff }));
     this.selection.visible = false;
@@ -226,8 +181,14 @@ export class Renderer {
     (this.ghostArrow.material as THREE.MeshBasicMaterial).color.setHex(colour);
   }
 
-  /** the element the hub's current order wants, floating above it */
-  hubWants(at: [number, number, number], want: Multivector | null) {
+  /** the element the hub's current order wants, turning inside its rings; a flash and steam when one arrives */
+  hubWants(pos: [number, number, number], want: Multivector | null, delivered: number) {
+    const hub = this.shown.get(at(...pos));
+    if (delivered > this.hubDelivered && this.hubDelivered >= 0 && hub) {
+      hub.model.pulse?.();
+      this.steam.puff(new THREE.Vector3(pos[0] + 0.5, pos[1] + 0.9, pos[2] + 0.5), 3);
+    }
+    this.hubDelivered = delivered;
     const key = want?.key() ?? '';
     if (this.beacon?.key === key) return;
     if (this.beacon) {
@@ -236,13 +197,14 @@ export class Renderer {
       this.beacon = null;
     }
     if (!want) return;
-    const glyph = new Glyph(want, 1.3);
-    glyph.position.set(at[0] + 0.5, at[1] + 1.9, at[2] + 0.5);
+    const glyph = new Glyph(want, 1);
+    glyph.position.set(pos[0] + 0.5, pos[1] + 1.5, pos[2] + 0.5);
     this.scene.add(glyph);
     this.beacon = { key, glyph };
   }
 
   sync(world: World) {
+    this.world = world;
     if (world.version !== this.builtVersion) this.rebuild(world);
     this.syncContents(world);
   }
@@ -258,15 +220,14 @@ export class Renderer {
 
     for (const [x, y, z, b] of world.entries()) {
       if (!isStatic(b)) {
-        const at = `${x},${y},${z}`;
-        seen.add(at);
-        this.show(at, x, y, z, b);
+        seen.add(at(x, y, z));
+        this.show(x, y, z, b);
         continue;
       }
       for (const f of FACES) {
         const n = world.get(x + f.n[0], y + f.n[1], z + f.n[2]);
         if (n && isStatic(n)) continue;
-        const tile = tileIndex(faceTile(b, f.n[1]));
+        const tile = tileIndex(faceTile(b));
         const shade = f.n[1] === 1 ? 1 : f.n[1] === -1 ? 0.45 : f.n[0] ? 0.85 : 0.7;
         const base = pos.length / 3;
         f.c.forEach(([cx, cy, cz], i) => {
@@ -278,10 +239,10 @@ export class Renderer {
         idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
       }
     }
-    for (const [at, s] of this.shown) {
-      if (seen.has(at)) continue;
+    for (const [key, s] of this.shown) {
+      if (seen.has(key)) continue;
       this.remove(s);
-      this.shown.delete(at);
+      this.shown.delete(key);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -294,39 +255,32 @@ export class Renderer {
   }
 
   private remove(s: Shown) {
-    this.scene.remove(s.group);
+    this.scene.remove(s.model.group);
     s.held.forEach((h) => h.glyph.dispose());
   }
 
-  /** the object for a machine or the hub; rebuilt when its type or facing changes */
-  private show(at: string, x: number, y: number, z: number, b: Block) {
-    const sig = b.kind === 'machine' ? `${b.type}:${b.facing}` : b.kind;
-    const existing = this.shown.get(at);
-    if (existing && existing.group.userData.sig === sig) return;
-    if (existing) this.remove(existing);
-    const group = new THREE.Group();
-    group.userData.sig = sig;
-    group.position.set(x + 0.5, y, z + 0.5);
-    if (b.kind === 'hub') {
-      const gold = 0xffd25a;
-      const side = face(gold, 'HUB', { size: 44 });
-      const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [side, side, face(gold, '★', { size: 60 }), side, side, side]);
-      box.position.y = 0.5;
-      group.add(box);
-    } else if (b.kind === 'machine' && b.type === 'duct') {
-      group.add(ductModel());
-      group.rotation.y = b.facing * (Math.PI / 2);
-    } else if (b.kind === 'machine') {
-      const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), machineFaces(b.type));
-      box.position.y = 0.5;
-      group.add(box);
-      group.rotation.y = b.facing * (Math.PI / 2);
+  /** the model for a machine, the bench or the hub; rebuilt when its type changes, turned when its facing does */
+  private show(x: number, y: number, z: number, b: Block) {
+    const kind = b.kind === 'machine' ? b.type : b.kind === 'hub' || b.kind === 'bench' ? b.kind : null;
+    if (!kind) return;
+    const key = at(x, y, z);
+    let s = this.shown.get(key);
+    if (s && s.model.group.userData.kind !== kind) {
+      this.remove(s);
+      s = undefined;
     }
-    this.scene.add(group);
-    this.shown.set(at, { group, held: new Map() });
+    if (!s) {
+      const model = buildModel(kind);
+      model.group.userData.kind = kind;
+      model.group.position.set(x + 0.5, y, z + 0.5);
+      this.scene.add(model.group);
+      s = { model, held: new Map(), last: { work: 0, timer: 0 } };
+      this.shown.set(key, s);
+    }
+    s.model.group.rotation.y = b.kind === 'machine' ? b.facing * (Math.PI / 2) : 0;
   }
 
-  /** elements riding ducts and waiting in machines */
+  /** elements riding belts and waiting in machines, and steam when an operation finishes */
   private syncContents(world: World) {
     const riding = new Set<number>();
     for (const [x, y, z] of world.active.values()) {
@@ -336,14 +290,16 @@ export class Renderer {
         riding.add(b.item.id);
         let g = this.riders.get(b.item.id);
         if (!g) {
-          g = new Glyph(b.item.mv, 0.55);
+          g = new Glyph(b.item.mv, 0.5);
           this.riders.set(b.item.id, g);
           this.scene.add(g);
         }
         g.position.copy(ridePosition(x, y, z, b.facing, b.item.from, b.item.t));
       }
-      const s = this.shown.get(`${x},${y},${z}`);
-      if (s) this.syncHeld(s, b);
+      const s = this.shown.get(at(x, y, z));
+      if (!s) continue;
+      this.syncHeld(s, b);
+      this.noticeFinished(s, b);
     }
     for (const [id, g] of this.riders) {
       if (riding.has(id)) continue;
@@ -353,76 +309,62 @@ export class Renderer {
     }
   }
 
-  /** small glyphs on a machine's faces: A at the back, B at a side, the output at the front, a fixed B above */
+  private noticeFinished(s: Shown, m: Machine) {
+    const work = 'work' in m ? m.work : 0;
+    const timer = m.type === 'extractor' ? m.timer : 0;
+    // an operation that just finished resets its work; an extractor that just drew resets its timer
+    const finished = (s.last.work > 0.5 && work === 0) || (s.last.timer > 0.5 && timer < s.last.timer);
+    if (finished) this.steam.puff(s.model.group.localToWorld(s.model.chimney.clone()), m.type === 'extractor' ? 3 : 6);
+    s.last = { work, timer };
+  }
+
+  /** small glyphs at a machine's ports: A at the back, B at a side, the output at the front, a fixed B above */
   private syncHeld(s: Shown, m: Machine) {
     const want = new Map<string, Multivector>();
     if (m.type === 'extractor' && m.out) want.set('out', m.out.mv);
-    if (m.type === 'adder' || m.type === 'wedger' || m.type === 'multiplier' || m.type === 'sandwich') {
+    if ('a' in m) {
       if (m.a) want.set('a', m.a);
       if (m.b) want.set('b', m.b);
       if (m.out) want.set('out', m.out);
       if (m.fixed) want.set('fixed', m.fixed);
     }
-    const place: Record<string, [number, number, number]> = { a: [-0.72, 0.5, 0], b: [0, 0.5, 0.72], out: [0.72, 0.5, 0], fixed: [0, 1.45, 0] };
     for (const [slot, h] of s.held) {
       const mv = want.get(slot);
       if (mv && mv.key() === h.key) continue;
-      s.group.remove(h.glyph);
+      s.model.group.remove(h.glyph);
       h.glyph.dispose();
       s.held.delete(slot);
     }
     for (const [slot, mv] of want) {
       if (s.held.has(slot)) continue;
-      const glyph = new Glyph(mv, slot === 'fixed' ? 0.8 : 0.42);
-      glyph.position.set(...place[slot]);
-      s.group.add(glyph);
+      const glyph = new Glyph(mv, slot === 'fixed' ? 0.6 : 0.42);
+      glyph.position.copy(s.model.anchors[slot as keyof Model['anchors']]);
+      s.model.group.add(glyph);
       s.held.set(slot, { key: mv.key(), glyph });
     }
   }
 
   render(dt: number) {
     this.time += dt;
-    for (const s of this.shown.values()) for (const h of s.held.values()) h.glyph.tick(dt);
+    scrollBelts(dt);
+    for (const [key, s] of this.shown) {
+      const [x, y, z] = key.split(',').map(Number);
+      s.model.update(this.world?.get(x, y, z), dt, this.time);
+      for (const h of s.held.values()) h.glyph.tick(dt);
+    }
     for (const g of this.riders.values()) g.tick(dt);
     if (this.beacon) {
       this.beacon.glyph.tick(dt);
       this.beacon.glyph.rotation.y += dt * 0.8;
-      this.beacon.glyph.position.y += Math.sin(this.time * 2) * 0.002;
     }
+    this.steam.update(dt);
     this.renderer.render(this.scene, this.camera);
   }
 }
 
-/** a duct: a low glass tube along local +x with chevrons showing the way it carries */
-function ductModel() {
-  const g = new THREE.Group();
-  const tube = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 0.34, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x0a2a33, transparent: true, opacity: 0.35, depthWrite: false }),
-  );
-  tube.position.y = 0.19;
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 0.34, 0.5)), new THREE.LineBasicMaterial({ color: 0x00fff0 }));
-  edges.position.y = 0.19;
-  g.add(tube, edges);
-  const chevron = new THREE.Shape();
-  chevron.moveTo(-0.08, -0.16);
-  chevron.lineTo(0.12, 0);
-  chevron.lineTo(-0.08, 0.16);
-  chevron.lineTo(-0.02, 0);
-  chevron.closePath();
-  const geo = new THREE.ShapeGeometry(chevron);
-  for (const x of [-0.28, 0.12]) {
-    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x00fff0, side: THREE.DoubleSide }));
-    m.rotation.x = -Math.PI / 2; // lie flat on top, pointing +x
-    m.position.set(x, 0.365, 0);
-    g.add(m);
-  }
-  return g;
-}
-
-/** where an element is along a duct, riding just above it: in from its entry side to the middle, then out the front */
+/** where an element is along a belt, riding on it: in from its entry side to the middle, then out the front */
 function ridePosition(x: number, y: number, z: number, facing: Dir, from: Dir | null, t: number) {
-  const c = new THREE.Vector3(x + 0.5, y + 0.62, z + 0.5);
+  const c = new THREE.Vector3(x + 0.5, y + 0.5, z + 0.5);
   const [ox, oz] = STEP[facing];
   const entry = from ?? opposite(facing);
   const [ix, iz] = STEP[entry];
@@ -433,4 +375,3 @@ function ridePosition(x: number, y: number, z: number, facing: Dir, from: Dir | 
   const k = t - 0.5;
   return c.add(new THREE.Vector3(ox * k, 0, oz * k));
 }
-
