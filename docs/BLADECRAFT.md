@@ -5,8 +5,9 @@ nature: no trees, animals or weather. The things you extract, carry and deliver 
 geometric algebra, and machines combine them. The name comes from *blades*, the basis elements of
 the algebra (e₁, e₁₂, e₁₂₃, …).
 
-The game is also a way to learn geometric algebra. Every idea it uses is something you build with,
-and the hub's orders and an optional achievement tree walk through the ideas in order.
+The game is also a way to learn geometric algebra, and through it quantum states: a rotor is a qubit,
+and the Hopf fibration is something you build and watch. Every idea it uses is something you build
+with, and the hub's orders and an optional achievement tree walk through the ideas in order.
 
 ## The algebra
 
@@ -55,11 +56,23 @@ block there. What a block takes depends on the side something arrives from (`fac
 | Duct | anything, from any side but its front, one at a time | carries it the way it points, 1.5 blocks a second |
 | Adder, Wedger, Multiplier | A from its back, B from either side | when A and B are both there, works for a second and outputs A + B, A ∧ B or A B |
 | Sandwich press | A from its back, B from either side | outputs B A B⁻¹: B turns (a rotor) or reflects (a vector) A |
+| Gate | A from its back, B from either side, or a preset gate | outputs B A: the gate B applied to the qubit state A |
+| Bloch projector | A from any side but its front | outputs A e₃ A⁻¹, the state's Bloch vector |
+| Detector | A from any side but its front | measures the state: outputs e₃ or −e₃ by the Born rule |
+| Fibration orrery | A from any side but its front | passes it through, drawing the Hopf fiber of each distinct state |
+| Splitter | anything, from its back | deals elements out of its front, left and right in turn, skipping a side that can't take one |
+| Merger | one element at a time from each of its back, left and right | sends them out of its front, taking each input in turn so none starves the others |
+| Sorter | anything, from its back | sends matches out of one side (left or right, set in its panel) and everything else out of its front |
+| Crossing | one element at a time from each side | sends each out of the side opposite where it came in, so two lines can cross |
 | Collector | anything, up to 256 | stores it; its panel gives everything to you |
 | Hub | anything, from any side | counts elements that match its current order |
 
+A sorter matches either elements equal to a sample, picked in its panel from your elements and not
+used up, or every element of one kind: scalars, vectors, bivectors, trivectors or qubit states.
+
 A blocked output waits, and everything behind it backs up, so elements are never lost. Results of 0
-(e₁ ∧ e₁) and sandwiches whose B has no inverse vanish.
+(e₁ ∧ e₁), sandwiches whose B has no inverse, and anything that isn't a state sent to the projector or
+detector vanish.
 
 An operation machine's panel can fix B to one of your elements. The machine then uses it for every
 A, so one duct of A is enough: a wedger with B fixed to e₃ wedges everything with e₃, and a sandwich
@@ -70,6 +83,30 @@ Placing a duct or machine points it the way you face, and Rotate (R on a keyboar
 quarter turn before you place it; a placed machine's panel can rotate it too. An extractor turns
 itself so its DEPOSIT side is against the deposit you aimed at. A ghost outline shows where the block
 will go and which way it will face, red when it can't go there.
+
+## Qubits and the Hopf fibration
+
+Any nonzero even element of G(3), R = a + b e₂₃ + c e₃₁ + d e₁₂, is a qubit state (`qubit.ts`). Its
+length doesn't matter, so states stay exact, and two states are the same when one is a positive
+multiple of the other.
+
+- **Bloch vector.** R e₃ R⁻¹ is where the state points: the scalar 1 is |0⟩ (up, +e₃), e₂₃ is |1⟩
+  (down), e₂₃ + e₁₂ is |+⟩ (along e₁). The map R ↦ R e₃ R⁻¹ from the 3-sphere of unit rotors to the
+  2-sphere of directions is the Hopf fibration, and the Bloch projector is that map as a machine.
+- **Phase.** e₁₂ commutes with e₃, so R(1 + e₁₂) points the same way as R. Multiplying on the right by
+  a phase moves the state round a circle, its Hopf fiber, while its Bloch vector stays put. A
+  multiplier with B fixed to 1 + e₁₂ is a phase shifter.
+- **Gates.** A rotor on the left, G R, turns the Bloch vector by the rotation G stands for. A gate
+  machine's panel sets one of five presets, which cost nothing: X ∝ e₂₃ (half turn about e₁),
+  Y ∝ e₃₁, Z ∝ e₁₂, H ∝ e₂₃ + e₁₂ (half turn about the e₁ + e₃ diagonal) and S ∝ 1 − e₁₂ (quarter
+  turn about e₃). None needs a square root, because the length of a state doesn't matter.
+- **Measurement.** The detector finds a state up with probability (1 + z)/2, z being its Bloch
+  vector's e₃ part, and outputs e₃ or −e₃.
+- **The orrery.** It draws the fiber of each distinct state that passes through: all of that state's
+  phases R(cos t + e₁₂ sin t), as points of the 3-sphere, projected stereographically into 3D. Each
+  fiber is a ring coloured by its Bloch point, with a bead for each phase seen on it. Rings of different
+  points never touch, yet every pair is linked. The 3-sphere is turned by a fixed rotor before
+  projecting, so that no common state's fiber passes through the projection point and becomes a line.
 
 ## How machines look
 
@@ -82,11 +119,19 @@ the factory leaves in its block, so you can see what a machine is doing without 
 | Machine | Model | Moves when |
 |---|---|---|
 | Extractor | a brass pump with a flywheel, pressure gauge and chimney | its rod strokes and flywheel turns once per element drawn; it stops when there's no deposit or its output is blocked |
-| Duct | a conveyor belt on an iron frame | the belt runs the way it carries, at the speed elements ride it |
+| Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed elements ride it; elements coming in from a side ride round the bend |
+| Splitter | a low iron box with belts out of three sides and a brass pointer on a gear | the pointer turns to the side the next element will go out of |
+| Merger | the same box with a copper hopper and a pointer | the pointer turns to the input whose turn it is |
+| Sorter | the same box with a glass jar holding its sample, a flap, and a lamp on each side | the flap swings toward the side the element in hand is going; the lit lamp marks the side matches leave by |
+| Crossing | two belts crossing under a brass turntable plate | the belts run |
 | Adder | two meshing gears | they spin up while it works |
 | Wedger | a stamping press over an anvil | the ram rises while it works and stamps down as the operation completes |
 | Multiplier | a spoked flywheel with a ball governor | it spins up while it works, and the governor's balls fly out |
 | Sandwich press | two jaws over a turntable | the jaws close while it works and the turntable turns a quarter per operation |
+| Gate | a cabinet with a valve handwheel and a plate showing the gate's letter | the wheel turns through the gate's angle (a half turn, or a quarter for S) each operation |
+| Bloch projector | a glass globe with brass meridians on a column | its pointer swings to the Bloch vector of the last state |
+| Detector | a Stern–Gerlach magnet (a wedge pole over a trough pole) with two lamps | the up or down lamp flashes with each measurement |
+| Fibration orrery | a brass tripod and crown | the Hopf fibers of the states it has seen turn slowly above it |
 | Collector | a banded tank with a gauge window | the level in the window rises as it fills |
 | Hub | an iron pedestal with armillary rings | the rings turn around the element it wants, and its lamp flashes as one arrives |
 | Bench | a wooden workbench with a vice and a gear train | its gears turn slowly |
@@ -108,6 +153,13 @@ operation by hand once is what lets you automate it (`recipes.ts`):
 | Wedger | 4 lattice, a bivector (e₁ ∧ e₂) |
 | Multiplier | 4 lattice, a rotor (scalar + bivector, such as e₁(e₁ + e₂)) |
 | Sandwich press | 4 lattice, a rotor, a trivector (e₁ ∧ e₂ ∧ e₃) |
+| Gate | 4 lattice, a rotor |
+| Bloch projector | 4 lattice, e₃, a rotor |
+| Detector | 4 lattice, 2 × e₃ |
+| Fibration orrery | 4 lattice, a rotor, a trivector |
+| Splitter, Merger | 6 lattice |
+| Sorter | 6 lattice, the scalar 1 |
+| Crossing | 4 lattice |
 
 The bench's other tab combines elements by hand. It has two inputs, A and B, and shows the result
 of every operation at once, so you can compare them before making one: A + B, A − B, A ∧ B, A B,
@@ -116,8 +168,11 @@ and one B; a result of 0 uses nothing.
 
 ## Hub orders
 
-The hub's orders run in sequence (`orders.ts`). Each asks for 8 of one element, and its hint names
-the machine and inputs that make it. The element the hub wants floats above it.
+The hub's orders run in sequence (`orders.ts`), and each hint names the machine and inputs that make
+the element. The first seven want exactly one element. The qubit orders want *states*: any state
+pointing the right way counts, whatever its phase, and the fiber order wants states in different
+phases. Above the hub floats the element it wants, or for a state order the Bloch vector it should
+point along.
 
 1. e₁: an extractor and ducts
 2. e₁ + e₂: an adder
@@ -126,6 +181,11 @@ the machine and inputs that make it. The element the hub wants floats above it.
 5. 1 + e₁₂: a multiplier, e₁ times e₁ + e₂
 6. e₁₂₃: two wedgers in a row
 7. −e₁ + e₂: a sandwich press with B fixed to 1 − e₁₂, fed e₁ + e₂
+8. 8 states pointing up (|0⟩): the scalar 1, in any phase
+9. 8 states pointing down (|1⟩): a gate set to X, fed |0⟩
+10. 8 states along e₁ (|+⟩): a gate set to H
+11. |+⟩ in 4 different phases: multipliers with B fixed to 1 + e₁₂, ideally watched by an orrery
+12. 8 states along e₂ (|+i⟩): H, then S
 
 ## The guide
 
@@ -146,7 +206,8 @@ Each has a goal and a lesson, and the lesson can be read at any time (`achieveme
 The tree starts with breaking ground and collecting the three axes, branches into adding vectors,
 squaring a vector and the outer product, and leads through bivectors squaring to −1, volume and
 mixed grades to rotors, applying rotors, reflections, and the factory: building a machine,
-delivering to the hub, filling an order and having a machine do an operation.
+delivering to the hub, filling an order and having a machine do an operation. From rotors a qubit
+branch grows: projecting a state, a gate, the Born rule, a new phase, a Hopf fiber and linked rings.
 
 ## Controls
 
@@ -163,8 +224,11 @@ delivering to the hub, filling an order and having a machine do an operation.
 
 ## Open questions
 
-- Should ducts split and merge (a splitter block, or ducts that alternate outputs), so one extractor
-  can feed both inputs of a machine?
+- Maxwell's equations are planned as a live field: a region of field plates where every cell holds
+  F = E + e₁₂₃B and steps by (∂ₜ + ∇)F = J, with charges, currents and oscillating sources as
+  machines, and the four equations taught as the scalar, vector, bivector and trivector parts of that
+  one. How big should a field region be, and how are its values shown without hiding the factory?
+- Should several qubits come next, through the tensor product, with entangling gates?
 - Should projective GA arrive as a second tier of orders, with points, lines and planes as
   elements and translations as machines?
 - How should larger coefficients be made: an adder looping back on itself, or a scaling machine?

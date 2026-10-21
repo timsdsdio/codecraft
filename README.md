@@ -4,7 +4,8 @@ This repository holds two games that share a look and a toolchain.
 
 **Bladecraft** is a block-building factory game where the items are elements of geometric algebra.
 Extractors draw vectors from deposits, ducts carry them into machines that add, wedge, multiply and
-rotate them, and a hub at spawn orders specific elements. Machines are built from elements you
+rotate them, and a hub at spawn orders specific elements, ending with qubit states built from gates
+and phases, whose Hopf fibers you can watch. Machines are built from elements you
 first made by hand, and an optional tree of achievements teaches the algebra as you play. Its
 design is in `docs/BLADECRAFT.md`.
 
@@ -46,8 +47,8 @@ The dev servers listen on the local network, so they also open on a phone at
 
 CodeCraft's game app also builds `window.html` (`/codecraft/window.html` in production): a test of
 whether a phone can look like a window into a box behind its screen. It moves the viewpoint with
-face tracking from the front camera, with the gyroscope, or with a finger. Phones only give the camera to `https://`
-pages, so open it through a deploy or a quick tunnel
+face tracking from the front camera, with the gyroscope, or with a finger. Phones only give the
+camera to `https://` pages, so open it through a deploy or a quick tunnel
 (`cloudflared tunnel --url http://localhost:5330`), not the local-network address.
 
 See `AGENTS.md` before writing or editing docs.

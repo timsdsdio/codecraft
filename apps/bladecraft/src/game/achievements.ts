@@ -2,7 +2,7 @@
 // Minecraft's advancements, nothing is locked behind them; an achievement can be earned at any time,
 // and the tree only shows how the ideas build on each other. A node is listed once one of its
 // parents is earned, so the next ideas come into view as you go.
-import type { Multivector } from '@codecraft/ga';
+import { G3, Multivector } from '@codecraft/ga';
 import type { MachineType } from './items.ts';
 import type { Op } from './ops.ts';
 import type { Block } from './world.ts';
@@ -14,7 +14,9 @@ export type GameEvent =
   | { type: 'build'; machine: MachineType }
   | { type: 'place'; block: Block }
   | { type: 'deliver'; mv: Multivector }
-  | { type: 'order'; index: number };
+  | { type: 'order'; index: number }
+  | { type: 'qubit'; kind: 'project' | 'gate' | 'measure'; input: Multivector; result: Multivector }
+  | { type: 'orrery'; seen: Multivector[] };
 
 export interface Achievement {
   id: string;
@@ -30,6 +32,11 @@ export interface Achievement {
 const isVector = (m: Multivector) => !m.isZero() && m.grades().join() === '1';
 const isBivector = (m: Multivector) => !m.isZero() && m.grades().join() === '2';
 const isRotor = (m: Multivector) => m.grades().join() === '0,2';
+const isEven = (m: Multivector) => !m.isZero() && m.grades().every((k) => k % 2 === 0);
+/** in span{1, e₁₂} with some e₁₂: a phase */
+const isPhase = (m: Multivector) => m.terms.has(3) && [...m.terms.keys()].every((b) => b === 0 || b === 3);
+const pointKey = (r: Multivector) => r.sandwich(el3)?.key() ?? '';
+const el3 = Multivector.e(G3, '3');
 const onAxis = (m: Multivector) => m.terms.size === 1;
 const negativeOnly = (m: Multivector) => [...m.terms.values()].every((c) => c.n < 0);
 
@@ -192,6 +199,64 @@ export const ACHIEVEMENTS: Achievement[] = [
       'A machine takes A from its back and B from its sides, or uses a fixed B set in its panel. With a fixed B, a wedger becomes "wedge everything with e₃" and a sandwich press "turn everything by this rotor".',
     parents: ['built'],
     test: (e) => e.type === 'craft' && e.by === 'machine',
+  },
+  {
+    id: 'qubit',
+    title: 'A qubit',
+    goal: 'Send a rotor through a Bloch projector.',
+    lesson:
+      'A rotor is a qubit state. R e₃ R⁻¹ is where it points, its Bloch vector: the scalar 1 points up (|0⟩), e₂₃ points down (|1⟩), and e₂₃ + e₁₂ points along e₁ (|+⟩). Its length never matters, so states stay exact.',
+    parents: ['quarter-turn'],
+    test: (e) => e.type === 'qubit' && e.kind === 'project',
+  },
+  {
+    id: 'quantum-gate',
+    title: 'Quantum gate',
+    goal: 'Have a gate machine act on a state.',
+    lesson:
+      'A gate is a rotor multiplied on the left, G R, and it turns the Bloch vector by the rotation G stands for: X is a half turn about e₁, H a half turn about the e₁ + e₃ diagonal, S a quarter turn about e₃.',
+    parents: ['qubit'],
+    test: (e) => e.type === 'qubit' && e.kind === 'gate',
+  },
+  {
+    id: 'born-rule',
+    title: 'Born rule',
+    goal: 'Measure a state with a detector.',
+    lesson:
+      'A detector finds a state up with probability (1 + z) / 2, z being its Bloch vector’s e₃ part: |0⟩ always, |1⟩ never, |+⟩ half the time. Only the Bloch vector matters, not the phase.',
+    parents: ['qubit'],
+    test: (e) => e.type === 'qubit' && e.kind === 'measure',
+  },
+  {
+    id: 'new-phase',
+    title: 'A new phase',
+    goal: 'Multiply a state on the right by a phase such as 1 + e₁₂.',
+    lesson:
+      'e₁₂ commutes with e₃, so R(1 + e₁₂) has the same Bloch vector as R: the state has moved without the point it shows moving. On the left, the same element would be a gate and turn the point.',
+    parents: ['qubit'],
+    test: (e) => e.type === 'craft' && e.op === 'product' && !!e.b && isEven(e.a) && isPhase(e.b) && isEven(e.result),
+  },
+  {
+    id: 'hopf-fiber',
+    title: 'Hopf fiber',
+    goal: 'Show an orrery two different states with the same Bloch vector.',
+    lesson:
+      'All the phases of one state form a circle in the 3-sphere of unit rotors, and R ↦ R e₃ R⁻¹ squashes each circle to one point of the Bloch sphere. That is the Hopf fibration; the orrery draws the circles, projected into 3D.',
+    parents: ['new-phase'],
+    test: (e) => {
+      if (e.type !== 'orrery') return false;
+      const keys = e.seen.map(pointKey);
+      return keys.some((k, i) => keys.indexOf(k) !== i);
+    },
+  },
+  {
+    id: 'linked',
+    title: 'Linked rings',
+    goal: 'Show an orrery states on two different Bloch points.',
+    lesson:
+      'The fibers of two different points never meet, yet every pair is linked: you can’t pull one ring off another without cutting it. The whole 3-sphere is filled with such rings, one for each point of the Bloch sphere.',
+    parents: ['hopf-fiber'],
+    test: (e) => e.type === 'orrery' && new Set(e.seen.map(pointKey)).size >= 2,
   },
 ];
 

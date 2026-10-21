@@ -8,9 +8,11 @@ import { Inventory, HOTBAR, element, itemName, placeable, type Item } from './it
 import { apply, type Op } from './ops';
 import { ORDERS } from './orders';
 import { Player, raycast, type Hit } from './player';
+import { GATES, bloch, type GateId } from './qubit';
 import { build, type Recipe } from './recipes';
 import { Renderer } from './render';
-import { HUB, STEP, World, blockName, contents, drop, newMachine, opposite, usable, DIR_NAMES, type Block, type Dir, type Machine } from './world';
+import { sortLabel } from './recipes';
+import { HUB, SINGLE_INPUT, STEP, World, blockName, contents, drop, newMachine, opposite, usable, DIR_NAMES, type Block, type Dir, type Machine, type SortMode } from './world';
 
 /** pointer lock returns a promise in newer browsers and nothing in older ones; either may refuse */
 function lock(el: HTMLElement) {
@@ -121,6 +123,8 @@ export class Game {
         this.emit({ type: 'deliver', mv });
         if (this.screen === 'hub' || this.screen === 'play') this.changed();
       },
+      qubit: (kind, input, result) => this.emit({ type: 'qubit', kind, input, result }),
+      orrery: (seen) => this.emit({ type: 'orrery', seen }),
       orderDone: (order, next) => {
         this.inventory.add({ kind: 'lattice' }, 16);
         this.toast(next ? `Order done: ${order.want}. Next: ${next.want}` : `All ${ORDERS.length} orders done!`, 'order');
@@ -383,12 +387,13 @@ export class Game {
     return this.panel ? this.world.get(...this.panel) : undefined;
   }
 
-  /** set an operation machine's fixed B from an inventory slot; the previous one comes back */
+  /** set an operation machine's fixed B from an inventory slot; the previous one comes back unless it was a preset gate */
   setFixed(slot: number | null) {
     const m = this.panelBlock;
     if (m?.kind !== 'machine' || !('fixed' in m)) return;
-    if (m.fixed) this.inventory.add(element(m.fixed));
+    if (m.fixed && !m.preset) this.inventory.add(element(m.fixed));
     m.fixed = null;
+    m.preset = null;
     if (slot !== null) {
       const it = this.inventory.take(slot);
       if (it?.kind === 'element') {
@@ -399,6 +404,41 @@ export class Game {
       }
     }
     this.inventoryChanged();
+  }
+
+  /** set a gate machine to one of the preset gates, which cost nothing */
+  setGate(id: GateId) {
+    const m = this.panelBlock;
+    if (m?.kind !== 'machine' || m.type !== 'gate') return;
+    this.setFixed(null);
+    m.fixed = GATES[id].rotor;
+    m.preset = id;
+    if (m.b) this.inventory.add(element(m.b));
+    m.b = null;
+    this.changed();
+  }
+
+  /** configure the open sorter: what it matches, its sample (copied from a slot, not used up), and which side matches leave by */
+  setSorter(change: { mode?: SortMode; sampleSlot?: number; side?: 1 | 3 }) {
+    const m = this.panelBlock;
+    if (m?.kind !== 'machine' || m.type !== 'sorter') return;
+    if (change.mode) m.mode = change.mode;
+    if (change.side) m.side = change.side;
+    if (change.sampleSlot !== undefined) {
+      const it = this.inventory.slots[change.sampleSlot]?.item;
+      if (it?.kind === 'element') {
+        m.filter = it.mv;
+        m.mode = 'same';
+      }
+    }
+    this.changed();
+  }
+
+  clearOrrery() {
+    const m = this.panelBlock;
+    if (m?.kind !== 'machine' || m.type !== 'orrery') return;
+    m.seen = [];
+    this.changed();
   }
 
   rotatePanel() {
@@ -447,7 +487,10 @@ export class Game {
     const p = this.screen === 'play' ? this.placement() : null;
     this.renderer.preview(p?.cell ?? null, p?.facing ?? null, p?.ok ?? false);
     // a count that only goes up: orders completed and elements toward the current one
-    this.renderer.hubWants(HUB, this.factory.order?.want ?? null, this.factory.hub.order * 1000 + this.factory.hub.delivered);
+    const order = this.factory.order;
+    // a state order shows where the state should point
+    const shows = order ? ((order.kind ?? 'exact') === 'exact' ? order.want : bloch(order.want)) : null;
+    this.renderer.hubWants(HUB, shows, this.factory.hub.order * 1000 + this.factory.hub.delivered);
     this.updatePrompt(p);
     this.renderer.sync(this.world);
     this.renderer.render(dt);
@@ -556,6 +599,14 @@ function machineNote(m: Machine, world: World, [x, y, z]: [number, number, numbe
   }
   if (m.type === 'collector') return ` · holds ${m.stored.reduce((n, s) => n + s.count, 0)}`;
   if (m.type === 'duct') return '';
-  const b = m.fixed ? `B fixed to ${m.fixed}` : m.b ? `B ${m.b}` : 'B empty';
+  if (m.type === 'splitter') return m.item ? ` · holding ${m.item}` : '';
+  if (m.type === 'merger' || m.type === 'crossing') {
+    const n = m.slots.filter(Boolean).length;
+    return n ? ` · holding ${n}` : '';
+  }
+  if (m.type === 'sorter') return ` · sends ${sortLabel(m.mode, m.filter)} ${m.side === 1 ? 'left' : 'right'}`;
+  if (m.type === 'orrery') return ` · ${m.seen.length} fiber${m.seen.length === 1 ? '' : 's'} shown`;
+  if (SINGLE_INPUT.includes(m.type)) return ` · A ${m.a ?? 'empty'}`;
+  const b = m.preset ? `gate ${m.preset}` : m.fixed ? `B fixed to ${m.fixed}` : m.b ? `B ${m.b}` : 'B empty';
   return ` · A ${m.a ?? 'empty'} · ${b}`;
 }

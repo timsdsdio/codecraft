@@ -9,6 +9,14 @@ export const MACHINE_LOOK: Record<MachineType, { colour: number; symbol: string 
   wedger: { colour: 0x00fff0, symbol: 'A∧B' },
   multiplier: { colour: 0xc78bff, symbol: 'AB' },
   sandwich: { colour: 0xffd25a, symbol: 'BAB⁻¹' },
+  gate: { colour: 0x5ad1ff, symbol: 'GATE' },
+  bloch: { colour: 0x9ad0ff, symbol: 'AeA⁻¹' },
+  detector: { colour: 0xff6a9a, symbol: 'MEASURE' },
+  orrery: { colour: 0xd7a6ff, symbol: 'HOPF' },
+  splitter: { colour: 0xffb347, symbol: 'SPLIT' },
+  merger: { colour: 0xffb347, symbol: 'MERGE' },
+  sorter: { colour: 0xffb347, symbol: 'SORT' },
+  crossing: { colour: 0xffb347, symbol: '' },
 };
 
 export const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;

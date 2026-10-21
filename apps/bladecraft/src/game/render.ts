@@ -1,13 +1,15 @@
 // Draws the world. Lattice and deposits go into one merged mesh of their visible faces, rebuilt
 // whenever blocks change. Machines, the bench and the hub are animated models (models.ts), driven
 // every frame by what the factory left in their blocks. Elements riding belts and waiting in machines
-// are drawn as their glyphs, and finished operations let off steam.
+// are drawn as their glyphs, and finished operations let off steam. A duct fed only from one side
+// is drawn as a corner, and elements coming in from a side ride round the bend.
 import * as THREE from 'three';
 import type { Multivector } from '@codecraft/ga';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Glyph, parts } from './glyph';
 import { hex } from './looks';
-import { Steam, buildModel, scrollBelts, type Model } from './models';
+import { relative, rel, outputs } from './factory';
+import { Steam, buildModel, curvePoint, scrollBelts, type Model, type ModelKind } from './models';
 import { STEP, opposite, type Block, type Dir, type Machine, type World } from './world';
 
 const PX = 128;
@@ -221,7 +223,7 @@ export class Renderer {
     for (const [x, y, z, b] of world.entries()) {
       if (!isStatic(b)) {
         seen.add(at(x, y, z));
-        this.show(x, y, z, b);
+        this.show(x, y, z, b, world);
         continue;
       }
       for (const f of FACES) {
@@ -260,8 +262,9 @@ export class Renderer {
   }
 
   /** the model for a machine, the bench or the hub; rebuilt when its type changes, turned when its facing does */
-  private show(x: number, y: number, z: number, b: Block) {
-    const kind = b.kind === 'machine' ? b.type : b.kind === 'hub' || b.kind === 'bench' ? b.kind : null;
+  private show(x: number, y: number, z: number, b: Block, world: World) {
+    const kind: ModelKind | null =
+      b.kind === 'machine' ? (b.type === 'duct' ? ductKind(world, x, y, z, b.facing) : b.type) : b.kind === 'hub' || b.kind === 'bench' ? b.kind : null;
     if (!kind) return;
     const key = at(x, y, z);
     let s = this.shown.get(key);
@@ -328,6 +331,11 @@ export class Renderer {
       if (m.out) want.set('out', m.out);
       if (m.fixed) want.set('fixed', m.fixed);
     }
+    if ((m.type === 'splitter' || m.type === 'sorter') && m.item) want.set('item', m.item);
+    if (m.type === 'sorter' && m.filter) want.set('filter', m.filter);
+    // merger slots are kept by side relative to its facing, crossing slots by the side they came in from
+    if (m.type === 'merger') m.slots.forEach((mv, r) => mv && want.set(`s${r}`, mv));
+    if (m.type === 'crossing') m.slots.forEach((mv, d) => mv && want.set(`s${relative(m.facing, d as Dir)}`, mv));
     for (const [slot, h] of s.held) {
       const mv = want.get(slot);
       if (mv && mv.key() === h.key) continue;
@@ -337,8 +345,8 @@ export class Renderer {
     }
     for (const [slot, mv] of want) {
       if (s.held.has(slot)) continue;
-      const glyph = new Glyph(mv, slot === 'fixed' ? 0.6 : 0.42);
-      glyph.position.copy(s.model.anchors[slot as keyof Model['anchors']]);
+      const glyph = new Glyph(mv, slot === 'fixed' ? 0.6 : slot === 'filter' ? 0.3 : 0.42);
+      glyph.position.copy(s.model.anchors[slot]);
       s.model.group.add(glyph);
       s.held.set(slot, { key: mv.key(), glyph });
     }
@@ -362,9 +370,33 @@ export class Renderer {
   }
 }
 
-/** where an element is along a belt, riding on it: in from its entry side to the middle, then out the front */
+/** a duct bends when it is fed from one side only, with nothing feeding it from behind */
+function ductKind(world: World, x: number, y: number, z: number, facing: Dir): ModelKind {
+  const feeds = (r: number) => {
+    const d = rel(facing, r);
+    const [dx, dz] = STEP[d];
+    const n = world.get(x + dx, y, z + dz);
+    return n?.kind === 'machine' && outputs(n).includes(opposite(d));
+  };
+  if (feeds(2)) return 'duct';
+  const left = feeds(1);
+  const right = feeds(3);
+  return left && !right ? 'duct-left' : right && !left ? 'duct-right' : 'duct';
+}
+
+/**
+ * Where an element is along a belt, riding on it. From the back it goes straight through; from a side
+ * it follows the quarter circle a corner belt draws, from the middle of that side round to the front.
+ */
 function ridePosition(x: number, y: number, z: number, facing: Dir, from: Dir | null, t: number) {
   const c = new THREE.Vector3(x + 0.5, y + 0.5, z + 0.5);
+  const side = from === null ? 2 : relative(facing, from);
+  if (side === 1 || side === 3) {
+    const [lx, lz] = curvePoint(side === 1 ? -1 : 1, 0.5, t * (Math.PI / 2));
+    // turn from the belt's frame into the world's, as its model is turned
+    const phi = facing * (Math.PI / 2);
+    return c.add(new THREE.Vector3(lx * Math.cos(phi) + lz * Math.sin(phi), 0, -lx * Math.sin(phi) + lz * Math.cos(phi)));
+  }
   const [ox, oz] = STEP[facing];
   const entry = from ?? opposite(facing);
   const [ix, iz] = STEP[entry];

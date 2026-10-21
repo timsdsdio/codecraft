@@ -3,6 +3,8 @@
 // lets you automate it.
 import type { Multivector } from '@codecraft/ga';
 import { machine, type Inventory, type Item, type MachineType } from './items.ts';
+import { E3 } from './qubit.ts';
+import type { SortMode } from './world.ts';
 
 export interface Ingredient {
   /** shown in the recipe, e.g. "any bivector" */
@@ -60,7 +62,50 @@ export const RECIPES: Recipe[] = [
       { label: 'a trivector (e.g. e₁ ∧ e₂ ∧ e₃)', count: 1, test: isEl((m) => grades(m) === '3') },
     ],
   },
+  {
+    makes: 'gate',
+    count: 1,
+    does: 'Outputs B A: applies a gate (X, Y, Z, H, S, or any rotor as B) to the qubit state A.',
+    needs: [lattice(4), { label: 'a rotor', count: 1, test: isEl((m) => grades(m) === '0,2') }],
+  },
+  {
+    makes: 'bloch',
+    count: 1,
+    does: 'Outputs A e₃ A⁻¹: where the qubit state A points, its Bloch vector.',
+    needs: [lattice(4), { label: 'e₃', count: 1, test: isEl((m) => m.equals(E3)) }, { label: 'a rotor', count: 1, test: isEl((m) => grades(m) === '0,2') }],
+  },
+  {
+    makes: 'detector',
+    count: 1,
+    does: 'Measures the qubit state A: outputs e₃ (up) or −e₃ (down), up with probability (1 + z) / 2.',
+    needs: [lattice(4), { label: 'e₃', count: 2, test: isEl((m) => m.equals(E3)) }],
+  },
+  {
+    makes: 'orrery',
+    count: 1,
+    does: 'Passes states through and draws the Hopf fiber of each one above itself.',
+    needs: [
+      lattice(4),
+      { label: 'a rotor', count: 1, test: isEl((m) => grades(m) === '0,2') },
+      { label: 'a trivector', count: 1, test: isEl((m) => grades(m) === '3') },
+    ],
+  },
+  { makes: 'splitter', count: 1, does: 'Takes elements at its back and deals them out to its front, left and right in turn.', needs: [lattice(6)] },
+  { makes: 'merger', count: 1, does: 'Takes elements at its back, left and right and sends them out the front in turn.', needs: [lattice(6)] },
+  {
+    makes: 'sorter',
+    count: 1,
+    does: 'Takes elements at its back: those matching its setting leave by one side, the rest go straight on.',
+    needs: [lattice(6), { label: 'the scalar 1', count: 1, test: isEl((m) => grades(m) === '0') }],
+  },
+  { makes: 'crossing', count: 1, does: 'Lets two lines cross: whatever comes in on one side leaves by the opposite side.', needs: [lattice(4)] },
 ];
+
+/** how a sorter's setting reads: "e₁" or "vectors" */
+export function sortLabel(mode: SortMode, filter: Multivector | null) {
+  if (mode === 'same') return filter ? String(filter) : 'nothing (no sample set)';
+  return { scalar: 'scalars', vector: 'vectors', bivector: 'bivectors', trivector: 'trivectors', state: 'qubit states' }[mode];
+}
 
 export const canBuild = (inv: Inventory, r: Recipe) => r.needs.every((n) => inv.count(n.test) >= n.count);
 
