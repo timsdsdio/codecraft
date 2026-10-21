@@ -484,14 +484,14 @@ export class Achievements {
     return fresh;
   }
 
-  /** shown in the tree: earned, or with an earned parent, or a root */
-  visible(a: Achievement) {
+  /** within reach: earned, or with an earned parent, or a root */
+  reachable(a: Achievement) {
     return this.earned.has(a.id) || !a.parents.length || a.parents.some((p) => this.earned.has(p));
   }
 
-  /** the goals worth suggesting next: visible and not yet met, in tree order */
+  /** the goals worth suggesting next: within reach and not yet met, in tree order */
   next() {
-    return ACHIEVEMENTS.filter((a) => !this.earned.has(a.id) && this.visible(a));
+    return ACHIEVEMENTS.filter((a) => !this.earned.has(a.id) && this.reachable(a));
   }
 
   save() {
