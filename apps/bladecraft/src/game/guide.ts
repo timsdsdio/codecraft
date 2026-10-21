@@ -39,7 +39,7 @@ export function guide({ world, inventory, achievements }: GuideState): GuideStep
     [
       held((s) => s.item.kind === 'element' && s.item.mv.isScalar()) || hasMachine('extractor') || placed('extractor'),
       'Take the scalar 1',
-      'Break the pale deposit labelled 1, to your left. Deposits give you one blade and stay put.',
+      'Break the top of the pale deposit labelled 1, to your left. A deposit breaks into 4 blades; leave the bottom block for an extractor.',
     ],
     [benchPlaced, 'Place the Workbench', 'Pick the Workbench in your hotbar, aim at the ground and place it.'],
     [

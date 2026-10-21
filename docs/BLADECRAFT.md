@@ -60,13 +60,17 @@ was without becoming an ingredient.
 
 A 64 × 64 grid of lattice, three blocks deep. Spawn is in the middle, with one deposit of each raw
 element a few steps away: e₁ (red) to the left, e₂ (green) to the right, and the scalar 1 (pale)
-and e₃ (blue) a little further back on each side. More deposits stand further out. Every block says
+and e₃ (blue) a little further back on each side, each two blocks high. Sixty more deposits, one
+or two high, stand further out. Every block says
 what it is on its faces: deposits carry their element in large letters, and machines show their
 symbol on top and their ports on their sides.
 
-Deposits never run out. Breaking one by hand gives one of its element and leaves it standing, so
-no world can be stuck without a source. Breaking anything else picks it up, along with whatever it
-holds; breaking the ground gives lattice. You start with a Workbench and 32 lattice. The world,
+Breaking a deposit by hand breaks it into 4 of its blade and it is gone, which is enough to get
+started. An extractor placed against a deposit draws from it forever without using it up, so it is
+the lasting source of blades, and it is the third thing the guide has you build; that's why the
+starting deposits are two high, leaving the bottom block for an extractor once you have broken the
+top. Breaking anything else picks it up, along with whatever it holds; breaking the ground gives
+lattice. You start with a Workbench and 32 lattice. The world,
 inventory, factory and goals are saved in the browser.
 
 ## The Workbench
@@ -333,14 +337,13 @@ another branch says so on its card ("after Volume").
 
 ## Controls
 
-- **Desktop:** WASD moves, the mouse looks (pointer lock), space jumps. Left click breaks (or takes
-  from a deposit). Right click opens the Workbench or a machine, and otherwise places; shift +
+- **Desktop:** WASD moves, the mouse looks (pointer lock), space jumps. Left click breaks. Right click opens the Workbench or a machine, and otherwise places; shift +
   right click always places. R rotates what you're about to place, 1–9 or the wheel pick a hotbar
   slot, E opens your inventory, L the goals. Esc frees the mouse to click the buttons on screen
   while the game carries on, and clicking the world takes it back. The line under the crosshair
   names the block and what each click would do to it.
 - **Touch:** the left side is a joystick wherever the thumb lands; the right side drags to look.
-  Buttons on the right appear when they apply: Break (Take on a deposit), Use, Place, Rotate when
+  Buttons on the right appear when they apply: Break, Use, Place, Rotate when
   holding a machine, and Jump. Tap a hotbar slot to hold it; tap the held slot again to open your
   inventory.
 - **Inventory and panels:** as in Minecraft, described under Items and stacks. Every panel shows

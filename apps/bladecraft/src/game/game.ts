@@ -44,7 +44,7 @@ import {
   type SlotRule,
   type Slots,
 } from './slots';
-import { DIR_NAMES, STEP, World, blockName, contents, drop, newMachine, opposite, usable, type Block, type Dir, type Machine, type SortMode } from './world';
+import { DEPOSIT_BLADES, DIR_NAMES, STEP, World, blockName, contents, drop, newMachine, opposite, usable, type Block, type Dir, type Machine, type SortMode } from './world';
 
 /** pointer lock returns a promise in newer browsers and nothing in older ones; either may refuse */
 function lock(el: HTMLElement) {
@@ -58,7 +58,6 @@ function lock(el: HTMLElement) {
 export type Screen = 'start' | 'play' | 'inventory' | 'workbench' | 'machine' | 'achievements';
 
 const SAVE_KEY = 'bladecraft.save.v3';
-const MINE_COOLDOWN = 250; // ms between blades taken from a deposit by hand
 /** hand sorts on the rail that learn a rule */
 export const SORTS_TO_LEARN = 3;
 
@@ -127,7 +126,6 @@ export class Game {
   wantJump = false;
   private dirty = false;
   private lastSave = 0;
-  private lastMine = 0;
   private lastCheck = 0;
   private toastId = 0;
   private promptKey = '';
@@ -326,15 +324,8 @@ export class Game {
     const t = this.target;
     const b = this.targetBlock;
     if (!t || !b) return;
-    if (b.kind === 'deposit') {
-      const now = performance.now();
-      if (now - this.lastMine < MINE_COOLDOWN) return;
-      this.lastMine = now;
-      this.give(stack(drop(b)));
-      return this.changed();
-    }
     this.world.set(...t.block, null);
-    this.give(stack(drop(b)));
+    this.give(drop(b));
     if (b.kind === 'machine') for (const s of contents(b)) this.give(s);
     this.changed();
   }
@@ -763,7 +754,7 @@ export class Game {
     const b = this.targetBlock;
     let prompt: Prompt | null = null;
     if (b) {
-      const actions: string[] = [b.kind === 'deposit' ? `Break: take one ${b.mv}` : 'Break: pick up'];
+      const actions: string[] = [b.kind === 'deposit' ? `Break: breaks into ${DEPOSIT_BLADES} × ${b.mv}` : 'Break: pick up'];
       if (usable(b)) actions.push('Use: open');
       const item = this.held;
       if (p && item) actions.push(`Place: ${itemName(item)}${p.facing !== null ? ` facing ${DIR_NAMES[p.facing]}` : ''}`);

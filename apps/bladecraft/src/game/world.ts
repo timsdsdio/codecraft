@@ -17,6 +17,7 @@ import {
   saveMv,
   saveStack,
   scalar,
+  stack,
   type Item,
   type MachineType,
   type SavedMv,
@@ -137,11 +138,14 @@ export function blockName(b: Block) {
   return MACHINE_NAMES[b.type];
 }
 
-/** what breaking a block gives (deposits give their blade and stay) */
-export function drop(b: Block): Item {
-  if (b.kind === 'deposit') return { kind: 'element', mv: b.mv };
-  if (b.kind === 'machine') return { kind: 'machine', type: b.type };
-  return { kind: b.kind };
+/** blades a deposit breaks into by hand; an extractor draws from one forever instead */
+export const DEPOSIT_BLADES = 4;
+
+/** what breaking a block gives */
+export function drop(b: Block): Stack {
+  if (b.kind === 'deposit') return stack({ kind: 'element', mv: b.mv }, DEPOSIT_BLADES);
+  if (b.kind === 'machine') return stack({ kind: 'machine', type: b.type });
+  return stack({ kind: b.kind });
 }
 
 /** everything a machine holds, returned to the player when it is broken */
@@ -247,14 +251,15 @@ export class World {
     for (let x = 0; x < SIZE; x++) for (let z = 0; z < SIZE; z++) for (let y = 0; y < GROUND; y++) w.set(x, y, z, { kind: 'lattice' });
 
     const [hx, hz] = HOME;
-    // one of each deposit a short walk from spawn, with room around them for an extractor and ducts
+    // one of each deposit a short walk from spawn, with room around them for an extractor and ducts;
+    // two high, so breaking the top for blades leaves the bottom for an extractor
     const starters: [number, number, Multivector][] = [
       [hx - 5, hz, el('1')],
       [hx + 5, hz, el('2')],
       [hx - 5, hz + 6, scalar(1)],
       [hx + 5, hz + 6, el('3')],
     ];
-    for (const [x, z, mv] of starters) w.set(x, GROUND, z, { kind: 'deposit', mv });
+    for (const [x, z, mv] of starters) for (const y of [GROUND, GROUND + 1]) w.set(x, y, z, { kind: 'deposit', mv });
 
     // outcrops further out
     const kinds = [el('1'), el('2'), el('3'), scalar(1)];
