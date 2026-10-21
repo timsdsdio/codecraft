@@ -44,4 +44,10 @@ same two commands.
 The dev servers listen on the local network, so they also open on a phone at
 `http://<this computer's IP>:<port>`.
 
+CodeCraft's game app also builds `window.html` (`/codecraft/window.html` in production): a test of
+whether a phone can look like a window into a box behind its screen. It moves the viewpoint with
+face tracking from the front camera, with the gyroscope, or with a finger. Phones only give the camera to `https://`
+pages, so open it through a deploy or a quick tunnel
+(`cloudflared tunnel --url http://localhost:5330`), not the local-network address.
+
 See `AGENTS.md` before writing or editing docs.
