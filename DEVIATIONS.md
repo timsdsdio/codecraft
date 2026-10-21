@@ -5,20 +5,32 @@ each with its reason. When one changes, edit its entry.
 
 ## Bladecraft
 
-- **Single-player, saved in the browser.** The world, inventory and achievements live in
+- **Single-player, saved in the browser.** The world, factory, inventory and achievements live in
   `localStorage`. `docs/STACK.md`'s server-authoritative architecture applies once worlds are
   shared or players meet.
 - **The engine is plain three.js, the UI is React.** A voxel game runs one imperative loop
   (physics, raycasts, a merged terrain mesh rebuilt on change), which R3F's component tree would
-  only wrap. React draws the HUD and the inventory, bench and achievement screens, and re-renders
-  when the game bumps a version number (`useSyncExternalStore`).
-- **Coefficients are exact rationals.** Items stack only with equal items, and crafting must give
-  the same item every time; floating point would make e₁ from one recipe differ from e₁ from
+  only wrap. React draws the HUD and the panels, and re-renders when the game bumps a version
+  number (`useSyncExternalStore`).
+- **The factory is a pure simulation with its own tests.** `factory.ts` steps the world's machines
+  at a fixed 20 ticks a second and knows nothing about drawing, so it runs under `node --test`
+  (`pnpm test`) and the renderer only reads what it left in each block.
+- **Coefficients are exact rationals.** Elements stack, and the hub counts deliveries, only when
+  they are exactly equal; floating point would make e₁ from one machine differ from e₁ from
   another. A rotor such as 1 + e₁₂ is applied with R X R⁻¹, which stays exact without normalising.
-- **Items are elements of G(3), not projective GA.** Vectors are arrows and bivectors are planes, the usual way geometric
-  algebra is taught. In projective GA a vector is a plane, which is a confusing first step.
+- **Elements are from G(3), not projective GA.** Vectors are arrows and bivectors are planes, the
+  usual way geometric algebra is taught. In projective GA a vector is a plane, which is a confusing
+  first step.
+- **One block per operation.** An adder, a wedger and a multiplier look different and are told apart
+  at a glance, which a single machine with a chosen operation would not allow.
+- **Machines cost elements you made by hand**, so the bench's hand operations are the tech tree: a
+  wedger needs a bivector, a multiplier a rotor. Lattice alone builds only ducts and collectors.
+- **Deposits never run out and can't be removed.** Taking from one by hand leaves it in place, so a
+  world can never lose its only source of an element.
 - **The bench offers every operation at once and previews each result**, so comparing A ∧ B with
   A B, or A ∧ B with B ∧ A, is the main way to learn what they do.
+- **Touch controls are explicit buttons that appear when they apply** (Take or Break, Use, Place,
+  Rotate, Jump) rather than taps and long presses on the view, which were easy to confuse.
 
 ## CodeCraft design
 

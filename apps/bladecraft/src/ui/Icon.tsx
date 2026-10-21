@@ -3,10 +3,10 @@
 import type { ReactNode } from 'react';
 import type { Multivector } from '@codecraft/ga';
 import { parts, vectorColour } from '../game/glyph';
-import type { Item } from '../game/items';
+import type { Item, MachineType } from '../game/items';
+import { MACHINE_LOOK, hex } from '../game/looks';
 
 type V3 = [number, number, number];
-const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 const P = ([a, b, c]: V3): [number, number] => [0.82 * a + 0.5 * b, 0.36 * a - 0.42 * b - 0.92 * c];
 const pt = (v: V3, s: number) => P(v).map((x) => (x * s).toFixed(2)).join(',');
 const norm = (v: V3): V3 => {
@@ -29,7 +29,30 @@ export function Icon({ item, size = 44 }: { item: Item; size?: number }) {
         </>
       )}
       {item.kind === 'element' && <ElementIcon mv={item.mv} />}
+      {item.kind === 'machine' && <MachineIcon type={item.type} />}
     </svg>
+  );
+}
+
+function MachineIcon({ type }: { type: MachineType }) {
+  const { colour, symbol } = MACHINE_LOOK[type];
+  const c = hex(colour);
+  if (type === 'duct') {
+    return (
+      <g stroke={c} strokeWidth="1.6" strokeLinejoin="round" fill="rgba(0,255,240,0.15)">
+        <rect x="-19" y="-6" width="38" height="12" rx="2" />
+        <polyline points="-8,-3 -2,0 -8,3" fill="none" />
+        <polyline points="4,-3 10,0 4,3" fill="none" />
+      </g>
+    );
+  }
+  return (
+    <>
+      <Cube colour={c} fill="#0a1722" />
+      <text x="0" y="4" textAnchor="middle" fontSize={symbol.length > 4 ? 7 : 11} fill={c} fontWeight="700">
+        {symbol}
+      </text>
+    </>
   );
 }
 

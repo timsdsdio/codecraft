@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite --host --port 5340 --strictPort",
     "build": "tsc --noEmit -p . && vite build",
+    "test": "node --experimental-strip-types --no-warnings --test src/game/*.test.ts",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
