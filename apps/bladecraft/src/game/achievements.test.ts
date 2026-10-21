@@ -87,3 +87,19 @@ test('a met goal stays met once the thing is gone, and is reported once', () => 
   assert.ok(!a.check(holdings([])).some((g) => g.id === 'direction'));
   assert.ok(a.earned.has('direction'));
 });
+
+test('the Hopf goals: a fiber, four phases round it, and two linked fibers', () => {
+  const orrery = (seen: ReturnType<typeof el>[]) => {
+    const m = newMachine('orrery', 0) as Extract<ReturnType<typeof newMachine>, { type: 'orrery' }>;
+    m.seen = seen;
+    return holdings([], { machines: [m] });
+  };
+  const up = scalar(1);
+  const phase = scalar(1).add(el('1', '2'));
+  const phases = [up, up.gp(phase), up.gp(phase).gp(phase), up.gp(phase).gp(phase).gp(phase)];
+  assert.ok(earns(orrery([up])).includes('fiber'));
+  assert.ok(!earns(orrery([up])).includes('linked'));
+  assert.ok(!earns(orrery(phases.slice(0, 3))).includes('round-the-fiber'));
+  assert.ok(earns(orrery(phases)).includes('round-the-fiber'), 'four phases of |0⟩');
+  assert.ok(earns(orrery([up, el('2', '3')])).includes('linked'), 'up and down');
+});

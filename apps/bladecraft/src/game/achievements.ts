@@ -361,13 +361,42 @@ export const ACHIEVEMENTS: Achievement[] = [
     test: (h) => placed(h, 'detector') && heavy(h, (b) => b.equals(E3), 8) && elementStacks(h).some((s) => s.item.kind === 'element' && s.item.mv.equals(E3) && num(s.count) <= -8),
   },
   {
+    id: 'fiber',
+    branch: 'qubits',
+    title: 'A Hopf fiber',
+    goal: 'Show an orrery a qubit state.',
+    lesson:
+      'Every phase of a state, R(cos t + e₁₂ sin t), points the same way, and together they make a circle in the 3-sphere of unit rotors: the state’s Hopf fiber. The orrery projects the 3-sphere into space so you can see it, as a ring coloured by the point the state shows.',
+    parents: ['phase'],
+    test: (h) => h.machines.some((m) => m.type === 'orrery' && m.seen.length > 0),
+  },
+  {
+    id: 'round-the-fiber',
+    branch: 'qubits',
+    title: 'Round the fiber',
+    goal: 'Show an orrery one point in four different phases.',
+    lesson:
+      'Each phase is a bead on the same ring. Multiplying on the right by 1 + e₁₂ moves a state an eighth of the way round its fiber, so four phase shifters in a row walk it halfway, while its Bloch vector never moves.',
+    parents: ['fiber'],
+    test: (h) =>
+      h.machines.some((m) => {
+        if (m.type !== 'orrery') return false;
+        const byPoint = new Map<string, number>();
+        for (const r of m.seen) {
+          const k = bloch(r)?.key() ?? '';
+          byPoint.set(k, (byPoint.get(k) ?? 0) + 1);
+        }
+        return [...byPoint.values()].some((n) => n >= 4);
+      }),
+  },
+  {
     id: 'linked',
     branch: 'qubits',
-    title: 'Linked rings',
+    title: 'The Hopf fibration',
     goal: 'Show an orrery two states that point different ways.',
     lesson:
-      'All the phases of one state form a circle in the 3-sphere of unit rotors, and R ↦ R e₃ R̃ squashes each circle to one point. That is the Hopf fibration. Circles of different points never meet, yet every pair is linked.',
-    parents: ['phase'],
+      'R ↦ R e₃ R̃ squashes each fiber to one point of the sphere of directions: that map is the Hopf fibration, and a Turn card does it. Fibers of different points never meet, yet every pair is linked, like two rings of a chain, and together they fill the 3-sphere.',
+    parents: ['fiber'],
     test: (h) =>
       h.machines.some((m) => {
         if (m.type !== 'orrery') return false;

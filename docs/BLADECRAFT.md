@@ -324,8 +324,9 @@ another branch says so on its card ("after Volume").
 - **The factory** starts with placing the Workbench: an extractor and a Store, stacks of 64 blades
   and of 16(e₁ + e₂), all four logistics blocks, a pressed card, a Mill, 16 rotors in one stack, and
   cards that turn and mirror.
-- **Qubits** grows from rotors: |1⟩, |+⟩, |+i⟩, a new phase, the Born rule (8e₃ and −8e₃ from a
-  detector) and linked rings in an orrery.
+- **Qubits** grows from rotors: |1⟩, |+⟩, |+i⟩, a new phase and the Born rule (8e₃ and −8e₃ from a
+  detector), then the Hopf fibration in an orrery: one state's fiber, four phases round it, and the
+  linked fibers of two states pointing different ways.
 - **The field** grows from duality (a Multiply card from the trivector): a field plate, then one
   reading per grade of Maxwell's equation that a probe can see: E alone, IB alone, and E and IB
   together.
