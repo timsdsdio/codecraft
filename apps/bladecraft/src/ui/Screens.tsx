@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import type { Multivector } from '@codecraft/ga';
 import { ACHIEVEMENTS, type Achievement } from '../game/achievements';
-import { COLLECTOR_CAPACITY, WORK_TIME } from '../game/factory';
+import { COLLECTOR_CAPACITY, MERGE_ORDER, SPLIT_ORDER, WORK_TIME } from '../game/factory';
 import type { Game } from '../game/game';
 import { HOTBAR, MACHINE_NAMES, describe, itemName, SLOTS } from '../game/items';
 import { apply, type Op } from '../game/ops';
 import { ORDERS } from '../game/orders';
-import { RECIPES, canBuild } from '../game/recipes';
-import { DIR_NAMES, STEP, opposite } from '../game/world';
+import { RECIPES, canBuild, sortLabel } from '../game/recipes';
+import { DIR_NAMES, STEP, opposite, type Dir, type SortMode } from '../game/world';
 import { GATES, bloch, probUp, type GateId } from '../game/qubit';
 import { Q } from '@codecraft/ga';
 import { Icon } from './Icon';
@@ -329,6 +329,75 @@ export function MachineScreen({ game }: { game: Game }) {
   }
 
   if (m.type === 'duct') return null;
+
+  if (m.type === 'splitter' || m.type === 'merger' || m.type === 'crossing') {
+    const sideName = (r: number) => ['front', 'left', 'back', 'right'][r];
+    const held =
+      m.type === 'splitter'
+        ? [{ name: 'holding', mv: m.item }]
+        : m.type === 'merger'
+          ? [1, 2, 3].map((r) => ({ name: `from the ${sideName(r)}`, mv: m.slots[r] }))
+          : ([0, 1, 2, 3] as Dir[]).map((d) => ({ name: `in from ${DIR_NAMES[d]}`, mv: m.slots[d] }));
+    return (
+      <Sheet title={title} game={game} icon={icon}>
+        <p>{recipe.does}</p>
+        <div className="machine-view">
+          {held.map((h) => (
+            <Held key={h.name} name={h.name} mv={h.mv} note="empty" />
+          ))}
+        </div>
+        {m.type === 'splitter' && <p className="dim">The next element goes out of its {sideName(SPLIT_ORDER[m.next])}. A side with nowhere to go is skipped.</p>}
+        {m.type === 'merger' && <p className="dim">Next it takes from the {sideName(MERGE_ORDER[m.next])}. An empty input is skipped.</p>}
+        {m.type === 'crossing' && <p className="dim">Its rotation doesn’t matter: every side goes straight across.</p>}
+        <div className="row">{rotate}</div>
+      </Sheet>
+    );
+  }
+
+  if (m.type === 'sorter') {
+    const modes: { id: SortMode; label: string }[] = [
+      { id: 'same', label: 'Same as the sample' },
+      { id: 'scalar', label: 'Scalars' },
+      { id: 'vector', label: 'Vectors' },
+      { id: 'bivector', label: 'Bivectors' },
+      { id: 'trivector', label: 'Trivectors' },
+      { id: 'state', label: 'Qubit states' },
+    ];
+    const sideWord = m.side === 1 ? 'left' : 'right';
+    return (
+      <Sheet title={title} game={game} icon={icon}>
+        <p>{recipe.does}</p>
+        <p>
+          Sends <b>{sortLabel(m.mode, m.filter)}</b> out of its {sideWord}; everything else goes out of its front.
+        </p>
+        <div className="machine-view">
+          <Held name="sample" mv={m.filter} note="none" />
+          <Held name="holding" mv={m.item} note="empty" />
+        </div>
+        <h3>Matches</h3>
+        <div className="row">
+          {modes.map((mode) => (
+            <button key={mode.id} className={m.mode === mode.id ? 'primary' : ''} onClick={() => game.setSorter({ mode: mode.id })}>
+              {mode.label}
+            </button>
+          ))}
+        </div>
+        <h3>Leave by</h3>
+        <div className="row">
+          <button className={m.side === 1 ? 'primary' : ''} onClick={() => game.setSorter({ side: 1 })}>
+            Left side
+          </button>
+          <button className={m.side === 3 ? 'primary' : ''} onClick={() => game.setSorter({ side: 3 })}>
+            Right side
+          </button>
+        </div>
+        <h3>Sample</h3>
+        <p className="dim">Pick one of your elements to sort by. The sorter only looks at it, so you keep it.</p>
+        <Slots game={game} onPick={(i) => game.setSorter({ sampleSlot: i })} filter={(i) => game.inventory.slots[i]?.item.kind === 'element'} />
+        <div className="row">{rotate}</div>
+      </Sheet>
+    );
+  }
 
   if (m.type === 'bloch' || m.type === 'detector' || m.type === 'orrery') {
     const v = m.a ? bloch(m.a) : null;

@@ -14,7 +14,11 @@ export type MachineType =
   | 'gate'
   | 'bloch'
   | 'detector'
-  | 'orrery';
+  | 'orrery'
+  | 'splitter'
+  | 'merger'
+  | 'sorter'
+  | 'crossing';
 
 export type Item =
   | { kind: 'lattice' }
@@ -46,6 +50,10 @@ export const MACHINE_NAMES: Record<MachineType, string> = {
   bloch: 'Bloch projector',
   detector: 'Detector',
   orrery: 'Fibration orrery',
+  splitter: 'Splitter',
+  merger: 'Merger',
+  sorter: 'Sorter',
+  crossing: 'Crossing',
 };
 
 export function itemKey(item: Item) {

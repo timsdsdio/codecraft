@@ -246,3 +246,114 @@ test('state orders count any state on the point; phase orders need a new phase e
   assert.equal(f.hub.order, ORDERS.findIndex((o) => o.kind === 'phases') + 1);
   void same;
 });
+
+// --- logistics ---------------------------------------------------------------------------------
+
+import { outputs } from './factory.ts';
+
+type Collector = Extract<Machine, { type: 'collector' }>;
+/** a block at (5,Y,5) with collectors on all four sides; `got(d)` lists what reached the one on side d */
+function hubless(m: Machine) {
+  const w = new World();
+  const f = new Factory(w, { order: 0, delivered: 0 });
+  w.set(5, Y, 5, m);
+  const at = (d: Dir) => [5 + [1, 0, -1, 0][d], Y, 5 + [0, -1, 0, 1][d]] as const;
+  for (const d of [E, N, W, S]) w.set(...at(d), newMachine('collector', E));
+  const got = (d: Dir) => (w.get(...at(d)) as Collector).stored.flatMap((s) => Array(s.count).fill(String(s.mv)));
+  return { w, f, got };
+}
+
+test('a splitter takes from its back only and deals out front, left and right in turn', () => {
+  const { f, got } = hubless(newMachine('splitter', E));
+  assert.equal(f.accept(5, Y, 5, el('1'), E), false, 'not from its front');
+  assert.equal(f.accept(5, Y, 5, el('1'), N), false, 'not from a side');
+  for (let i = 0; i < 6; i++) {
+    assert.ok(f.accept(5, Y, 5, el('1'), W));
+    f.tick(0.05);
+  }
+  assert.equal(got(E).length, 2);
+  assert.equal(got(N).length, 2); // facing east, its left is north
+  assert.equal(got(S).length, 2);
+  assert.equal(got(W).length, 0);
+});
+
+test('a splitter skips a side with nowhere to go', () => {
+  const { w, f, got } = hubless(newMachine('splitter', E));
+  w.set(5, Y, 4, null);
+  for (let i = 0; i < 4; i++) {
+    f.accept(5, Y, 5, el('1'), W);
+    f.tick(0.05);
+  }
+  assert.deepEqual([got(E).length, got(S).length], [2, 2]);
+});
+
+test('a merger takes its back, left and right in turn and sends them all out the front', () => {
+  const { f, got } = hubless(newMachine('merger', E));
+  assert.equal(f.accept(5, Y, 5, el('1'), E), false, 'not from its front');
+  assert.ok(f.accept(5, Y, 5, el('3'), S));
+  assert.equal(f.accept(5, Y, 5, el('3'), S), false, 'one at a time per side');
+  // keep the back and left full: they still take turns, so neither starves the other
+  for (let t = 0; t < 7; t++) {
+    f.accept(5, Y, 5, el('1'), W);
+    f.accept(5, Y, 5, el('2'), N);
+    f.tick(0.05);
+  }
+  assert.deepEqual(got(E).sort(), ['e₁', 'e₁', 'e₁', 'e₂', 'e₂', 'e₂', 'e₃']);
+});
+
+test('a sorter sends matches out of its chosen side and the rest straight on', () => {
+  const m = newMachine('sorter', E) as Extract<Machine, { type: 'sorter' }>;
+  m.mode = 'vector';
+  m.side = 3;
+  const { f, got } = hubless(m);
+  for (const mv of [el('1'), el('1').op(el('2')), scalar(2), el('2')]) {
+    f.accept(5, Y, 5, mv, W);
+    f.tick(0.05);
+  }
+  assert.deepEqual(got(S), ['e₁', 'e₂']); // facing east, its right is south
+  assert.deepEqual(got(E), ['e₁₂', '2']);
+  m.mode = 'same';
+  m.filter = el('1').op(el('2'));
+  m.side = 1;
+  f.accept(5, Y, 5, el('1').op(el('2')), W);
+  f.tick(0.05);
+  f.accept(5, Y, 5, el('1'), W);
+  f.tick(0.05);
+  assert.deepEqual(got(N), ['e₁₂']);
+  assert.deepEqual(got(E), ['e₁₂', '2', 'e₁']);
+});
+
+test('a crossing sends each element straight across, whatever way it faces', () => {
+  const { f, got } = hubless(newMachine('crossing', N));
+  assert.ok(f.accept(5, Y, 5, el('1'), W));
+  assert.ok(f.accept(5, Y, 5, el('2'), N));
+  assert.equal(f.accept(5, Y, 5, el('2'), N), false, 'one per side');
+  f.tick(0.05);
+  assert.deepEqual(got(E), ['e₁']);
+  assert.deepEqual(got(S), ['e₂']);
+});
+
+test('what each block pushes out of, for drawing corner belts', () => {
+  assert.deepEqual(outputs(newMachine('duct', N)), [N]);
+  assert.deepEqual(outputs(newMachine('splitter', E)), [E, N, S]);
+  assert.deepEqual(outputs(newMachine('collector', E)), []);
+  const s = newMachine('sorter', W) as Extract<Machine, { type: 'sorter' }>;
+  s.side = 1;
+  assert.deepEqual(outputs(s), [W, S]); // facing west, its left is south
+});
+
+test('logistics blocks save and load what they hold and how they are set', () => {
+  const w = new World();
+  const s = newMachine('sorter', E) as Extract<Machine, { type: 'sorter' }>;
+  Object.assign(s, { mode: 'same', filter: el('2'), side: 3, item: el('1') });
+  const mg = newMachine('merger', N) as Extract<Machine, { type: 'merger' }>;
+  mg.slots[3] = el('3');
+  mg.next = 2;
+  w.set(1, Y, 1, s);
+  w.set(2, Y, 1, mg);
+  const back = World.load(JSON.parse(JSON.stringify(w.save())));
+  const s2 = back.get(1, Y, 1) as typeof s;
+  const m2 = back.get(2, Y, 1) as typeof mg;
+  assert.ok(s2.filter?.equals(el('2')) && s2.item?.equals(el('1')) && s2.side === 3 && s2.mode === 'same');
+  assert.ok(m2.slots[3]?.equals(el('3')) && m2.next === 2 && !m2.slots[1]);
+});

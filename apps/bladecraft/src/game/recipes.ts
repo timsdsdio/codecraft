@@ -4,6 +4,7 @@
 import type { Multivector } from '@codecraft/ga';
 import { machine, type Inventory, type Item, type MachineType } from './items.ts';
 import { E3 } from './qubit.ts';
+import type { SortMode } from './world.ts';
 
 export interface Ingredient {
   /** shown in the recipe, e.g. "any bivector" */
@@ -89,7 +90,22 @@ export const RECIPES: Recipe[] = [
       { label: 'a trivector', count: 1, test: isEl((m) => grades(m) === '3') },
     ],
   },
+  { makes: 'splitter', count: 1, does: 'Takes elements at its back and deals them out to its front, left and right in turn.', needs: [lattice(6)] },
+  { makes: 'merger', count: 1, does: 'Takes elements at its back, left and right and sends them out the front in turn.', needs: [lattice(6)] },
+  {
+    makes: 'sorter',
+    count: 1,
+    does: 'Takes elements at its back: those matching its setting leave by one side, the rest go straight on.',
+    needs: [lattice(6), { label: 'the scalar 1', count: 1, test: isEl((m) => grades(m) === '0') }],
+  },
+  { makes: 'crossing', count: 1, does: 'Lets two lines cross: whatever comes in on one side leaves by the opposite side.', needs: [lattice(4)] },
 ];
+
+/** how a sorter's setting reads: "e₁" or "vectors" */
+export function sortLabel(mode: SortMode, filter: Multivector | null) {
+  if (mode === 'same') return filter ? String(filter) : 'nothing (no sample set)';
+  return { scalar: 'scalars', vector: 'vectors', bivector: 'bivectors', trivector: 'trivectors', state: 'qubit states' }[mode];
+}
 
 export const canBuild = (inv: Inventory, r: Recipe) => r.needs.every((n) => inv.count(n.test) >= n.count);
 

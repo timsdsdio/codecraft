@@ -25,6 +25,11 @@ each with its reason. When one changes, edit its entry.
   tori, extruded gears and canvas-textured plates keep the bundle small, need no loaders, and give
   every moving part a name the animation can drive directly from the factory's state. Geometry and
   materials are shared between all copies of a machine.
+- **A duct's corner shape comes from its neighbours, not from the player.** A duct fed from one side
+  only is drawn bent; the factory treats it like any other duct. There is no corner block to build
+  or orient, and a belt can never be drawn bending the wrong way.
+- **Logistics blocks have plain names** (splitter, merger, sorter, crossing) rather than
+  electronics terms such as multiplexer, so a player knows what each does from its name.
 - **Qubits are unnormalised rotors of G(3), equal up to a positive scale.** A state needs no new
   algebra: the even subalgebra is the quaternions, its Bloch vector is a sandwich with e₃, and gates
   such as H ∝ e₂₃ + e₁₂ need no √2, so states stay exact and stack. A negative scale is kept apart

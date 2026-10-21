@@ -11,7 +11,8 @@ import { Player, raycast, type Hit } from './player';
 import { GATES, bloch, type GateId } from './qubit';
 import { build, type Recipe } from './recipes';
 import { Renderer } from './render';
-import { HUB, SINGLE_INPUT, STEP, World, blockName, contents, drop, newMachine, opposite, usable, DIR_NAMES, type Block, type Dir, type Machine } from './world';
+import { sortLabel } from './recipes';
+import { HUB, SINGLE_INPUT, STEP, World, blockName, contents, drop, newMachine, opposite, usable, DIR_NAMES, type Block, type Dir, type Machine, type SortMode } from './world';
 
 /** pointer lock returns a promise in newer browsers and nothing in older ones; either may refuse */
 function lock(el: HTMLElement) {
@@ -417,6 +418,22 @@ export class Game {
     this.changed();
   }
 
+  /** configure the open sorter: what it matches, its sample (copied from a slot, not used up), and which side matches leave by */
+  setSorter(change: { mode?: SortMode; sampleSlot?: number; side?: 1 | 3 }) {
+    const m = this.panelBlock;
+    if (m?.kind !== 'machine' || m.type !== 'sorter') return;
+    if (change.mode) m.mode = change.mode;
+    if (change.side) m.side = change.side;
+    if (change.sampleSlot !== undefined) {
+      const it = this.inventory.slots[change.sampleSlot]?.item;
+      if (it?.kind === 'element') {
+        m.filter = it.mv;
+        m.mode = 'same';
+      }
+    }
+    this.changed();
+  }
+
   clearOrrery() {
     const m = this.panelBlock;
     if (m?.kind !== 'machine' || m.type !== 'orrery') return;
@@ -582,6 +599,12 @@ function machineNote(m: Machine, world: World, [x, y, z]: [number, number, numbe
   }
   if (m.type === 'collector') return ` · holds ${m.stored.reduce((n, s) => n + s.count, 0)}`;
   if (m.type === 'duct') return '';
+  if (m.type === 'splitter') return m.item ? ` · holding ${m.item}` : '';
+  if (m.type === 'merger' || m.type === 'crossing') {
+    const n = m.slots.filter(Boolean).length;
+    return n ? ` · holding ${n}` : '';
+  }
+  if (m.type === 'sorter') return ` · sends ${sortLabel(m.mode, m.filter)} ${m.side === 1 ? 'left' : 'right'}`;
   if (m.type === 'orrery') return ` · ${m.seen.length} fiber${m.seen.length === 1 ? '' : 's'} shown`;
   if (SINGLE_INPUT.includes(m.type)) return ` · A ${m.a ?? 'empty'}`;
   const b = m.preset ? `gate ${m.preset}` : m.fixed ? `B fixed to ${m.fixed}` : m.b ? `B ${m.b}` : 'B empty';

@@ -60,8 +60,15 @@ block there. What a block takes depends on the side something arrives from (`fac
 | Bloch projector | A from any side but its front | outputs A e₃ A⁻¹, the state's Bloch vector |
 | Detector | A from any side but its front | measures the state: outputs e₃ or −e₃ by the Born rule |
 | Fibration orrery | A from any side but its front | passes it through, drawing the Hopf fiber of each distinct state |
+| Splitter | anything, from its back | deals elements out of its front, left and right in turn, skipping a side that can't take one |
+| Merger | one element at a time from each of its back, left and right | sends them out of its front, taking each input in turn so none starves the others |
+| Sorter | anything, from its back | sends matches out of one side (left or right, set in its panel) and everything else out of its front |
+| Crossing | one element at a time from each side | sends each out of the side opposite where it came in, so two lines can cross |
 | Collector | anything, up to 256 | stores it; its panel gives everything to you |
 | Hub | anything, from any side | counts elements that match its current order |
+
+A sorter matches either elements equal to a sample, picked in its panel from your elements and not
+used up, or every element of one kind: scalars, vectors, bivectors, trivectors or qubit states.
 
 A blocked output waits, and everything behind it backs up, so elements are never lost. Results of 0
 (e₁ ∧ e₁), sandwiches whose B has no inverse, and anything that isn't a state sent to the projector or
@@ -112,7 +119,11 @@ the factory leaves in its block, so you can see what a machine is doing without 
 | Machine | Model | Moves when |
 |---|---|---|
 | Extractor | a brass pump with a flywheel, pressure gauge and chimney | its rod strokes and flywheel turns once per element drawn; it stops when there's no deposit or its output is blocked |
-| Duct | a conveyor belt on an iron frame | the belt runs the way it carries, at the speed elements ride it |
+| Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed elements ride it; elements coming in from a side ride round the bend |
+| Splitter | a low iron box with belts out of three sides and a brass pointer on a gear | the pointer turns to the side the next element will go out of |
+| Merger | the same box with a copper hopper and a pointer | the pointer turns to the input whose turn it is |
+| Sorter | the same box with a glass jar holding its sample, a flap, and a lamp on each side | the flap swings toward the side the element in hand is going; the lit lamp marks the side matches leave by |
+| Crossing | two belts crossing under a brass turntable plate | the belts run |
 | Adder | two meshing gears | they spin up while it works |
 | Wedger | a stamping press over an anvil | the ram rises while it works and stamps down as the operation completes |
 | Multiplier | a spoked flywheel with a ball governor | it spins up while it works, and the governor's balls fly out |
@@ -146,6 +157,9 @@ operation by hand once is what lets you automate it (`recipes.ts`):
 | Bloch projector | 4 lattice, e₃, a rotor |
 | Detector | 4 lattice, 2 × e₃ |
 | Fibration orrery | 4 lattice, a rotor, a trivector |
+| Splitter, Merger | 6 lattice |
+| Sorter | 6 lattice, the scalar 1 |
+| Crossing | 4 lattice |
 
 The bench's other tab combines elements by hand. It has two inputs, A and B, and shows the result
 of every operation at once, so you can compare them before making one: A + B, A − B, A ∧ B, A B,
@@ -215,8 +229,6 @@ branch grows: projecting a state, a gate, the Born rule, a new phase, a Hopf fib
   machines, and the four equations taught as the scalar, vector, bivector and trivector parts of that
   one. How big should a field region be, and how are its values shown without hiding the factory?
 - Should several qubits come next, through the tensor product, with entangling gates?
-- Should ducts split and merge (a splitter block, or ducts that alternate outputs), so one extractor
-  can feed both inputs of a machine?
 - Should projective GA arrive as a second tier of orders, with points, lines and planes as
   elements and translations as machines?
 - How should larger coefficients be made: an adder looping back on itself, or a scaling machine?

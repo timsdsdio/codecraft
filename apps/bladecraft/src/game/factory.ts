@@ -7,6 +7,10 @@
 //   operation   from its back into input A, from its left or right into input B (unless B is fixed
 //               in its panel); when both are full it works for a second and outputs the result
 //   one-input   the Bloch projector, detector and orrery take A from any side but the front
+//   splitter    from its back; deals out to its front, left and right in turn
+//   merger      from its back, left and right, one each; sends them out the front in turn
+//   sorter      from its back; matches go out one side, everything else straight on
+//   crossing    from any side, one per side; each leaves by the opposite side
 //   collector   anything, until full
 //   hub         anything; elements matching its order count toward it
 // Results of 0, sandwiches whose B has no inverse, and non-states sent to qubit machines vanish
@@ -16,7 +20,7 @@ import { loadMv, saveMv } from './items.ts';
 import { apply, type Op } from './ops.ts';
 import { ORDERS, type HubProgress, type Order } from './orders.ts';
 import { E3, bloch, isState, probUp, samePoint, sameState } from './qubit.ts';
-import { SINGLE_INPUT, STEP, opposite, type Block, type Carried, type Dir, type Machine, type World } from './world.ts';
+import { SINGLE_INPUT, STEP, opposite, type Block, type Carried, type Dir, type Machine, type SortMode, type World } from './world.ts';
 import { Q } from '@codecraft/ga';
 
 export const TICK = 1 / 20;
@@ -113,6 +117,48 @@ export class Factory {
       }
       case 'collector':
         return;
+      case 'splitter': {
+        // deal out to the front, left and right in turn, skipping any that are full
+        if (!m.item) return;
+        for (let k = 0; k < 3; k++) {
+          const i = (m.next + k) % 3;
+          if (this.push(x, y, z, rel(m.facing, SPLIT_ORDER[i]), m.item)) {
+            m.item = null;
+            m.next = (i + 1) % 3;
+            return;
+          }
+        }
+        return;
+      }
+      case 'merger': {
+        // take from the back, left and right in turn, so no input starves the others
+        for (let k = 0; k < 3; k++) {
+          const i = (m.next + k) % 3;
+          const side = MERGE_ORDER[i];
+          const mv = m.slots[side];
+          if (!mv) continue;
+          if (this.push(x, y, z, m.facing, mv)) {
+            m.slots[side] = null;
+            m.next = (i + 1) % 3;
+          }
+          return;
+        }
+        return;
+      }
+      case 'sorter': {
+        if (!m.item) return;
+        const dir = sortMatches(m.mode, m.filter, m.item) ? rel(m.facing, m.side) : m.facing;
+        if (this.push(x, y, z, dir, m.item)) m.item = null;
+        return;
+      }
+      case 'crossing': {
+        // straight through: whatever came in on one side leaves by the opposite side
+        for (const from of [0, 1, 2, 3] as Dir[]) {
+          const mv = m.slots[from];
+          if (mv && this.push(x, y, z, opposite(from), mv)) m.slots[from] = null;
+        }
+        return;
+      }
       default: {
         const single = SINGLE_INPUT.includes(m.type);
         const b = m.fixed ?? m.b;
@@ -207,6 +253,20 @@ export class Factory {
         else b.stored.push({ mv, count: 1 });
         return true;
       }
+      case 'splitter':
+        if (b.item || relative(b.facing, from) !== 2) return false;
+        return (b.item = mv), true;
+      case 'sorter':
+        if (b.item || relative(b.facing, from) !== 2) return false;
+        return (b.item = mv), true;
+      case 'merger': {
+        const side = relative(b.facing, from);
+        if (side === 0 || b.slots[side]) return false;
+        return (b.slots[side] = mv), true;
+      }
+      case 'crossing':
+        if (b.slots[from]) return false;
+        return (b.slots[from] = mv), true;
       default: {
         const side = SINGLE_INPUT.includes(b.type) ? (from === b.facing ? null : 'a') : inputSide(b.facing, from);
         if (side === 'a' && !b.a) return (b.a = mv), true;
@@ -215,6 +275,38 @@ export class Factory {
       }
     }
   }
+}
+
+/** a side relative to a facing: 0 front, 1 left, 2 back, 3 right */
+export const relative = (facing: Dir, side: Dir) => (side - facing + 4) % 4;
+/** the absolute side at a relative position to a facing */
+export const rel = (facing: Dir, r: number) => ((facing + r) % 4) as Dir;
+export const SPLIT_ORDER = [0, 1, 3];
+export const MERGE_ORDER = [2, 1, 3];
+
+/** the sides a machine can push elements out of */
+export function outputs(m: Machine): Dir[] {
+  switch (m.type) {
+    case 'collector':
+      return [];
+    case 'splitter':
+      return SPLIT_ORDER.map((r) => rel(m.facing, r));
+    case 'sorter':
+      return [m.facing, rel(m.facing, m.side)];
+    case 'crossing':
+      return [0, 1, 2, 3];
+    default:
+      return [m.facing];
+  }
+}
+
+/** does a sorter in this mode, with this sample, send mv to its side? */
+export function sortMatches(mode: SortMode, filter: Multivector | null, mv: Multivector) {
+  if (mode === 'same') return !!filter && mv.equals(filter);
+  if (mode === 'state') return isState(mv);
+  const g = mv.grades();
+  const want = { scalar: 0, vector: 1, bivector: 2, trivector: 3 }[mode];
+  return g.length === 1 && g[0] === want;
 }
 
 /** which input of an operation machine facing `facing` an arrival from side `from` feeds */

@@ -2,7 +2,11 @@
 // copper, with brass plates naming each part. Every model sits on the block's floor, faces local +x
 // (its output), and animates from the state the factory leaves in its block:
 //   extractor        a pump: its rod strokes and its flywheel turns once per element drawn
-//   duct             a conveyor belt whose surface runs the way it carries
+//   duct             a conveyor belt whose surface runs the way it carries, bent round where fed from a side
+//   splitter         a pointer that turns to the side the next element goes out of
+//   merger           a hopper with a pointer that turns to the input whose turn it is
+//   sorter           a glass jar holding its sample, and a flap that swings toward a match's side
+//   crossing         two belts crossing under a brass turntable plate
 //   adder            two meshing gears that turn while it works
 //   wedger           a stamping press whose ram comes down as the work completes
 //   multiplier       a spoked flywheel that spins up while it works
@@ -12,7 +16,7 @@
 //   bench            a workbench with a vice and a gear train
 import * as THREE from 'three';
 import type { Multivector } from '@codecraft/ga';
-import { DUCT_SPEED, EXTRACT_EVERY, WORK_TIME, COLLECTOR_CAPACITY } from './factory';
+import { DUCT_SPEED, EXTRACT_EVERY, WORK_TIME, COLLECTOR_CAPACITY, MERGE_ORDER, SPLIT_ORDER, sortMatches } from './factory';
 import type { MachineType } from './items';
 import { MACHINE_LOOK, hex } from './looks';
 import { E3, bloch, fiber, project, toQuat } from './qubit';
@@ -222,7 +226,7 @@ export function scrollBelts(dt: number) {
 export interface Model {
   group: THREE.Group;
   /** where held elements are drawn, in the model's frame */
-  anchors: { a: THREE.Vector3; b: THREE.Vector3; out: THREE.Vector3; fixed: THREE.Vector3 };
+  anchors: Record<string, THREE.Vector3>;
   /** where steam comes out, in the model's frame */
   chimney: THREE.Vector3;
   update(b: Block | undefined, dt: number, time: number): void;
@@ -412,7 +416,9 @@ function extractor(): Model {
   g.add(mesh(cyl(0.2, 0.24, 0.06, 24), M.darkBrass, 0, 0.69, 0));
   const rod = new THREE.Group();
   rod.add(mesh(cyl(0.035, 0.035, 0.42, 10), M.steel, 0, 0.21, 0), mesh(box(0.2, 0.05, 0.08), M.darkIron, 0, 0.43, 0));
-  rod.position.set(0, 0.68, 0);
+  // seated half its length into the housing, so its foot stays hidden at the top of the stroke
+  const ROD_BASE = 0.47;
+  rod.position.set(0, ROD_BASE, 0);
   g.add(rod);
   // flywheel on the side, linked to the rod
   const fly = wheel(0.2, 5, M.iron);
@@ -454,7 +460,7 @@ function extractor(): Model {
       const m = b?.kind === 'machine' && b.type === 'extractor' ? b : null;
       const phase = m ? m.timer / EXTRACT_EVERY : 0;
       const running = !!m && m.timer > 0;
-      rod.position.y = 0.68 + (running ? 0.1 * (1 - Math.cos(phase * Math.PI * 2)) : 0);
+      rod.position.y = ROD_BASE + (running ? 0.1 * (1 - Math.cos(phase * Math.PI * 2)) : 0);
       fly.rotation.z = -phase * Math.PI * 2;
       needlePivot.rotation.z = running ? -0.6 + phase * 1.6 + Math.sin(time * 30) * 0.03 : 0.8;
       lamp.set(running, dt);
@@ -473,6 +479,221 @@ function duct(): Model {
     g.add(roller);
   }
   return { group: g, anchors: ANCHORS(), chimney: new THREE.Vector3(), update() {} };
+}
+
+/**
+ * A point on a corner belt, in its frame: `r` from the corner it turns about, at angle `a` from 0 where
+ * it comes in to π/2 at its front. `zs` is −1 for a belt fed from its left, 1 from its right.
+ */
+export function curvePoint(zs: number, r: number, a: number): [number, number] {
+  return [0.5 - r * Math.cos(a), zs * (0.5 - r * Math.sin(a))];
+}
+
+/** the belt surface of a corner: a quarter ring whose texture runs along the arc at the same pace as a straight belt */
+function cornerBeltGeometry(zs: number) {
+  return geo(`corner${zs}`, () => {
+    const N = 20;
+    const pos: number[] = [];
+    const uv: number[] = [];
+    const idx: number[] = [];
+    for (let i = 0; i <= N; i++) {
+      const a = (i / N) * (Math.PI / 2);
+      for (const [k, r] of [[0, 0.25], [1, 0.75]]) {
+        const [x, z] = curvePoint(zs, r, a);
+        pos.push(x, 0.315, z);
+        // the middle of the belt is π/4 long, so this spacing matches the straight belt's texture
+        uv.push((i / N) * (Math.PI / 4), k);
+      }
+    }
+    for (let i = 0; i < N; i++) {
+      const [a0, b0, a1, b1] = [2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 3];
+      // wind each triangle so it faces up, whichever way the corner turns
+      if (zs < 0) idx.push(a0, b0, a1, b0, b1, a1);
+      else idx.push(a0, a1, b0, b0, a1, b1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  });
+}
+
+/** a belt that comes in from its left (zs −1) or right (zs 1) and bends round to leave by its front */
+function cornerDuct(zs: number): Model {
+  const g = new THREE.Group();
+  g.add(mesh(cornerBeltGeometry(zs), beltMat));
+  // rails: quarter rings about the corner, turned to sweep from the side in to the front
+  for (const r of [0.22, 0.78]) {
+    const rail = new THREE.Group();
+    const ring = mesh(geo(`rail${r}`, () => new THREE.TorusGeometry(r, 0.03, 6, 24, Math.PI / 2)), M.iron);
+    ring.rotation.x = Math.PI / 2;
+    rail.add(ring);
+    rail.position.set(0.5, 0.29, zs * 0.5);
+    rail.rotation.y = zs < 0 ? -Math.PI / 2 : Math.PI;
+    g.add(rail);
+    for (const a of [0.15, Math.PI / 2 - 0.15]) {
+      const [x, z] = curvePoint(zs, r, a);
+      g.add(mesh(box(0.05, 0.25, 0.05), M.darkIron, x, 0.12, z));
+    }
+  }
+  const entry = mesh(cyl(0.05, 0.05, 0.54, 12), M.steel, 0, 0.29, zs * 0.47);
+  entry.rotation.z = Math.PI / 2;
+  const exit = mesh(cyl(0.05, 0.05, 0.54, 12), M.steel, 0.47, 0.29, 0);
+  exit.rotation.x = Math.PI / 2;
+  g.add(entry, exit);
+  return { group: g, anchors: ANCHORS(), chimney: new THREE.Vector3(), update() {} };
+}
+
+// --- logistics ---------------------------------------------------------------------------------
+
+/** a belt `len` long whose texture keeps the straight belt's scale */
+function beltPiece(len: number) {
+  return geo(`beltPiece${len}`, () => {
+    const g = new THREE.BoxGeometry(len, 0.03, 0.5);
+    const uv = g.getAttribute('uv');
+    for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len);
+    return g;
+  });
+}
+
+/** a short run of belt through side r (0 front, 1 left, 2 back, 3 right), running in or out */
+function stub(g: THREE.Group, r: number, inward: boolean) {
+  const s = new THREE.Group();
+  const belt = mesh(beltPiece(0.24), beltMat, 0.38, 0.3, 0);
+  if (inward) belt.rotation.y = Math.PI;
+  s.add(belt);
+  for (const z of [-0.27, 0.27]) s.add(mesh(box(0.24, 0.1, 0.05), M.iron, 0.38, 0.27, z));
+  s.add(mesh(box(0.05, 0.25, 0.05), M.darkIron, 0.45, 0.12, 0.27), mesh(box(0.05, 0.25, 0.05), M.darkIron, 0.45, 0.12, -0.27));
+  s.rotation.y = (r * Math.PI) / 2;
+  g.add(s);
+}
+
+/** the low iron box the splitter, merger and sorter are built on, with belts through the given sides */
+function crate(type: MachineType, ins: number[], outs: number[]) {
+  const g = new THREE.Group();
+  g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
+  g.add(mesh(box(0.54, 0.36, 0.54), M.iron, 0, 0.28, 0));
+  g.add(mesh(box(0.6, 0.05, 0.6), M.brass, 0, 0.485, 0));
+  for (const [x, z] of [[0.28, 0.28], [0.28, -0.28], [-0.28, 0.28], [-0.28, -0.28]]) g.add(mesh(cyl(0.035, 0.035, 0.42, 8), M.brass, x, 0.3, z));
+  rivets(g, 0.515, 0.26, 2);
+  for (const r of ins) stub(g, r, true);
+  for (const r of outs) stub(g, r, false);
+  const sym = plate(MACHINE_LOOK[type].symbol, 0.24, 0.1);
+  sym.rotation.x = -Math.PI / 2;
+  sym.rotation.z = -Math.PI / 2;
+  sym.position.set(-0.2, 0.511, 0);
+  g.add(sym);
+  return g;
+}
+
+/** a brass pointer on a spindle that turns to face one side, standing on a gear */
+function pointer(g: THREE.Group, y: number, length: number) {
+  const arm = new THREE.Group();
+  arm.add(mesh(box(length, 0.04, 0.05), M.brass, length / 2, 0, 0));
+  const tip = mesh(geo('pointerTip', () => new THREE.ConeGeometry(0.045, 0.1, 10)), M.copper, length + 0.04, 0, 0);
+  tip.rotation.z = -Math.PI / 2;
+  arm.add(tip, mesh(cyl(0.04, 0.04, 0.06, 12), M.darkBrass));
+  const cog = mesh(gear(0.11, 10, 0.03), M.darkBrass, 0, -0.05, 0);
+  cog.rotation.x = Math.PI / 2;
+  arm.add(cog);
+  arm.position.set(0.04, y, 0);
+  g.add(arm, mesh(cyl(0.02, 0.02, y - 0.5, 8), M.steel, 0.04, (y + 0.5) / 2, 0));
+  // turn the short way round toward side r (0 front, 1 left, 2 back, 3 right)
+  let angle = 0;
+  return (r: number, dt: number) => {
+    const target = (r * Math.PI) / 2;
+    const d = Math.atan2(Math.sin(target - angle), Math.cos(target - angle));
+    angle += d * Math.min(1, dt * 10);
+    arm.rotation.y = angle;
+  };
+}
+
+/** a point beside side r of a block, `d` out from its middle, at height y */
+const sideAnchor = (r: number, d: number, y: number) => new THREE.Vector3(Math.cos((r * Math.PI) / 2) * d, y, -Math.sin((r * Math.PI) / 2) * d);
+
+const logisticAnchors = (y: number) => ({ ...ANCHORS(), ...Object.fromEntries([0, 1, 2, 3].map((r) => [`s${r}`, sideAnchor(r, 0.3, y)])) });
+
+function splitter(): Model {
+  const g = crate('splitter', [2], [0, 1, 3]);
+  const turn = pointer(g, 0.62, 0.18);
+  return {
+    group: g,
+    anchors: { ...logisticAnchors(0.62), item: new THREE.Vector3(0.04, 0.86, 0) },
+    chimney: new THREE.Vector3(0, 0.8, 0),
+    update(b, dt) {
+      // the pointer shows where the next element goes
+      if (b?.kind === 'machine' && b.type === 'splitter') turn(SPLIT_ORDER[b.next], dt);
+    },
+  };
+}
+
+function merger(): Model {
+  const g = crate('merger', [1, 2, 3], [0]);
+  // a copper hopper the inputs tip into
+  const rim = mesh(torus(0.2, 0.018), M.brass, 0.04, 0.72, 0);
+  rim.rotation.x = Math.PI / 2;
+  g.add(mesh(cyl(0.2, 0.08, 0.2, 20, true), M.copper, 0.04, 0.62, 0), rim);
+  const turn = pointer(g, 0.78, 0.2);
+  return {
+    group: g,
+    anchors: logisticAnchors(0.66),
+    chimney: new THREE.Vector3(0, 0.9, 0),
+    update(b, dt) {
+      // the pointer shows whose turn it is
+      if (b?.kind === 'machine' && b.type === 'merger') turn(MERGE_ORDER[b.next], dt);
+    },
+  };
+}
+
+function sorter(): Model {
+  const g = crate('sorter', [2], [0, 1, 3]);
+  // a glass jar holding the sample, so you can see what it sorts by
+  g.add(mesh(cyl(0.15, 0.15, 0.03, 20), M.darkBrass, 0.04, 0.525, 0));
+  g.add(mesh(geo('jar', () => new THREE.CylinderGeometry(0.13, 0.13, 0.3, 20, 1, true)), M.glass, 0.04, 0.69, 0));
+  g.add(mesh(cyl(0.15, 0.15, 0.04, 20), M.brass, 0.04, 0.86, 0), mesh(sphere(0.03), M.brass, 0.04, 0.9, 0));
+  // a lamp on each side; the lit one is where matches go
+  const lamps = { 1: pilot(MACHINE_LOOK.sorter.colour), 3: pilot(MACHINE_LOOK.sorter.colour) };
+  lamps[1].lamp.position.set(0.24, 0.51, -0.24);
+  lamps[3].lamp.position.set(0.24, 0.51, 0.24);
+  g.add(lamps[1].lamp, lamps[3].lamp);
+  // a flap in front of the jar that swings toward where the element in hand will go
+  const flap = new THREE.Group();
+  flap.add(mesh(box(0.16, 0.12, 0.02), M.brass, 0.08, 0, 0));
+  flap.position.set(0.2, 0.6, 0);
+  g.add(flap, mesh(cyl(0.012, 0.012, 0.14, 6), M.steel, 0.2, 0.58, 0));
+  let angle = 0;
+  return {
+    group: g,
+    anchors: { ...logisticAnchors(0.62), filter: new THREE.Vector3(0.04, 0.69, 0), item: new THREE.Vector3(0.3, 0.8, 0) },
+    chimney: new THREE.Vector3(0, 1, 0),
+    update(b, dt) {
+      const m = b?.kind === 'machine' && b.type === 'sorter' ? b : null;
+      const toSide = !!m?.item && sortMatches(m.mode, m.filter, m.item);
+      const target = toSide ? (m!.side === 1 ? 1 : -1) * (Math.PI / 2.5) : 0;
+      angle += (target - angle) * Math.min(1, dt * 10);
+      flap.rotation.y = angle;
+      lamps[1].set(m?.side === 1, dt);
+      lamps[3].set(m?.side === 3, dt);
+    },
+  };
+}
+
+function crossing(): Model {
+  const g = new THREE.Group();
+  for (const [x, z] of [[0.36, 0.36], [0.36, -0.36], [-0.36, 0.36], [-0.36, -0.36]]) {
+    g.add(mesh(box(0.06, 0.28, 0.06), M.darkIron, x, 0.14, z));
+    g.add(mesh(box(0.28, 0.08, 0.05), M.iron, x, 0.27, z > 0 ? 0.27 : -0.27), mesh(box(0.05, 0.08, 0.28), M.iron, x > 0 ? 0.27 : -0.27, 0.27, z));
+  }
+  g.add(mesh(box(1, 0.03, 0.5), beltMat, 0, 0.3, 0));
+  const across = mesh(box(1, 0.03, 0.5), beltMat, 0, 0.305, 0);
+  across.rotation.y = Math.PI / 2;
+  g.add(across);
+  // a brass turntable plate where the two belts meet
+  g.add(mesh(cyl(0.2, 0.2, 0.02, 24), M.brass, 0, 0.325, 0));
+  rivets(g, 0.335, 0.12, 1);
+  return { group: g, anchors: logisticAnchors(0.5), chimney: new THREE.Vector3(), update() {} };
 }
 
 function collector(): Model {
@@ -786,8 +1007,23 @@ function orrery(): Model {
   };
 }
 
-export function buildModel(kind: MachineType | 'hub' | 'bench'): Model {
+/** what a block is drawn as: a duct fed only from one side is drawn as a corner */
+export type ModelKind = MachineType | 'hub' | 'bench' | 'duct-left' | 'duct-right';
+
+export function buildModel(kind: ModelKind): Model {
   switch (kind) {
+    case 'duct-left':
+      return cornerDuct(-1);
+    case 'duct-right':
+      return cornerDuct(1);
+    case 'splitter':
+      return splitter();
+    case 'merger':
+      return merger();
+    case 'sorter':
+      return sorter();
+    case 'crossing':
+      return crossing();
     case 'adder':
       return adder();
     case 'wedger':

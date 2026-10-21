@@ -33,7 +33,15 @@ export type MachineState =
   | { type: 'extractor'; timer: number; out: Carried | null }
   | { type: 'collector'; stored: { mv: Multivector; count: number }[] }
   | ({ type: 'adder' | 'wedger' | 'multiplier' | 'sandwich' | 'gate' | 'bloch' | 'detector' } & Inputs)
-  | ({ type: 'orrery'; seen: Multivector[] } & Inputs);
+  | ({ type: 'orrery'; seen: Multivector[] } & Inputs)
+  // logistics: these only move elements around
+  | { type: 'splitter'; item: Multivector | null; next: number }
+  | { type: 'merger'; slots: (Multivector | null)[]; next: number }
+  | { type: 'sorter'; item: Multivector | null; filter: Multivector | null; mode: SortMode; side: 1 | 3 }
+  | { type: 'crossing'; slots: (Multivector | null)[] };
+
+/** what a sorter sends to its side: elements equal to its sample, or every element of one kind */
+export type SortMode = 'same' | 'scalar' | 'vector' | 'bivector' | 'trivector' | 'state';
 
 /** what an operation machine holds: A, B (or a fixed B, possibly one of the preset gates), the result, and how far along it is */
 interface Inputs {
@@ -58,6 +66,11 @@ export function newMachine(type: MachineType, facing: Dir): Machine {
   if (type === 'duct') return { kind: 'machine', facing, type, item: null };
   if (type === 'extractor') return { kind: 'machine', facing, type, timer: 0, out: null };
   if (type === 'collector') return { kind: 'machine', facing, type, stored: [] };
+  if (type === 'splitter') return { kind: 'machine', facing, type, item: null, next: 0 };
+  // merger slots are indexed by side relative to its facing (1 left, 2 back, 3 right); crossing slots by the absolute side an element came in from
+  if (type === 'merger') return { kind: 'machine', facing, type, slots: [null, null, null, null], next: 0 };
+  if (type === 'sorter') return { kind: 'machine', facing, type, item: null, filter: null, mode: 'same', side: 1 };
+  if (type === 'crossing') return { kind: 'machine', facing, type, slots: [null, null, null, null] };
   const inputs = { a: null, b: null, fixed: null, preset: null, out: null, work: 0 };
   if (type === 'orrery') return { kind: 'machine', facing, type, seen: [], ...inputs };
   return { kind: 'machine', facing, type, ...inputs };
@@ -93,6 +106,8 @@ export function contents(m: Machine): Multivector[] {
   if (m.type === 'duct') return m.item ? [m.item.mv] : [];
   if (m.type === 'extractor') return m.out ? [m.out.mv] : [];
   if (m.type === 'collector') return m.stored.flatMap((s) => Array(s.count).fill(s.mv));
+  if (m.type === 'splitter' || m.type === 'sorter') return m.item ? [m.item] : [];
+  if (m.type === 'merger' || m.type === 'crossing') return m.slots.filter((x): x is Multivector => !!x);
   // a preset gate was never the player's to get back
   return [m.a, m.b, m.preset ? null : m.fixed, m.out].filter((x): x is Multivector => !!x);
 }
@@ -101,7 +116,7 @@ export function contents(m: Machine): Multivector[] {
 export const usable = (b: Block | undefined) => !!b && (b.kind === 'bench' || b.kind === 'hub' || (b.kind === 'machine' && b.type !== 'duct'));
 
 /** how tall a block is for walking on: ducts are low enough to step over */
-export const heightOf = (b: Block | undefined) => (!b ? 0 : b.kind === 'machine' && b.type === 'duct' ? 0.375 : 1);
+export const heightOf = (b: Block | undefined) => (!b ? 0 : b.kind === 'machine' && (b.type === 'duct' || b.type === 'crossing') ? 0.375 : 1);
 
 export class World {
   private blocks = new Map<number, Block>();
@@ -198,6 +213,14 @@ function saveBlock(b: Block): SavedBlock {
       return { ...base, timer: b.timer, out: b.out ? saveMv(b.out.mv) : null };
     case 'collector':
       return { ...base, stored: b.stored.map((s) => [saveMv(s.mv), s.count]) };
+    case 'splitter':
+      return { ...base, item: mvOrNull(b.item), next: b.next };
+    case 'merger':
+      return { ...base, slots: b.slots.map(mvOrNull), next: b.next };
+    case 'sorter':
+      return { ...base, item: mvOrNull(b.item), filter: mvOrNull(b.filter), mode: b.mode, side: b.side };
+    case 'crossing':
+      return { ...base, slots: b.slots.map(mvOrNull) };
     default:
       return {
         ...base,
@@ -225,6 +248,14 @@ function loadBlock(s: SavedBlock): Block {
     m.out = s.out ? { id: loadedIds++, mv: loadMv(s.out as SavedMv), t: 1, from: null } : null;
   } else if (m.type === 'collector') {
     m.stored = ((s.stored as [SavedMv, number][]) ?? []).map(([mv, count]) => ({ mv: loadMv(mv), count }));
+  } else if (m.type === 'splitter') {
+    Object.assign(m, { item: loadOrNull(s.item), next: (s.next as number) ?? 0 });
+  } else if (m.type === 'merger') {
+    Object.assign(m, { slots: ((s.slots as unknown[]) ?? [null, null, null, null]).map(loadOrNull), next: (s.next as number) ?? 0 });
+  } else if (m.type === 'sorter') {
+    Object.assign(m, { item: loadOrNull(s.item), filter: loadOrNull(s.filter), mode: (s.mode as SortMode) ?? 'same', side: (s.side as 1 | 3) ?? 1 });
+  } else if (m.type === 'crossing') {
+    m.slots = ((s.slots as unknown[]) ?? [null, null, null, null]).map(loadOrNull);
   } else if (m.type !== 'duct') {
     Object.assign(m, {
       a: loadOrNull(s.a),
