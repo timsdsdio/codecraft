@@ -710,7 +710,7 @@ export function AchievementsScreen({ game }: { game: Game }) {
     <Sheet title="Goals" game={game} slots={false}>
       <p className="dim">
         A goal is met when the thing it names exists: in your inventory, in a Store, in a machine or placed in the world. Nothing is used up,
-        and nothing is locked behind a goal. Each branch reads left to right, and new goals are named as you meet the ones before them.{' '}
+        and nothing is locked behind a goal. Each branch reads left to right; the goals within reach are lit, and the ones further on are dimmer.{' '}
         {earned.size} of {ACHIEVEMENTS.length} met.
       </p>
       {BRANCHES.map((br) => {
@@ -734,30 +734,29 @@ export function AchievementsScreen({ game }: { game: Game }) {
                     const [x1, y1, x2, y2] = [x(a) + NODE_W, y(a) + NODE_H / 2, x(b), y(b) + NODE_H / 2];
                     const mid = (x1 + x2) / 2;
                     const lit = earned.has(from) && earned.has(to);
-                    const known = game.achievements.visible(b.a);
+                    const ahead = !game.achievements.reachable(b.a);
                     return (
                       <path
                         key={`${from}-${to}`}
                         d={`M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`}
-                        className={`edge${lit ? ' lit' : ''}${known ? '' : ' unknown'}`}
+                        className={`edge${lit ? ' lit' : ''}${ahead ? ' ahead' : ''}`}
                       />
                     );
                   })}
                 </svg>
                 {nodes.map((n) => {
                   const done = earned.has(n.a.id);
-                  const seen = game.achievements.visible(n.a);
+                  const ahead = !game.achievements.reachable(n.a);
                   return (
                     <button
                       key={n.a.id}
-                      className={`node${done ? ' earned' : ''}${open?.id === n.a.id ? ' open' : ''}`}
+                      className={`node${done ? ' earned' : ''}${ahead ? ' ahead' : ''}${open?.id === n.a.id ? ' open' : ''}`}
                       style={{ left: x(n), top: y(n), width: NODE_W, height: NODE_H }}
-                      disabled={!seen}
                       onClick={() => setOpen(n.a)}
                     >
-                      <b>{seen ? n.a.title : '?'}</b>
-                      {seen && <span className="dim goal">{done ? 'Met' : n.a.goal}</span>}
-                      {seen && n.outside.length > 0 && <span className="after">after {n.outside.map((o) => o.title).join(', ')}</span>}
+                      <b>{n.a.title}</b>
+                      <span className="dim goal">{done ? 'Met' : n.a.goal}</span>
+                      {n.outside.length > 0 && <span className="after">after {n.outside.map((o) => o.title).join(', ')}</span>}
                     </button>
                   );
                 })}

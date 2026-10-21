@@ -567,9 +567,9 @@ h3 {
 .edge.lit {
   stroke: var(--gold);
 }
-.edge.unknown {
+.edge.ahead {
   stroke-dasharray: 4 5;
-  stroke: rgba(255, 255, 255, 0.15);
+  stroke: rgba(0, 255, 240, 0.2);
 }
 .node {
   position: absolute;
@@ -602,6 +602,14 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+.node.ahead {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.node.ahead:hover,
+.node.ahead.open {
+  opacity: 0.9;
 }
 .node.earned {
   border-color: var(--gold);

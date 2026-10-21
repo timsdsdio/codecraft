@@ -23,7 +23,7 @@ test('every achievement can be reached from the root by earning parents', () => 
   let grew = true;
   while (grew) {
     grew = false;
-    for (const a of ACHIEVEMENTS) if (!got.earned.has(a.id) && got.visible(a)) (got.earned.set(a.id, 0), (grew = true));
+    for (const a of ACHIEVEMENTS) if (!got.earned.has(a.id) && got.reachable(a)) (got.earned.set(a.id, 0), (grew = true));
   }
   assert.equal(got.earned.size, ACHIEVEMENTS.length);
 });

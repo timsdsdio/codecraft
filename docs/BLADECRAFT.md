@@ -311,9 +311,10 @@ exists, in your inventory, on your cursor, in a Store, inside a machine, or plac
 nothing is locked behind a goal, so a factory can be laid out however suits it. A met goal stays
 met.
 
-Goals are arranged as a tree, where a goal's parents are the ideas it builds on. A goal appears
-once one of its parents is met. Each has a goal and a lesson, and the lesson can be read at any
-time. The tree has four branches, each drawn as its own band read left to right, with lines from
+Goals are arranged as a tree, where a goal's parents are the ideas it builds on. The whole tree is
+shown from the start, so you can see where you're headed: goals within reach (a parent met, or no
+parents) are lit, and those further on are dimmer, with dashed lines leading to them. Each has a
+goal and a lesson, and the lesson can be read at any time. The tree has four branches, each drawn as its own band read left to right, with lines from
 each idea to the ones that build on it and a count of how many are met. An idea that follows one in
 another branch says so on its card ("after Volume").
 
