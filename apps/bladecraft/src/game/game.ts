@@ -760,7 +760,9 @@ export class Game {
       if (p && item) actions.push(`Place: ${itemName(item)}${p.facing !== null ? ` facing ${DIR_NAMES[p.facing]}` : ''}`);
       prompt = { name: describeBlock(b, this.world, this.target!.block, this.factory.field), actions };
     }
-    const key = JSON.stringify(prompt);
+    // the touch buttons read the target and placement too, so a new block that reads the same (the
+    // bottom of a deposit after breaking its top) still has to redraw them
+    const key = JSON.stringify([prompt, this.target?.block, p?.cell, p?.ok]);
     if (key !== this.promptKey) {
       this.promptKey = key;
       this.prompt = prompt;
