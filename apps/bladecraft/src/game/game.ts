@@ -233,6 +233,11 @@ export class Game {
     this.changed();
   }
 
+  /** on a desktop, whether the mouse is turning the view (pointer locked) rather than free for the buttons */
+  get looking() {
+    return !this.touch && document.pointerLockElement === this.renderer.renderer.domElement;
+  }
+
   play(canvas?: HTMLCanvasElement) {
     this.open('play');
     if (!this.touch) lock(canvas ?? this.renderer.renderer.domElement);
@@ -566,8 +571,10 @@ export class Game {
     canvas.addEventListener('click', () => {
       if (!this.touch && this.screen === 'play' && !document.pointerLockElement) lock(canvas);
     });
+    // Esc frees the mouse for the buttons without leaving the game; clicking the world takes it back
     document.addEventListener('pointerlockchange', () => {
-      if (!document.pointerLockElement && this.screen === 'play' && !this.touch) this.open('start');
+      if (!document.pointerLockElement) this.keys.clear();
+      this.changed();
     });
     addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== canvas) return;

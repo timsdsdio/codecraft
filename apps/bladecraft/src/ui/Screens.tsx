@@ -45,7 +45,7 @@ export function StartScreen({ game }: { game: Game }) {
       <p className="dim">
         {game.touch
           ? 'Left thumb moves, right thumb looks. Buttons on the right break, use, place and rotate.'
-          : 'WASD moves, the mouse looks, space jumps. Left click breaks; right click uses a machine or places; shift + right click always places; R rotates.'}
+          : 'WASD moves, the mouse looks, space jumps. Left click breaks; right click uses a machine or places; shift + right click always places; R rotates. Esc frees the mouse to click the buttons; click the world to look again.'}
       </p>
       <div className="row">
         <button className="primary" onClick={() => game.play()}>

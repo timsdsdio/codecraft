@@ -91,6 +91,7 @@ function Hud({ game }: { game: Game }) {
   return (
     <>
       <div className="crosshair" />
+      {!game.touch && !game.looking && <div className="free-mouse">Click the world to look around</div>}
       {p && (
         <div className="prompt">
           <b>{p.name}</b>
@@ -110,7 +111,7 @@ function Hud({ game }: { game: Game }) {
           {held?.kind === 'machine' && !game.touch && <span className="dim"> · R rotates</span>}
         </div>
         <Hotbar game={game} onReselect={() => game.open('inventory')} />
-        {!game.touch && <div className="hint">1–9 or wheel picks · E items · L achievements</div>}
+        {!game.touch && <div className="hint">1–9 or wheel picks · E items · L achievements · Esc frees the mouse</div>}
       </div>
     </>
   );
