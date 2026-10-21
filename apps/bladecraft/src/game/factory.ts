@@ -1,4 +1,4 @@
-// The factory: moves stacks through extractors, ducts and machines, a fixed number of ticks per
+// The factory: moves stacks through generators, ducts and machines, a fixed number of ticks per
 // second. It works on the world's blocks directly and knows nothing about drawing.
 //
 // Every machine faces one of four directions and pushes what it makes out of its front into the
@@ -33,7 +33,7 @@ import { STEP, opposite, type Block, type Carried, type Dir, type Machine, type 
 
 export const TICK = 1 / 20;
 export const DUCT_SPEED = 1.5; // blocks per second
-export const EXTRACT_EVERY = 1.5; // seconds per blade
+export const GENERATE_EVERY = 1.5; // seconds per blade
 export const WORK_TIME = 1; // seconds per measurement
 export const LAMP_TIME = 0.25; // seconds per pair of blades a Mill multiplies out
 export const PACK_TIME = 0.5;
@@ -91,16 +91,16 @@ export class Factory {
         if (m.item.t >= 1 && this.push(x, y, z, m.facing, m.item.stack)) m.item = null;
         return;
       }
-      case 'extractor': {
-        const [dx, dz] = STEP[opposite(m.facing)];
-        const source = this.world.get(x + dx, y, z + dz);
-        if (!m.out && source?.kind === 'deposit') {
+      case 'generator': {
+        // a copy of the blade in its sample slot, weight ±1; the sample stays
+        const sample = m.sample?.item.kind === 'element' && m.sample.item.mv.terms.size === 1 ? m.sample : null;
+        if (!m.out && sample) {
           m.timer += dt;
-          if (m.timer >= EXTRACT_EVERY) {
+          if (m.timer >= GENERATE_EVERY) {
             m.timer = 0;
-            m.out = { item: { kind: 'element', mv: source.mv }, count: Q.ONE };
+            m.out = { item: sample.item, count: Q.q(Math.sign(sample.count.n)) };
           }
-        }
+        } else if (!sample) m.timer = 0;
         if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
         return;
       }

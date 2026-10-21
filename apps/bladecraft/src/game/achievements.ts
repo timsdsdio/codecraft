@@ -8,7 +8,7 @@
 // to right. A goal is named once one of its parents is met, so the next ideas come into view as you go.
 import { G3, Multivector } from '@codecraft/ga';
 import { applyCard, type Card } from './cards.ts';
-import { num, valueOf, type Stack } from './items.ts';
+import { num, savedName, valueOf, type Stack } from './items.ts';
 import type { Rule } from './products.ts';
 import { bloch, isState, sameState, samePoint } from './qubit.ts';
 import type { Machine } from './world.ts';
@@ -111,14 +111,14 @@ export const ACHIEVEMENTS: Achievement[] = [
     test: (h) => has(h, (m) => grades(m) === '1' && m.terms.size > 1),
   },
   {
-    id: 'learn-join',
+    id: 'learn-wedge',
     branch: 'algebra',
-    title: 'Learn to join',
-    goal: 'On the Workbench, sort three cells by hand under the Join rule.',
+    title: 'Learn the wedge',
+    goal: 'On the Workbench, sort three cells by hand under the wedge rule.',
     lesson:
-      'Multiplying two blades means laying their factors in a row and sorting them: swapping two neighbours flips the sign, so e₂e₁ = −e₁e₂. Join (∧) allows no cancelling: if two factors match, the result is 0, so e₁ ∧ e₁ = 0.',
+      'Multiplying two blades means laying their factors in a row and sorting them: swapping two neighbours flips the sign, so e₂e₁ = −e₁e₂. The wedge product (∧) allows no cancelling: if two factors match, the result is 0, so e₁ ∧ e₁ = 0.',
     parents: ['three-axes'],
-    test: (h) => h.learned.join,
+    test: (h) => h.learned.wedge,
   },
   {
     id: 'oriented-area',
@@ -127,7 +127,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     goal: 'Have a bivector, such as e₁ ∧ e₂.',
     lesson:
       'a ∧ b is the piece of plane swept out by a and b: its size is the area of their parallelogram, and its ring of arrows runs from a toward b. e₁ ∧ e₂ = e₁₂ is the floor plane, one block in area, turning east-to-north.',
-    parents: ['learn-join'],
+    parents: ['learn-wedge'],
     test: (h) => has(h, (m) => grades(m) === '2'),
   },
   {
@@ -135,7 +135,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     branch: 'algebra',
     title: 'Order matters',
     goal: 'Have a negative bivector, such as −e₁₂.',
-    lesson: 'b ∧ a = −(a ∧ b). Swapping the order flips the orientation: e₂ ∧ e₁ = −e₁₂ is the same plane turning the other way. On the grid, the Join cells mirror across the diagonal with their signs flipped.',
+    lesson: 'b ∧ a = −(a ∧ b). Swapping the order flips the orientation: e₂ ∧ e₁ = −e₁₂ is the same plane turning the other way. On the grid, the wedge cells mirror across the diagonal with their signs flipped.',
     parents: ['oriented-area'],
     test: (h) => has(h, (m) => grades(m) === '2' && [...m.terms.values()].every((c) => c.n < 0)),
   },
@@ -150,14 +150,14 @@ export const ACHIEVEMENTS: Achievement[] = [
     test: (h) => has(h, (m) => grades(m) === '3'),
   },
   {
-    id: 'learn-meter',
+    id: 'learn-dot',
     branch: 'algebra',
-    title: 'Learn to measure',
-    goal: 'Sort three cells by hand under the Meter rule.',
+    title: 'Learn the dot',
+    goal: 'Sort three cells by hand under the dot rule.',
     lesson:
-      'Meter (⌋) needs every factor of the left blade to cancel: e₁ ⌋ e₁₂ = e₂, what is left of the plane once e₁ is taken out. For two vectors it is the dot product, a number saying how much they agree: e₁ ⌋ (e₁ + e₂) = 1.',
-    parents: ['learn-join'],
-    test: (h) => h.learned.meter,
+      'The dot (⌋, the inner product) needs every factor of the left blade to cancel: e₁ ⌋ e₁₂ = e₂, what is left of the plane once e₁ is taken out. For two vectors it is the dot product, a number saying how much they agree: e₁ ⌋ (e₁ + e₂) = 1.',
+    parents: ['learn-wedge'],
+    test: (h) => h.learned.dot,
   },
   {
     id: 'minus-one',
@@ -165,8 +165,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'A real √−1',
     goal: 'Have a negative scalar, such as −1.',
     lesson:
-      'e₁₂ e₁₂ = e₁e₂e₁e₂ = −e₁e₁e₂e₂ = −1: one swap, then two cancels. The unit bivector squares to −1, which is why complex numbers describe rotation: i is the floor plane. Meter gives it too: e₁₂ ⌋ e₁₂ = −1.',
-    parents: ['learn-meter'],
+      'e₁₂ e₁₂ = e₁e₂e₁e₂ = −e₁e₁e₂e₂ = −1: one swap, then two cancels. The unit bivector squares to −1, which is why complex numbers describe rotation: i is the floor plane. The dot gives it too: e₁₂ ⌋ e₁₂ = −1.',
+    parents: ['learn-dot'],
     test: (h) => has(h, (m) => grades(m) === '0' && m.scalarPart().n < 0),
   },
   {
@@ -175,29 +175,29 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'Both halves',
     goal: 'Have a rotor: a scalar plus a bivector, such as 1 + e₁₂.',
     lesson:
-      'Put e₁ + e₂ against e₁ on the grid under Meter, then under Join, and add the results on the tray: 1 and e₁₂. For vectors that sum is the geometric product, ab = a · b + a ∧ b: the diagonal of the grid from Meter, the rest from Join. A scalar plus a bivector is a rotor, and 1 + e₁₂ turns things a quarter turn.',
-    parents: ['learn-meter', 'oriented-area'],
+      'Put e₁ + e₂ against e₁ on the grid under the dot, then under the wedge, and add the results on the tray: 1 and e₁₂. For vectors that sum is the geometric product, ab = a · b + a ∧ b: the diagonal of the grid from the dot, the rest from the wedge. A scalar plus a bivector is a rotor, and 1 + e₁₂ turns things a quarter turn.',
+    parents: ['learn-dot', 'oriented-area'],
     test: (h) => has(h, (m) => grades(m) === '0,2'),
   },
   {
-    id: 'learn-multiply',
+    id: 'learn-geometric',
     branch: 'algebra',
-    title: 'The middle grade',
-    goal: 'Sort three cells by hand under the Multiply rule.',
+    title: 'The geometric product',
+    goal: 'Sort three cells by hand under the geometric rule.',
     lesson:
-      'Join and Meter make the whole product only for vectors. Sort e₁₂ against e₂₃: the e₂ pair cancels, so Join gives 0; e₁ never cancels, so Meter gives 0; yet e₁₂ e₂₃ = e₁₃. Multiply lets anything cancel, and that middle grade is what the two halves miss.',
+      'The wedge and the dot make the whole product only for vectors. Sort e₁₂ against e₂₃: the e₂ pair cancels, so the wedge gives 0; e₁ never cancels, so the dot gives 0; yet e₁₂ e₂₃ = e₁₃. The geometric product lets anything cancel, and that middle grade is what the two halves miss.',
     parents: ['quarter-turn'],
-    test: (h) => h.learned.multiply,
+    test: (h) => h.learned.geometric,
   },
   {
     id: 'right-angles',
     branch: 'algebra',
     title: 'At right angles',
-    goal: 'Have a Multiply card pressed from a trivector.',
+    goal: 'Have a Geometric card pressed from a trivector.',
     lesson:
       'An I card turns every vector into the plane at right angles to it: e₁ becomes e₂₃. Duality is nothing more than using I as an operation. It is how the magnetic field B, a direction, becomes the plane IB in the field F = E + IB.',
-    parents: ['volume', 'learn-multiply'],
-    test: (h) => cards(h).some((c) => c.verb === 'multiply' && !!c.mv && grades(c.mv) === '3'),
+    parents: ['volume', 'learn-geometric'],
+    test: (h) => cards(h).some((c) => c.verb === 'geometric' && !!c.mv && grades(c.mv) === '3'),
   },
   {
     id: 'backwards',
@@ -206,7 +206,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     goal: 'Have a Reverse card.',
     lesson:
       'The reverse writes every product backwards: e₁e₂ becomes e₂e₁ = −e₁₂. Scalars and vectors stay as they are; bivectors and trivectors change sign. A rotor times its reverse is a plain number, so the reverse undoes a turn.',
-    parents: ['learn-multiply'],
+    parents: ['learn-geometric'],
     test: (h) => cards(h).some((c) => c.verb === 'reverse'),
   },
 
@@ -224,19 +224,29 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'built',
     branch: 'factory',
-    title: 'Built to last',
-    goal: 'Build an Extractor and a Store.',
-    lesson: 'An extractor against a deposit draws out one blade every 1.5 seconds, forever. Ducts carry one stack at a time the way they point, and wait when the next block is full, so nothing is lost.',
+    title: 'Somewhere to keep it',
+    goal: 'Build a Store.',
+    lesson: 'A Store holds 27 stacks, put in by hand or by duct. Ducts carry one stack at a time the way they point, and wait when the next block is full, so nothing is lost.',
     parents: ['workbench'],
-    test: (h) => owned(h, 'extractor') && owned(h, 'store'),
+    test: (h) => owned(h, 'store'),
+  },
+  {
+    id: 'generator',
+    branch: 'factory',
+    title: 'Never run dry',
+    goal: 'Place a Generator.',
+    lesson:
+      'Deposits break into a few blades and are gone. A Generator makes the blade in its sample slot every 1.5 seconds, forever, and keeps the sample: one e₁ in, endless e₁ out. It costs a rotor and a trivector, so it comes once you can make both by hand.',
+    parents: ['built', 'quarter-turn'],
+    test: (h) => placed(h, 'generator'),
   },
   {
     id: 'stockpile',
     branch: 'factory',
     title: 'Stockpile',
     goal: 'Have a stack of 64e₁ (or any other unit blade).',
-    lesson: 'Duct an extractor into a Store and the stack grows by itself: the Store adds every blade that arrives onto the stack it already holds, because multiples stack.',
-    parents: ['built'],
+    lesson: 'Duct a Generator into a Store and the stack grows by itself: the Store adds every blade that arrives onto the stack it already holds, because multiples stack.',
+    parents: ['generator'],
     test: (h) => heavy(h, (b) => b.terms.size === 1, 64),
   },
   {
@@ -255,7 +265,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     goal: 'Have a Splitter, a Merger, a Sorter and a Crossing.',
     lesson:
       'A splitter deals out to three sides in turn, a merger takes three inputs in turn, a sorter sends matches to one side (multiples of a sample, or one grade, or qubit states), and a crossing lets two lines pass through one block.',
-    parents: ['stockpile'],
+    parents: ['built'],
     test: (h) => (['splitter', 'merger', 'sorter', 'crossing'] as const).every((t) => owned(h, t)),
   },
   {
@@ -264,8 +274,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'Item into action',
     goal: 'Press a card.',
     lesson:
-      'Every multivector is also an operation. On the Card Press it unfolds into its grade card, and a verb plate says what it will do: Join, Meter, Multiply, Turn, Reverse or Sieve. The card is punched where the multivector has blades, so you can read it off the holes.',
-    parents: ['built', 'learn-join'],
+      'Every multivector is also an operation. On the Card Press it unfolds into its grade card, and a verb plate says what it will do: Wedge, Dot, Geometric, Sandwich, Reverse or Grade. The card is punched where the multivector has blades, so you can read it off the holes.',
+    parents: ['built', 'learn-wedge'],
     test: (h) => cards(h).length > 0,
   },
   {
@@ -283,7 +293,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     branch: 'factory',
     title: 'Both halves, automated',
     goal: 'Have 16 rotors or more in one stack.',
-    lesson: 'A Join card and a Meter card pressed from the same vector, side by side in one Mill, make the geometric product: aX = a ⌋ X + a ∧ X for any vector a. Feed it e₁ + e₂ with e₁ cards and out comes 1 + e₁₂.',
+    lesson: 'A Wedge card and a Dot card pressed from the same vector, side by side in one Mill, make the geometric product: aX = a ⌋ X + a ∧ X for any vector a. Feed it e₁ + e₂ with e₁ cards and out comes 1 + e₁₂.',
     parents: ['mill', 'quarter-turn'],
     test: (h) => heavy(h, (b) => grades(b) === '0,2', 16),
   },
@@ -293,8 +303,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'Quarter turn',
     goal: 'Have a card that turns e₁ into e₂ and e₂ into −e₁.',
     lesson:
-      'A Turn card pressed from 1 − e₁₂ does R X R̃ / (R R̃): a quarter turn about e₃. So does one pressed from 2 − 2e₁₂, because a turn forgets the size of its rotor. Two decks of Multiply cards, 1 − e₁₂ then 1 + e₁₂ from the right, turn too, at twice the size.',
-    parents: ['mill', 'learn-multiply'],
+      'A Sandwich card pressed from 1 − e₁₂ does R X R̃ / (R R̃): a quarter turn about e₃. So does one pressed from 2 − 2e₁₂, because a turn forgets the size of its rotor. Two decks of Geometric cards, 1 − e₁₂ then 1 + e₁₂ from the right, turn too, at twice the size.',
+    parents: ['mill', 'learn-geometric'],
     test: (h) => cards(h).some((c) => turnsTo(c, E1, E2) && turnsTo(c, E2, E1.neg())),
   },
   {
@@ -303,7 +313,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'Mirror',
     goal: 'Have a card that swaps e₁ and e₂.',
     lesson:
-      'A Turn card pressed from a vector reflects: n X n⁻¹ mirrors across the line of n, so e₁ + e₂ swaps e₁ and e₂. It agrees with the quarter turn on e₁ and disagrees on e₂: an operation is pinned down by what it does to more than one thing. Two mirrors make a turn, which is why a rotor is a product of two vectors.',
+      'A Sandwich card pressed from a vector reflects: n X n⁻¹ mirrors across the line of n, so e₁ + e₂ swaps e₁ and e₂. It agrees with the quarter turn on e₁ and disagrees on e₂: an operation is pinned down by what it does to more than one thing. Two mirrors make a turn, which is why a rotor is a product of two vectors.',
     parents: ['turn'],
     test: (h) => cards(h).some((c) => turnsTo(c, E1, E2) && turnsTo(c, E2, E1)),
   },
@@ -315,7 +325,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'A qubit',
     goal: 'Have |1⟩: a state pointing down.',
     lesson:
-      'A rotor is a qubit state. R e₃ R̃ is where it points, its Bloch vector: the scalar 1 points up (|0⟩) and e₂₃ points down (|1⟩). Its size never matters, so states stay exact. A Mill with a live Turn card at its side and e₃ at its back shows where each state points.',
+      'A rotor is a qubit state. R e₃ R̃ is where it points, its Bloch vector: the scalar 1 points up (|0⟩) and e₂₃ points down (|1⟩). Its size never matters, so states stay exact. A Mill with a live Sandwich card at its side and e₃ at its back shows where each state points.',
     parents: ['quarter-turn'],
     test: (h) => has(h, pointsAlong(E3.neg())),
   },
@@ -324,7 +334,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     branch: 'qubits',
     title: 'Superposition',
     goal: 'Have |+⟩: a state pointing along e₁.',
-    lesson: 'A gate is a rotor multiplied on the left. A Multiply card pressed from H = e₂₃ + e₁₂ is a half turn about the e₁ + e₃ diagonal: it turns |0⟩ into |+⟩ = e₂₃ + e₁₂, an even mix of up and down.',
+    lesson: 'A gate is a rotor multiplied on the left. A Geometric card pressed from H = e₂₃ + e₁₂ is a half turn about the e₁ + e₃ diagonal: it turns |0⟩ into |+⟩ = e₂₃ + e₁₂, an even mix of up and down.',
     parents: ['qubit'],
     test: (h) => has(h, pointsAlong(E1)),
   },
@@ -343,7 +353,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'A new phase',
     goal: 'Have two different states that point the same way.',
     lesson:
-      'e₁₂ commutes with e₃, so R(1 + e₁₂) points where R points: the state has moved without the point it shows moving. A Multiply card from 1 + e₁₂, turned end to end to multiply from the right, is a phase shifter.',
+      'e₁₂ commutes with e₃, so R(1 + e₁₂) points where R points: the state has moved without the point it shows moving. A Geometric card from 1 + e₁₂, turned end to end to multiply from the right, is a phase shifter.',
     parents: ['qubit'],
     test: (h) => {
       const states = elements(h).filter(isState);
@@ -395,7 +405,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: 'The Hopf fibration',
     goal: 'Show an orrery two states that point different ways.',
     lesson:
-      'R ↦ R e₃ R̃ squashes each fiber to one point of the sphere of directions: that map is the Hopf fibration, and a Turn card does it. Fibers of different points never meet, yet every pair is linked, like two rings of a chain, and together they fill the 3-sphere.',
+      'R ↦ R e₃ R̃ squashes each fiber to one point of the sphere of directions: that map is the Hopf fibration, and a Sandwich card does it. Fibers of different points never meet, yet every pair is linked, like two rings of a chain, and together they fill the 3-sphere.',
     parents: ['fiber'],
     test: (h) =>
       h.machines.some((m) => {
@@ -528,6 +538,7 @@ export class Achievements {
   }
 
   load(saved: [string, number][]) {
-    this.earned = new Map(saved.filter(([id]) => ACHIEVEMENTS.some((a) => a.id === id)));
+    const named = saved.map(([id, at]) => [id.replace(/^learn-(\w+)$/, (_, rule) => `learn-${savedName(rule)}`), at] as [string, number]);
+    this.earned = new Map(named.filter(([id]) => ACHIEVEMENTS.some((a) => a.id === id)));
   }
 }

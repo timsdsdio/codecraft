@@ -12,7 +12,7 @@ import { G3, Multivector, Q, type Rational } from '@codecraft/ga';
 
 /** blocks with a facing, placed from the inventory */
 export type MachineType =
-  | 'extractor'
+  | 'generator'
   | 'duct'
   | 'store'
   | 'splitter'
@@ -33,14 +33,14 @@ export type MachineType =
 
 /**
  * What a card does with the multivector M it was pressed from, to whatever X a Mill feeds it:
- *   join      M ∧ X
- *   meter     M ⌋ X
- *   multiply  M X, or X M when the card is turned end to end
- *   turn      M X M̃ / (M M̃): a rotation, or a reflection when M is a vector
- *   reverse   X̃ (no M)
- *   sieve     keeps the grades M has and drops the rest
+ *   wedge      M ∧ X, the outer product
+ *   dot        M ⌋ X, the inner product (the left contraction)
+ *   geometric  M X, or X M when the card is turned end to end
+ *   sandwich   M X M̃ / (M M̃): a rotation, or a reflection when M is a vector
+ *   reverse    X̃ (no M)
+ *   grade      keeps the grades M has and drops the rest (grade projection)
  */
-export type Verb = 'join' | 'meter' | 'multiply' | 'turn' | 'reverse' | 'sieve';
+export type Verb = 'wedge' | 'dot' | 'geometric' | 'sandwich' | 'reverse' | 'grade';
 
 export type Item =
   | { kind: 'lattice' }
@@ -65,7 +65,7 @@ export const machine = (type: MachineType): Item => ({ kind: 'machine', type });
 export const stack = (item: Item, count = 1): Stack => ({ item, count: Q.q(count) });
 
 export const MACHINE_NAMES: Record<MachineType, string> = {
-  extractor: 'Extractor',
+  generator: 'Generator',
   duct: 'Duct',
   store: 'Store',
   splitter: 'Splitter',
@@ -86,12 +86,12 @@ export const MACHINE_NAMES: Record<MachineType, string> = {
 };
 
 export const VERB_NAMES: Record<Verb, string> = {
-  join: 'Join',
-  meter: 'Meter',
-  multiply: 'Multiply',
-  turn: 'Turn',
+  wedge: 'Wedge',
+  dot: 'Dot',
+  geometric: 'Geometric',
+  sandwich: 'Sandwich',
   reverse: 'Reverse',
-  sieve: 'Sieve',
+  grade: 'Grade',
 };
 
 // --- weights -----------------------------------------------------------------------------------
@@ -248,8 +248,13 @@ export function saveStack(s: Stack): SavedStack {
   return { item, count: [s.count.n, s.count.d] };
 }
 
+/** verbs and rules as saves from before they took their usual names call them */
+export const SAVED_NAMES: Record<string, string> = { join: 'wedge', meter: 'dot', multiply: 'geometric', turn: 'sandwich', sieve: 'grade' };
+export const savedName = (name: string) => SAVED_NAMES[name] ?? name;
+
 export function loadStack(s: SavedStack): Stack {
-  const raw = s.item as Record<string, unknown> & { kind: Item['kind'] };
+  let raw = s.item as Record<string, unknown> & { kind: Item['kind'] };
+  if (raw.kind === 'card' || raw.kind === 'plate') raw = { ...raw, verb: savedName(raw.verb as string) };
   const item = (
     raw.kind === 'element' || raw.kind === 'reading'
       ? { ...raw, mv: loadMv(raw.mv as SavedMv) }
@@ -261,5 +266,11 @@ export function loadStack(s: SavedStack): Stack {
 }
 
 export const saveSlots = (slots: (Stack | null)[]) => slots.map((s) => (s ? saveStack(s) : null));
+/** a saved stack, or null when it holds a machine the game no longer has */
+export function loadKnownStack(s: SavedStack): Stack | null {
+  const raw = s.item as { kind: string; type?: string };
+  return raw.kind === 'machine' && !(raw.type! in MACHINE_NAMES) ? null : loadStack(s);
+}
+
 export const loadSlots = (saved: (SavedStack | null)[] | undefined, n: number) =>
-  Array.from({ length: n }, (_, i) => (saved?.[i] ? loadStack(saved[i]!) : null));
+  Array.from({ length: n }, (_, i) => (saved?.[i] ? loadKnownStack(saved[i]!) : null));

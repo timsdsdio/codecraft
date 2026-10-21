@@ -21,6 +21,7 @@ import {
   stackOf,
   valueOf,
   loadSlots,
+  savedName,
   saveSlots,
   type Item,
   type Stack,
@@ -98,7 +99,7 @@ export class Game {
   achievements = new Achievements();
   factory: Factory;
   /** hand sorts done on the rail under each rule */
-  sorts: Record<Rule, number> = { join: 0, meter: 0, multiply: 0 };
+  sorts: Record<Rule, number> = { wedge: 0, dot: 0, geometric: 0 };
   selected = 0;
   screen: Screen = 'start';
   target: Hit | null = null;
@@ -112,7 +113,7 @@ export class Game {
     tray: Multivector.zero(G3),
     left: null,
     bottom: null,
-    rule: 'join',
+    rule: 'wedge',
     rail: null,
   };
   readonly touch = matchMedia('(pointer: coarse)').matches;
@@ -168,8 +169,8 @@ export class Game {
 
   learned = (rule: Rule) => this.sorts[rule] >= SORTS_TO_LEARN;
 
-  /** a rule can be learned once the one before it is: Join, then Meter, then Multiply */
-  learnable = (rule: Rule) => rule === 'join' || this.learned(RULES[RULES.indexOf(rule) - 1]);
+  /** a rule can be learned once the one before it is: the wedge, then the dot, then the geometric product */
+  learnable = (rule: Rule) => rule === 'wedge' || this.learned(RULES[RULES.indexOf(rule) - 1]);
 
   // --- world lifecycle -------------------------------------------------------------------------
 
@@ -184,7 +185,7 @@ export class Game {
     this.inventory[1] = stack({ kind: 'lattice' }, 32);
     this.cursor = null;
     this.achievements = new Achievements();
-    this.sorts = { join: 0, meter: 0, multiply: 0 };
+    this.sorts = { wedge: 0, dot: 0, geometric: 0 };
     this.player = new Player();
     this.selected = 0;
     this.turn = 0;
@@ -205,7 +206,8 @@ export class Game {
       this.world = World.load(s.world);
       this.inventory = loadSlots(s.inventory, SLOTS);
       this.achievements.load(s.achievements ?? []);
-      this.sorts = { join: 0, meter: 0, multiply: 0, ...s.sorts };
+      this.sorts = { wedge: 0, dot: 0, geometric: 0 };
+      for (const [rule, n] of Object.entries(s.sorts ?? {})) this.sorts[savedName(rule) as Rule] = n as number;
       this.player.pos.set(...(s.player.pos as [number, number, number]));
       this.player.yaw = s.player.yaw;
       this.player.pitch = s.player.pitch;
@@ -254,7 +256,7 @@ export class Game {
       machines.push(b);
       stacks.push(...contents(b));
     }
-    return { stacks, machines, workbenchPlaced, learned: { join: this.learned('join'), meter: this.learned('meter'), multiply: this.learned('multiply') } };
+    return { stacks, machines, workbenchPlaced, learned: { wedge: this.learned('wedge'), dot: this.learned('dot'), geometric: this.learned('geometric') } };
   }
 
   private checkGoals() {
@@ -349,23 +351,10 @@ export class Game {
     const cell = t.before;
     const ok = !this.world.solid(...cell) && !this.player.occupies(...cell) && cell[1] < 31;
     if (item.kind !== 'machine') return { cell, facing: null, ok };
-    return { cell, facing: this.facingFor(item.type, cell), ok };
+    return { cell, facing: this.facingFor(), ok };
   }
 
-  private facingFor(type: string, cell: [number, number, number]): Dir {
-    if (type === 'extractor') {
-      // back against a deposit: the one aimed at first, then any neighbour
-      const [bx, , bz] = this.target!.block;
-      const candidates: Dir[] = [0, 1, 2, 3];
-      for (const d of candidates) {
-        const [dx, dz] = STEP[d];
-        if (cell[0] + dx === bx && cell[2] + dz === bz && this.world.get(bx, cell[1], bz)?.kind === 'deposit') return opposite(d);
-      }
-      for (const d of candidates) {
-        const [dx, dz] = STEP[d];
-        if (this.world.get(cell[0] + dx, cell[1], cell[2] + dz)?.kind === 'deposit') return opposite(d);
-      }
-    }
+  private facingFor(): Dir {
     return ((this.player.facing() + this.turn) % 4) as Dir;
   }
 
@@ -422,7 +411,11 @@ export class Game {
       case 'wire':
       case 'antenna':
         return [{ field: 'slot', label: 'Current', size: 1, rule: { accepts: ofGrade('1') } }];
-      case 'extractor':
+      case 'generator':
+        return [
+          { field: 'sample', label: 'Sample', size: 1, rule: { accepts: (i) => i.kind === 'element' && i.mv.terms.size === 1 } },
+          { field: 'out', label: 'Out', size: 1, rule: out },
+        ];
       case 'probe':
         return [{ field: 'out', label: 'Out', size: 1, rule: out }];
       case 'detector':
@@ -671,7 +664,7 @@ export class Game {
     this.changed();
   }
 
-  /** turn a card in a Mill slot end to end, so a Multiply card multiplies from the right */
+  /** turn a card in a Mill slot end to end, so a Geometric card multiplies from the right */
   flipCard(i: number) {
     const m = this.panelBlock;
     if (m?.kind !== 'machine' || m.type !== 'mill') return;
@@ -849,10 +842,8 @@ function machineNote(m: Machine, world: World, [x, y, z]: [number, number, numbe
   const inField = !!field.regionAt(x, y, z);
   const holds = (s: Stack | null) => (s ? (s.item.kind === 'element' ? String(valueOf(s)) : itemName(s.item)) : 'nothing');
   switch (m.type) {
-    case 'extractor': {
-      const [dx, dz] = STEP[opposite(m.facing)];
-      return world.get(x + dx, y, z + dz)?.kind === 'deposit' ? '' : ' · no deposit behind it';
-    }
+    case 'generator':
+      return m.sample ? ` · makes ${holds({ item: m.sample.item, count: Q.q(Math.sign(m.sample.count.n)) })}` : ' · no sample';
     case 'store':
       return ` · ${m.slots.filter(Boolean).length} of ${m.slots.length} slots used`;
     case 'sorter':

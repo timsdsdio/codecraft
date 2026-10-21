@@ -1,7 +1,7 @@
 // The machines as small steampunk contraptions built from primitives: riveted iron, brass and
 // copper, with brass plates naming each part. Every model sits on the block's floor, faces local +x
 // (its output), and animates from the state the factory leaves in its block:
-//   extractor        a pump: its rod strokes and its flywheel turns once per element drawn
+//   generator        a pump with its sample in a glass jar: its rod strokes and flywheel turns once per blade made
 //   duct             a conveyor belt whose surface runs the way it carries, bent round where fed from a side
 //   splitter         a pointer that turns to the side the next element goes out of
 //   merger           a hopper with a pointer that turns to the input whose turn it is
@@ -22,7 +22,7 @@
 //   workbench        a wooden bench with a vice and a gear train
 import * as THREE from 'three';
 import type { Multivector } from '@codecraft/ga';
-import { DUCT_SPEED, EXTRACT_EVERY, LAMP_TIME, MERGE_ORDER, PACK_TIME, SPLIT_ORDER, WORK_TIME, sortMatches } from './factory';
+import { DUCT_SPEED, GENERATE_EVERY, LAMP_TIME, MERGE_ORDER, PACK_TIME, SPLIT_ORDER, WORK_TIME, sortMatches } from './factory';
 import { valueOf, type MachineType } from './items';
 import { MACHINE_LOOK, hex } from './looks';
 import { E3, bloch, fiber, project, toQuat } from './qubit';
@@ -279,15 +279,16 @@ function chassis(type: MachineType, sides: string) {
   return { g, lamp };
 }
 
-function extractor(): Model {
+function generator(): Model {
   const g = new THREE.Group();
   g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
-  // intake from the deposit behind
-  const intake = mesh(cyl(0.12, 0.12, 0.3), M.copper, -0.36, 0.3, 0);
-  intake.rotation.z = Math.PI / 2;
-  const iflange = mesh(torus(0.13, 0.035), M.brass, -0.5, 0.3, 0);
-  iflange.rotation.y = Math.PI / 2;
-  g.add(intake, iflange);
+  // a glass jar at the back holding the sample it copies
+  g.add(mesh(cyl(0.13, 0.13, 0.03, 20), M.darkBrass, -0.33, 0.115, 0));
+  g.add(mesh(geo('jar', () => new THREE.CylinderGeometry(0.13, 0.13, 0.3, 20, 1, true)), M.glass, -0.33, 0.28, 0));
+  g.add(mesh(cyl(0.13, 0.13, 0.04, 20), M.brass, -0.33, 0.45, 0));
+  const feed = mesh(cyl(0.035, 0.035, 0.2, 8), M.copper, -0.2, 0.42, 0);
+  feed.rotation.z = Math.PI / 2;
+  g.add(feed);
   // pump housing
   g.add(mesh(cyl(0.24, 0.27, 0.56, 24), M.brass, 0, 0.38, 0));
   for (const y of [0.18, 0.4, 0.62]) {
@@ -324,23 +325,20 @@ function extractor(): Model {
   gauge.position.set(0.16, 0.6, -0.24);
   gauge.rotation.y = -0.5;
   g.add(gauge, mesh(cyl(0.045, 0.06, 0.4, 10), M.darkIron, -0.2, 0.86, -0.2));
-  const pl = plate('EXTRACT', 0.42, 0.12);
+  const pl = plate('GENERATE', 0.42, 0.12);
   pl.position.set(0, 0.32, -0.31);
   pl.rotation.y = Math.PI;
-  const deposit = plate('DEPOSIT', 0.3, 0.1);
-  deposit.position.set(-0.27, 0.52, 0);
-  deposit.rotation.y = -Math.PI / 2;
-  g.add(pl, deposit);
-  const lamp = pilot(MACHINE_LOOK.extractor.colour);
+  g.add(pl);
+  const lamp = pilot(MACHINE_LOOK.generator.colour);
   lamp.lamp.position.set(0.3, 0.1, 0.34);
   g.add(lamp.lamp);
   return {
     group: g,
-    anchors: { ...ANCHORS(), out: new THREE.Vector3(0.72, 0.36, 0) },
+    anchors: { ...ANCHORS(), out: new THREE.Vector3(0.72, 0.36, 0), sample: new THREE.Vector3(-0.33, 0.28, 0) },
     chimney: new THREE.Vector3(-0.2, 1.08, -0.2),
     update(b, dt, time) {
-      const m = b?.kind === 'machine' && b.type === 'extractor' ? b : null;
-      const phase = m ? m.timer / EXTRACT_EVERY : 0;
+      const m = b?.kind === 'machine' && b.type === 'generator' ? b : null;
+      const phase = m ? m.timer / GENERATE_EVERY : 0;
       const running = !!m && m.timer > 0;
       rod.position.y = ROD_BASE + (running ? 0.1 * (1 - Math.cos(phase * Math.PI * 2)) : 0);
       fly.rotation.z = -phase * Math.PI * 2;
@@ -1077,8 +1075,8 @@ export function buildModel(kind: ModelKind): Model {
     case 'plate':
       // plates are drawn all together (fieldview.ts)
       return { group: new THREE.Group(), anchors: ANCHORS(), chimney: new THREE.Vector3(), update() {} };
-    case 'extractor':
-      return extractor();
+    case 'generator':
+      return generator();
     case 'duct':
       return duct();
     case 'store':

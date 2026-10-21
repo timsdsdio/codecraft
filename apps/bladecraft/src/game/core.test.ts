@@ -119,44 +119,44 @@ test('sorting by hand on the rail agrees with the library for every pair of blad
       }
 });
 
-test('e₁₂ × e₂₃: Join and Meter both give 0, Multiply gives e₁₃ (the middle grade)', () => {
+test('e₁₂ × e₂₃: the wedge and the dot both give 0, the geometric product gives e₁₃ (the middle grade)', () => {
   const e23 = e2.op(e3);
-  assert.ok(product('join', e12, e23).isZero());
-  assert.ok(product('meter', e12, e23).isZero());
-  assert.ok(product('multiply', e12, e23).equals(e1.op(e3)));
+  assert.ok(product('wedge', e12, e23).isZero());
+  assert.ok(product('dot', e12, e23).isZero());
+  assert.ok(product('geometric', e12, e23).equals(e1.op(e3)));
 });
 
-test('for vectors, Join + Meter is the geometric product (and the grid is the distributive law)', () => {
+test('for vectors, wedge + dot is the geometric product (and the grid is the distributive law)', () => {
   const a = e1.add(e2);
   const b = e1.sub(e2);
-  assert.ok(product('join', a, b).add(product('meter', a, b)).equals(product('multiply', a, b)));
-  const grid = terms(a).flatMap((x) => terms(b).map((y) => product('multiply', x, y)));
+  assert.ok(product('wedge', a, b).add(product('dot', a, b)).equals(product('geometric', a, b)));
+  const grid = terms(a).flatMap((x) => terms(b).map((y) => product('geometric', x, y)));
   assert.ok(grid.reduce((acc, c) => acc.add(c)).equals(e12.scale(-2)));
 });
 
 // --- cards and the Mill ------------------------------------------------------------------------
 
-test('cards: join, meter, multiply from either side, turn, reverse and sieve', () => {
-  assert.ok(applyCard(card('join', e1), e2)!.equals(e12));
-  assert.ok(applyCard(card('meter', e1), e12)!.equals(e2));
+test('cards: wedge, dot, geometric from either side, sandwich, reverse and grade', () => {
+  assert.ok(applyCard(card('wedge', e1), e2)!.equals(e12));
+  assert.ok(applyCard(card('dot', e1), e12)!.equals(e2));
   const I = e12.op(e3);
-  assert.ok(applyCard(card('multiply', I), e1)!.equals(e2.op(e3)), 'an I card is the dualizer: e₁ becomes e₂₃');
-  assert.ok(applyCard(card('multiply', e1, true), e2)!.equals(e2.gp(e1)), 'turned end to end it multiplies from the right');
+  assert.ok(applyCard(card('geometric', I), e1)!.equals(e2.op(e3)), 'an I card is the dualizer: e₁ becomes e₂₃');
+  assert.ok(applyCard(card('geometric', e1, true), e2)!.equals(e2.gp(e1)), 'turned end to end it multiplies from the right');
   const quarter = scalar(1).sub(e12);
-  assert.ok(applyCard(card('turn', quarter), e1)!.equals(e2), '1 − e₁₂ turns e₁ to e₂');
-  assert.ok(applyCard(card('turn', quarter.scale(2)), e1)!.equals(e2), 'a turn forgets the size of its rotor');
-  assert.ok(applyCard(card('turn', e1.add(e2)), e1)!.equals(e2), 'a vector turn mirrors');
-  assert.ok(applyCard(card('turn', quarter), scalar(1))!.equals(scalar(1)), 'imprinting a Turn card gives 1, not its rotor');
+  assert.ok(applyCard(card('sandwich', quarter), e1)!.equals(e2), '1 − e₁₂ turns e₁ to e₂');
+  assert.ok(applyCard(card('sandwich', quarter.scale(2)), e1)!.equals(e2), 'a turn forgets the size of its rotor');
+  assert.ok(applyCard(card('sandwich', e1.add(e2)), e1)!.equals(e2), 'a vector turn mirrors');
+  assert.ok(applyCard(card('sandwich', quarter), scalar(1))!.equals(scalar(1)), 'a Sandwich card on 1 gives 1, not its rotor');
   assert.ok(applyCard(card('reverse', null), scalar(1).add(e12))!.equals(scalar(1).sub(e12)));
-  assert.ok(applyCard(card('sieve', e12), scalar(3).add(e1).add(e12))!.equals(e12), 'keeps the grades of its multivector');
-  assert.equal(applyCard(card('turn', scalar(1).add(e1)), e2), null, '1 + e₁ has no inverse as a versor');
+  assert.ok(applyCard(card('grade', e12), scalar(3).add(e1).add(e12))!.equals(e12), 'keeps the grades of its multivector');
+  assert.equal(applyCard(card('sandwich', scalar(1).add(e1)), e2), null, '1 + e₁ has no inverse as a versor');
 });
 
 test('a Mill adds cards side by side and runs the second deck on the first', () => {
   const x = e1.add(e2);
-  assert.ok(millOutput([card('join', e1), card('meter', e1)], [], x).equals(scalar(1).add(e12)), 'the halves make the product');
-  const twoDecks = millOutput([card('multiply', scalar(1).sub(e12))], [card('multiply', scalar(1).add(e12), true)], e1);
+  assert.ok(millOutput([card('wedge', e1), card('dot', e1)], [], x).equals(scalar(1).add(e12)), 'the halves make the product');
+  const twoDecks = millOutput([card('geometric', scalar(1).sub(e12))], [card('geometric', scalar(1).add(e12), true)], e1);
   assert.ok(twoDecks.equals(e2.scale(2)), 'two multiplies make a scaled turn');
   assert.ok(millOutput([], [], x).equals(x), 'an empty Mill passes things through');
-  assert.equal(lampCount([card('join', e1), card('meter', e1)], [], x), 4);
+  assert.equal(lampCount([card('wedge', e1), card('dot', e1)], [], x), 4);
 });

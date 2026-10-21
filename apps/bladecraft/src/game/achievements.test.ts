@@ -42,7 +42,7 @@ const holdings = (stacks: Stack[], extra: Partial<Holdings> = {}): Holdings => (
   stacks,
   machines: [],
   workbenchPlaced: false,
-  learned: { join: false, meter: false, multiply: false },
+  learned: { wedge: false, dot: false, geometric: false },
   ...extra,
 });
 const earns = (h: Holdings) => new Achievements().check(h).map((a) => a.id);
@@ -63,15 +63,15 @@ test('a goal is met by holding the thing it names, wherever it is', () => {
 });
 
 test('learning a rule, placing machines and pressing cards meet their goals', () => {
-  assert.ok(earns(holdings([], { learned: { join: true, meter: false, multiply: false } })).includes('learn-join'));
+  assert.ok(earns(holdings([], { learned: { wedge: true, dot: false, geometric: false } })).includes('learn-wedge'));
   assert.ok(earns(holdings([], { workbenchPlaced: true })).includes('workbench'));
-  const extractor = stack(machine('extractor'));
-  const placedStore = newMachine('store', 0);
-  assert.ok(earns(holdings([extractor], { machines: [placedStore] })).includes('built'), 'one carried and one placed');
-  assert.ok(!earns(holdings([extractor])).includes('built'));
+  assert.ok(earns(holdings([stack(machine('store'))])).includes('built'), 'a Store carried');
+  assert.ok(earns(holdings([], { machines: [newMachine('store', 0)] })).includes('built'), 'or placed');
+  assert.ok(!earns(holdings([stack(machine('generator'))])).includes('generator'), 'a Generator must be placed');
+  assert.ok(earns(holdings([], { machines: [newMachine('generator', 0)] })).includes('generator'));
   assert.ok(earns(holdings([stack(card('reverse', null))])).includes('backwards'));
   const quarter = scalar(1).add(e2.op(e1));
-  assert.ok(earns(holdings([stack(card('turn', quarter))])).includes('turn'), 'a Turn card taking e₁ to e₂ and e₂ to −e₁');
+  assert.ok(earns(holdings([stack(card('sandwich', quarter))])).includes('turn'), 'a Sandwich card taking e₁ to e₂ and e₂ to −e₁');
 });
 
 test('readings count only as readings, not as elements', () => {
@@ -102,4 +102,10 @@ test('the Hopf goals: a fiber, four phases round it, and two linked fibers', () 
   assert.ok(!earns(orrery(phases.slice(0, 3))).includes('round-the-fiber'));
   assert.ok(earns(orrery(phases)).includes('round-the-fiber'), 'four phases of |0⟩');
   assert.ok(earns(orrery([up, el('2', '3')])).includes('linked'), 'up and down');
+});
+
+test('goals saved under the earlier rule names load under the current ones', () => {
+  const a = new Achievements();
+  a.load([['learn-join', 1], ['learn-meter', 2], ['direction', 3]]);
+  assert.deepEqual([...a.earned.keys()].sort(), ['direction', 'learn-dot', 'learn-wedge']);
 });

@@ -65,13 +65,12 @@ or two high, stand further out. Every block says
 what it is on its faces: deposits carry their element in large letters, and machines show their
 symbol on top and their ports on their sides.
 
-Breaking a deposit by hand breaks it into 4 of its blade and it is gone, which is enough to get
-started. An extractor placed against a deposit draws from it forever without using it up, so it is
-the lasting source of blades, and it is the third thing the guide has you build; that's why the
-starting deposits are two high, leaving the bottom block for an extractor once you have broken the
-top. Breaking anything else picks it up, along with whatever it holds; breaking the ground gives
-lattice. You start with a Workbench and 32 lattice. The world,
-inventory, factory and goals are saved in the browser.
+Breaking a deposit by hand breaks it into 4 of its blade and it is gone. Deposits are the only
+source of blades until the Generator, which makes blades forever but costs a rotor and a
+trivector, so the early game is hand mining and hand work. Breaking anything else picks it up,
+along with whatever it holds; breaking the ground gives lattice. You start with a Workbench and 32
+lattice. The world, inventory, factory and goals are saved in the browser, and a save that holds a
+machine the game no longer has loads without it.
 
 ## The Workbench
 
@@ -86,7 +85,7 @@ three parts.
   run down the column; the other goes in the slot at the end of the bottom edge and its blades run
   along the row. Each cell is one blade of the left factor times one blade of the right, as in
   matrix multiplication, and the result is every cell added up. Make takes both factors, whole
-  stacks and all, so 2e₁ by 3e₂ under Join makes 6e₁₂; put down one with a right click to multiply
+  stacks and all, so 2e₁ by 3e₂ under the wedge makes 6e₁₂; put down one with a right click to multiply
   just one.
 - **The rail** shows one cell worked out. The two blades are laid out as tiles, e₁, e₂ and e₃ each
   in its axis colour, left-factor tiles first and outlined. Tap ⇄ to swap two neighbours, which
@@ -97,15 +96,18 @@ The grid has three rules, and they differ only in which cancellations they allow
 
 | Rule | Symbol | A pair may cancel | e₁ by e₁ | e₁ by e₁₂ | e₁₂ by e₁ |
 |---|---|---|---|---|---|
-| Join | ∧ | never: a cell that needs to cancel is 0 | 0 | 0 | 0 |
-| Meter | ⌋ | always, and every left-factor tile must cancel | 1 | e₂ | 0 |
-| Multiply | (none) | always | 1 | e₂ | −e₂ |
+| Wedge | ∧ | never: a cell that needs to cancel is 0 | 0 | 0 | 0 |
+| Dot | ⌋ | always, and every left-factor tile must cancel | 1 | e₂ | 0 |
+| Geometric | (none) | always | 1 | e₂ | −e₂ |
 
-Join is the outer product, Meter the left contraction and Multiply the geometric product, and the
-rail shows why Multiply is Meter and Join together. A rule starts out unknown: its cells show ? and
+The wedge is the outer product. The dot is the inner product geometric algebra mostly uses, the left
+contraction A ⌋ B; for two vectors it is the familiar dot product. The geometric product is the
+whole thing, and the rail shows why for vectors it is the dot and the wedge together. The rules go by
+their usual names so that what you learn here carries over to any book on the subject. A rule starts out unknown: its cells show ? and
 Make does nothing. Sorting three cells by hand under a rule learns it (a cell that opens already in
-order doesn't count), after which the grid fills in by itself and the rail can sort for you. Join is
-learnable from the start, Meter once Join is learned, and Multiply once Meter is.
+order doesn't count), after which the grid fills in by itself and the rail can sort for you. The wedge
+is learnable from the start, the dot once the wedge is learned, and the geometric product once the
+dot is.
 
 The Build tab lists recipes (`recipes.ts`). Each costs lattice and elements you could only have
 made by hand, and each verb plate also needs its rule learned, so a machine can never do anything
@@ -115,8 +117,8 @@ you haven't done yourself:
 |---|---|
 | Workbench | 4 lattice |
 | 4 ducts | 2 lattice |
-| Extractor | 4 lattice, the scalar 1 |
 | Store | 4 lattice |
+| Generator | 6 lattice, a rotor, a trivector |
 | Packer, Unpacker | 4 lattice, a vector off the axes (e₁ + e₂) |
 | Splitter, Merger | 6 lattice |
 | Sorter | 6 lattice, the scalar 1 |
@@ -124,12 +126,12 @@ you haven't done yourself:
 | Card Press | 6 lattice, a bivector |
 | 4 blank cards | 2 lattice |
 | Mill | 6 lattice, a trivector |
-| Join plate | 2 lattice, a bivector; Join learned |
-| Meter plate | 2 lattice, the scalar 1; Meter learned |
-| Sieve plate | 2 lattice, a vector off the axes; Meter learned |
-| Multiply plate | 2 lattice, a rotor; Multiply learned |
-| Reverse plate | 2 lattice, a bivector; Multiply learned |
-| Turn plate | 2 lattice, 2 rotors; Multiply learned |
+| Wedge plate | 2 lattice, a bivector; the wedge learned |
+| Dot plate | 2 lattice, the scalar 1; the dot learned |
+| Grade plate | 2 lattice, a vector off the axes; the dot learned |
+| Geometric plate | 2 lattice, a rotor; the geometric product learned |
+| Reverse plate | 2 lattice, a bivector; the geometric product learned |
+| Sandwich plate | 2 lattice, 2 rotors; the geometric product learned |
 | Detector | 4 lattice, 2 × e₃ |
 | Fibration orrery | 4 lattice, a rotor, a trivector |
 | 8 field plates | 4 lattice, a trivector |
@@ -147,12 +149,12 @@ it forever.
 
 | Verb | The card does to X | Notes |
 |---|---|---|
-| Join | M ∧ X | |
-| Meter | M ⌋ X | |
-| Multiply | M X | a Mill can turn it end to end to do X M |
-| Turn | M X M̃ / (M M̃) | turns X for a rotor M, mirrors it for a vector M; the size of M doesn't matter |
+| Wedge | M ∧ X | the outer product |
+| Dot | M ⌋ X | the inner product (left contraction) |
+| Geometric | M X | the geometric product; a Mill can turn it end to end to do X M |
+| Sandwich | M X M̃ / (M M̃) | the sandwich product: turns X for a rotor M, mirrors it for a vector M; the size of M doesn't matter |
 | Reverse | X̃ | needs nothing on the bed |
-| Sieve | the grades of X that M has | M = e₁ + e₂ keeps the vector part |
+| Grade | the grades of X that M has | grade projection: M = e₁ + e₂ keeps the vector part |
 
 ## The factory
 
@@ -162,7 +164,7 @@ What a block takes depends on the side something arrives from (`factory.ts`):
 
 | Block | Takes | Does |
 |---|---|---|
-| Extractor | nothing | with a deposit behind it, draws that blade out every 1.5 s |
+| Generator | a blade in its sample slot, set in its panel | makes another of that blade, weight +1 or −1 as the sample's sign, every 1.5 s, and keeps the sample |
 | Duct | anything, from any side but its front, one stack at a time | carries it the way it points, 1.5 blocks a second |
 | Store | anything, from any side, when all of the stack fits | holds 27 stacks; open it to take them by hand |
 | Packer | an element at its back, left and right | waits until every side that something feeds has delivered, then sends their sum as one multivector |
@@ -181,12 +183,12 @@ What a block takes depends on the side something arrives from (`factory.ts`):
 
 **The Mill** holds four cards in two decks of two. Cards side by side in deck 1 each work on what
 arrives and their outputs add; deck 2 works on what deck 1 made, and its two cards add too. So
-Join with e₃ beside Multiply with e₁ makes e₃ ∧ X + e₁ X, and a Multiply card from 1 − e₁₂ in deck
-1 followed by a Multiply card from 1 + e₁₂, turned to multiply from the right, in deck 2 is a quarter
+Wedge with e₃ beside Geometric with e₁ makes e₃ ∧ X + e₁ X, and a Geometric card from 1 − e₁₂ in deck
+1 followed by a Geometric card from 1 + e₁₂, turned to multiply from the right, in deck 2 is a quarter
 turn about e₃ at twice the size. A Mill with no cards passes things straight through. A *live card* makes a Mill take
 two inputs: set it to a verb in the panel, and the Mill waits for an element at its side, presses it
-into a card of that verb on the spot, and adds it to deck 1. A Mill with a live Join card is a
-wedger of whatever two lines feed it. The Mill takes a quarter of a second per pair of blades it
+into a card of that verb on the spot, and adds it to deck 1. A Mill with a live Wedge card
+wedges whatever two lines feed it. The Mill takes a quarter of a second per pair of blades it
 multiplies out, shown by a grid of lamps on its side that light one by one.
 
 A sorter matches either multiples of a sample, picked up in its panel from the element on your
@@ -197,8 +199,7 @@ A blocked output waits, and everything behind it backs up, so nothing is ever lo
 sends nothing.
 
 Placing a duct or machine points it the way you face, and Rotate (R on a keyboard) turns it a
-quarter turn before you place it; a placed machine's panel can rotate it too. An extractor turns
-itself so its back is against the deposit you aimed at. A ghost outline shows where the block will
+quarter turn before you place it; a placed machine's panel can rotate it too. A ghost outline shows where the block will
 go and which way it will face, red when it can't go there.
 
 ## Qubits and the Hopf fibration
@@ -209,13 +210,13 @@ multiple of the other.
 
 - **Bloch vector.** R e₃ R⁻¹ is where the state points: the scalar 1 is |0⟩ (up, +e₃), e₂₃ is |1⟩
   (down), e₂₃ + e₁₂ is |+⟩ (along e₁). The map R ↦ R e₃ R⁻¹ from the 3-sphere of unit rotors to the
-  2-sphere of directions is the Hopf fibration. A Turn card pressed from R does exactly this to e₃,
-  so a Mill with a live Turn card, fed the state at its side and e₃ at its back, finds it.
+  2-sphere of directions is the Hopf fibration. A Sandwich card pressed from R does exactly this to e₃,
+  so a Mill with a live Sandwich card, fed the state at its side and e₃ at its back, finds it.
 - **Phase.** e₁₂ commutes with e₃, so R(1 + e₁₂) points the same way as R. Multiplying on the right by
   a phase moves the state round a circle, its Hopf fiber, while its Bloch vector stays put. A Mill
-  with a Multiply card from 1 + e₁₂, turned to multiply from the right, is a phase shifter.
+  with a Geometric card from 1 + e₁₂, turned to multiply from the right, is a phase shifter.
 - **Gates.** A rotor on the left, G R, turns the Bloch vector by the rotation G stands for, so a
-  gate is a Multiply card: X ∝ e₂₃ (half turn about e₁), Y ∝ e₃₁, Z ∝ e₁₂, H ∝ e₂₃ + e₁₂ (half turn
+  gate is a Geometric card: X ∝ e₂₃ (half turn about e₁), Y ∝ e₃₁, Z ∝ e₁₂, H ∝ e₂₃ + e₁₂ (half turn
   about the e₁ + e₃ diagonal) and S ∝ 1 − e₁₂ (quarter turn about e₃). None needs a square root,
   because the length of a state doesn't matter.
 - **Measurement.** The detector finds a state up with probability (1 + z)/2, z being its Bloch
@@ -276,7 +277,7 @@ state the factory leaves in its block, so you can see what a machine is doing wi
 
 | Machine | Model | Moves when |
 |---|---|---|
-| Extractor | a brass pump with a flywheel, pressure gauge and chimney | its rod strokes and flywheel turns once per blade drawn; it stops when there's no deposit or its output is blocked |
+| Generator | a brass pump with a flywheel, pressure gauge and chimney, and a glass jar at the back holding its sample | its rod strokes and flywheel turns once per blade made; it stops when it has no sample or its output is blocked |
 | Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed stacks ride it; stacks coming in from a side ride round the bend |
 | Store | a banded tank with a gauge window | the level in the window rises as it fills |
 | Packer | a low iron box with a copper hopper and a + plate | the lid drops as a sum leaves |
@@ -297,12 +298,12 @@ state the factory leaves in its block, so you can see what a machine is doing wi
 | Workbench | a wooden workbench with a vice and a gear train | its gears turn slowly |
 
 The Mill and the detector have a pilot lamp in their own colour that glows while they work. They,
-the orrery and the extractor let off a puff of steam each time they finish.
+the orrery and the Generator let off a puff of steam each time they finish.
 
 ## The guide
 
-A card in the corner says what to do next. It walks through five first steps: take the scalar 1,
-place the Workbench, build an extractor, place it on the e₁ deposit, and duct it into a Store.
+A card in the corner says what to do next. It walks through four first steps: break the e₁ and e₂
+deposits, place the Workbench, add e₁ and e₂ on the tray, and build a Store.
 After that it suggests the next goal from the tree. Each step is worked out from the state of the
 world (`guide.ts`), so it always matches what the player has done. Tapping the card hides or shows
 the hint.
@@ -323,15 +324,16 @@ each idea to the ones that build on it and a count of how many are met. An idea 
 another branch says so on its card ("after Volume").
 
 - **The algebra** starts from a vector and the three axes, then a heavy stack, a vector off the
-  axes, learning Join, a bivector and a negative one, a trivector, learning Meter, −1, a rotor,
-  learning Multiply, a Multiply card from a trivector (duality) and a Reverse card.
-- **The factory** starts with placing the Workbench: an extractor and a Store, stacks of 64 blades
-  and of 16(e₁ + e₂), all four logistics blocks, a pressed card, a Mill, 16 rotors in one stack, and
+  axes, learning the wedge, a bivector and a negative one, a trivector, learning the dot, −1, a
+  rotor, learning the geometric product, a Geometric card from a trivector (duality) and a Reverse
+  card.
+- **The factory** starts with placing the Workbench: a Store, a Generator (once you can make a
+  rotor), stacks of 64 blades and of 16(e₁ + e₂), all four logistics blocks, a pressed card, a Mill, 16 rotors in one stack, and
   cards that turn and mirror.
 - **Qubits** grows from rotors: |1⟩, |+⟩, |+i⟩, a new phase and the Born rule (8e₃ and −8e₃ from a
   detector), then the Hopf fibration in an orrery: one state's fiber, four phases round it, and the
   linked fibers of two states pointing different ways.
-- **The field** grows from duality (a Multiply card from the trivector): a field plate, then one
+- **The field** grows from duality (a Geometric card from the trivector): a field plate, then one
   reading per grade of Maxwell's equation that a probe can see: E alone, IB alone, and E and IB
   together.
 

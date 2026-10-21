@@ -13,17 +13,17 @@ export const card = (verb: Verb, mv: Multivector | null, right = false): Card =>
 /** verbs that need a multivector to press (Reverse is the only one that doesn't) */
 export const needsMultivector = (verb: Verb) => verb !== 'reverse';
 
-/** what the card does to X, or null when it can't (a Turn pressed from something with no inverse) */
+/** what the card does to X, or null when it can't (a Sandwich pressed from something with no inverse) */
 export function applyCard(c: Card, x: Multivector): Multivector | null {
   const m = c.mv;
   switch (c.verb) {
-    case 'join':
+    case 'wedge':
       return m ? m.op(x) : null;
-    case 'meter':
+    case 'dot':
       return m ? m.lc(x) : null;
-    case 'multiply':
+    case 'geometric':
       return m ? (c.right ? x.gp(m) : m.gp(x)) : null;
-    case 'turn': {
+    case 'sandwich': {
       if (!m) return null;
       const rev = m.reverse();
       const norm = m.gp(rev);
@@ -33,7 +33,7 @@ export function applyCard(c: Card, x: Multivector): Multivector | null {
     }
     case 'reverse':
       return x.reverse();
-    case 'sieve': {
+    case 'grade': {
       if (!m) return null;
       const keep = m.grades();
       return terms(x)
@@ -56,7 +56,7 @@ export function millOutput(deck1: Card[], deck2: Card[], x: Multivector) {
 
 /** pairs of blades a deck multiplies out: one lamp each on the Mill's face, and the time it takes */
 export function lampCount(deck1: Card[], deck2: Card[], x: Multivector) {
-  const size = (c: Card) => (c.mv && c.verb !== 'sieve' ? c.mv.terms.size : 1) * (c.verb === 'turn' ? 2 : 1);
+  const size = (c: Card) => (c.mv && c.verb !== 'grade' ? c.mv.terms.size : 1) * (c.verb === 'sandwich' ? 2 : 1);
   const n = Math.max(1, x.terms.size);
   const mid = Math.max(1, millOutput(deck1, [], x).terms.size);
   return deck1.reduce((s, c) => s + size(c) * n, 0) + deck2.reduce((s, c) => s + size(c) * mid, 0);
