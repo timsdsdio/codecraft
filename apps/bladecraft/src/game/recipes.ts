@@ -99,6 +99,36 @@ export const RECIPES: Recipe[] = [
     needs: [lattice(6), { label: 'the scalar 1', count: 1, test: isEl((m) => grades(m) === '0') }],
   },
   { makes: 'crossing', count: 1, does: 'Lets two lines cross: whatever comes in on one side leaves by the opposite side.', needs: [lattice(4)] },
+  {
+    makes: 'plate',
+    count: 8,
+    does: 'Holds the electromagnetic field F = E + IB. Plates side by side at one height make one field, and machines standing among them join it.',
+    needs: [lattice(4), { label: 'a trivector (I = e₁₂₃ joins E and B)', count: 1, test: isEl((m) => grades(m) === '3') }],
+  },
+  {
+    makes: 'charge',
+    count: 1,
+    does: 'In a field, a charge set by the last scalar it was given: its electric field E spreads out from it.',
+    needs: [lattice(4), { label: 'the scalar 1', count: 1, test: isEl((m) => grades(m) === '0') }],
+  },
+  {
+    makes: 'wire',
+    count: 1,
+    does: 'In a field, carries a current up along e₃, set by the e₃ part of the last vector it was given: the magnetic field circles it.',
+    needs: [lattice(4), { label: 'e₃', count: 1, test: isEl((m) => m.equals(E3)) }],
+  },
+  {
+    makes: 'antenna',
+    count: 1,
+    does: 'A wire whose current swings up and down, as big as the e₃ part of the last vector it was given: it sends waves across the field.',
+    needs: [lattice(4), { label: 'e₃', count: 1, test: isEl((m) => m.equals(E3)) }, { label: 'a rotor (it turns through a cycle)', count: 1, test: isEl((m) => grades(m) === '0,2') }],
+  },
+  {
+    makes: 'probe',
+    count: 1,
+    does: 'In a field, outputs the field where it stands once a second: F = E + IB, a vector plus a bivector, rounded to halves.',
+    needs: [lattice(4), { label: 'a vector (for E)', count: 1, test: isEl((m) => grades(m) === '1') }, { label: 'a bivector (for IB)', count: 1, test: isEl((m) => grades(m) === '2') }],
+  },
 ];
 
 /** how a sorter's setting reads: "e₁" or "vectors" */

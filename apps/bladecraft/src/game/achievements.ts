@@ -16,7 +16,9 @@ export type GameEvent =
   | { type: 'deliver'; mv: Multivector }
   | { type: 'order'; index: number }
   | { type: 'qubit'; kind: 'project' | 'gate' | 'measure'; input: Multivector; result: Multivector }
-  | { type: 'orrery'; seen: Multivector[] };
+  | { type: 'orrery'; seen: Multivector[] }
+  /** a source set while standing in a field, or a probe's reading */
+  | { type: 'field'; kind: 'charge' | 'wire' | 'antenna' | 'reading'; mv: Multivector };
 
 export interface Achievement {
   id: string;
@@ -257,6 +259,61 @@ export const ACHIEVEMENTS: Achievement[] = [
       'The fibers of two different points never meet, yet every pair is linked: you can’t pull one ring off another without cutting it. The whole 3-sphere is filled with such rings, one for each point of the Bloch sphere.',
     parents: ['hopf-fiber'],
     test: (e) => e.type === 'orrery' && new Set(e.seen.map(pointKey)).size >= 2,
+  },
+  // the field: Maxwell's four equations are the four grades of one, (∂ₜ + ∇)F = ρ − j
+  {
+    id: 'a-field',
+    title: 'A field',
+    goal: 'Lay a field plate.',
+    lesson:
+      'A field gives every point a value. The electromagnetic field gives each point one multivector, F = E + IB with I = e₁₂₃: the electric field E is its vector part, and the magnetic field B, times I, is its bivector part, a small plane at right angles to the way B points. Plates draw E as an orange arrow and IB as a blue disc. Maxwell’s four equations are the four grades of one: (∂ₜ + ∇)F = ρ − j, with ∇ = e₁∂₁ + e₂∂₂ + e₃∂₃.',
+    parents: ['volume'],
+    test: (e) => e.type === 'place' && e.block.kind === 'machine' && e.block.type === 'plate',
+  },
+  {
+    id: 'gauss',
+    title: 'Gauss’s law',
+    goal: 'Give a charge standing in a field a scalar.',
+    lesson:
+      'The scalar part of (∂ₜ + ∇)F = ρ − j is ∇·E = ρ: electric field spreads out from charge, away from a positive one and toward a negative one. The plates are one layer, so the field acts as if each charge were a long rod running straight up, and it falls off as 1/r. A field’s edge is earthed, which pulls the field toward it.',
+    parents: ['a-field'],
+    test: (e) => e.type === 'field' && e.kind === 'charge' && !e.mv.isZero(),
+  },
+  {
+    id: 'ampere',
+    title: 'Ampère’s law',
+    goal: 'Run a current up a wire standing in a field.',
+    lesson:
+      'The vector part is ∂ₜE = ∇×B − j: a current makes the magnetic field circle it. Current up a wire (along e₃) makes B run anticlockwise round it, seen from above. IB is the plane at right angles to B, so round a wire the discs stand upright and fan out from it, like the pages of an open book.',
+    parents: ['a-field'],
+    test: (e) => e.type === 'field' && e.kind === 'wire' && e.mv.terms.has(4),
+  },
+  {
+    id: 'faraday',
+    title: 'Faraday’s law',
+    goal: 'Run an antenna in a field.',
+    lesson:
+      'The bivector part is ∂ₜB = −∇×E: a changing magnetic field makes an electric field curl round it. Together with the vector part, a changing E makes B and a changing B makes E, so the field carries itself away from a swinging current as a wave, at the speed of light: 4 blocks a second here.',
+    parents: ['ampere'],
+    test: (e) => e.type === 'field' && e.kind === 'antenna' && e.mv.terms.has(4),
+  },
+  {
+    id: 'no-monopoles',
+    title: 'No monopoles',
+    goal: 'Have a probe read a magnetic field.',
+    lesson:
+      'The trivector part is ∇·B = 0: magnetic field has no sources, because there is no magnetic charge. Round a wire B runs in closed loops with no start or end, where E from a charge starts at the charge.',
+    parents: ['ampere'],
+    test: (e) => e.type === 'field' && e.kind === 'reading' && e.mv.grades().includes(2),
+  },
+  {
+    id: 'one-equation',
+    title: 'One equation',
+    goal: 'Have a probe read E and IB together.',
+    lesson:
+      'A reading is the whole field at a point as one multivector: E + IB, a vector plus a bivector. In a wave E and B are at right angles and equally strong, so F² = E² − B² + 2I E·B is 0: light is a field whose square vanishes.',
+    parents: ['gauss', 'faraday'],
+    test: (e) => e.type === 'field' && e.kind === 'reading' && e.mv.grades().join() === '1,2',
   },
 ];
 

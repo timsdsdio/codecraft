@@ -4,8 +4,8 @@
 //              by hand gives one element and leaves it in place, and an extractor draws on it forever
 //   bench      the hand bench: combine elements by hand and build machines
 //   hub        the factory's goal, at spawn: it takes delivered elements toward its current order
-//   machine    extractors, ducts, collectors and operation machines; each faces one of four
-//              directions and holds what is passing through it (see factory.ts)
+//   machine    extractors, ducts, collectors, operation machines and field blocks; each faces one
+//              of four directions and holds what is passing through it (see factory.ts and field.ts)
 //
 // World axes follow three.js (x east, y up, z south); algebra axes are e₁ east, e₂ north, e₃ up, a
 // right-handed set, so the arrow drawn for e₁ points the way you walk to go east.
@@ -38,7 +38,13 @@ export type MachineState =
   | { type: 'splitter'; item: Multivector | null; next: number }
   | { type: 'merger'; slots: (Multivector | null)[]; next: number }
   | { type: 'sorter'; item: Multivector | null; filter: Multivector | null; mode: SortMode; side: 1 | 3 }
-  | { type: 'crossing'; slots: (Multivector | null)[] };
+  | { type: 'crossing'; slots: (Multivector | null)[] }
+  // the field (field.ts): plates hold it; a charge's scalar and a wire's or antenna's e₃ part are its sources
+  | { type: 'plate' }
+  | { type: 'charge'; charge: Multivector | null }
+  | { type: 'wire'; current: Multivector | null }
+  | { type: 'antenna'; current: Multivector | null; frequency: number }
+  | { type: 'probe'; timer: number; out: Multivector | null; reading: Multivector | null };
 
 /** what a sorter sends to its side: elements equal to its sample, or every element of one kind */
 export type SortMode = 'same' | 'scalar' | 'vector' | 'bivector' | 'trivector' | 'state';
@@ -71,6 +77,11 @@ export function newMachine(type: MachineType, facing: Dir): Machine {
   if (type === 'merger') return { kind: 'machine', facing, type, slots: [null, null, null, null], next: 0 };
   if (type === 'sorter') return { kind: 'machine', facing, type, item: null, filter: null, mode: 'same', side: 1 };
   if (type === 'crossing') return { kind: 'machine', facing, type, slots: [null, null, null, null] };
+  if (type === 'plate') return { kind: 'machine', facing, type };
+  if (type === 'charge') return { kind: 'machine', facing, type, charge: null };
+  if (type === 'wire') return { kind: 'machine', facing, type, current: null };
+  if (type === 'antenna') return { kind: 'machine', facing, type, current: null, frequency: 1 };
+  if (type === 'probe') return { kind: 'machine', facing, type, timer: 0, out: null, reading: null };
   const inputs = { a: null, b: null, fixed: null, preset: null, out: null, work: 0 };
   if (type === 'orrery') return { kind: 'machine', facing, type, seen: [], ...inputs };
   return { kind: 'machine', facing, type, ...inputs };
@@ -108,15 +119,20 @@ export function contents(m: Machine): Multivector[] {
   if (m.type === 'collector') return m.stored.flatMap((s) => Array(s.count).fill(s.mv));
   if (m.type === 'splitter' || m.type === 'sorter') return m.item ? [m.item] : [];
   if (m.type === 'merger' || m.type === 'crossing') return m.slots.filter((x): x is Multivector => !!x);
+  if (m.type === 'plate') return [];
+  if (m.type === 'charge') return m.charge ? [m.charge] : [];
+  if (m.type === 'wire' || m.type === 'antenna') return m.current ? [m.current] : [];
+  if (m.type === 'probe') return m.out ? [m.out] : [];
   // a preset gate was never the player's to get back
   return [m.a, m.b, m.preset ? null : m.fixed, m.out].filter((x): x is Multivector => !!x);
 }
 
 /** blocks you can use (open a panel for) rather than place against */
-export const usable = (b: Block | undefined) => !!b && (b.kind === 'bench' || b.kind === 'hub' || (b.kind === 'machine' && b.type !== 'duct'));
+export const usable = (b: Block | undefined) => !!b && (b.kind === 'bench' || b.kind === 'hub' || (b.kind === 'machine' && b.type !== 'duct' && b.type !== 'plate'));
 
-/** how tall a block is for walking on: ducts are low enough to step over */
-export const heightOf = (b: Block | undefined) => (!b ? 0 : b.kind === 'machine' && (b.type === 'duct' || b.type === 'crossing') ? 0.375 : 1);
+/** how tall a block is for walking on: ducts are low enough to step over, and field plates lie flat */
+export const heightOf = (b: Block | undefined) =>
+  !b ? 0 : b.kind === 'machine' && b.type === 'plate' ? 0.125 : b.kind === 'machine' && (b.type === 'duct' || b.type === 'crossing') ? 0.375 : 1;
 
 export class World {
   private blocks = new Map<number, Block>();
@@ -221,6 +237,16 @@ function saveBlock(b: Block): SavedBlock {
       return { ...base, item: mvOrNull(b.item), filter: mvOrNull(b.filter), mode: b.mode, side: b.side };
     case 'crossing':
       return { ...base, slots: b.slots.map(mvOrNull) };
+    case 'plate':
+      return base;
+    case 'charge':
+      return { ...base, charge: mvOrNull(b.charge) };
+    case 'wire':
+      return { ...base, current: mvOrNull(b.current) };
+    case 'antenna':
+      return { ...base, current: mvOrNull(b.current), frequency: b.frequency };
+    case 'probe':
+      return { ...base, timer: b.timer, out: mvOrNull(b.out) };
     default:
       return {
         ...base,
@@ -256,7 +282,15 @@ function loadBlock(s: SavedBlock): Block {
     Object.assign(m, { item: loadOrNull(s.item), filter: loadOrNull(s.filter), mode: (s.mode as SortMode) ?? 'same', side: (s.side as 1 | 3) ?? 1 });
   } else if (m.type === 'crossing') {
     m.slots = ((s.slots as unknown[]) ?? [null, null, null, null]).map(loadOrNull);
-  } else if (m.type !== 'duct') {
+  } else if (m.type === 'charge') {
+    m.charge = loadOrNull(s.charge);
+  } else if (m.type === 'wire') {
+    m.current = loadOrNull(s.current);
+  } else if (m.type === 'antenna') {
+    Object.assign(m, { current: loadOrNull(s.current), frequency: (s.frequency as number) ?? 1 });
+  } else if (m.type === 'probe') {
+    Object.assign(m, { timer: (s.timer as number) ?? 0, out: loadOrNull(s.out) });
+  } else if (m.type !== 'duct' && m.type !== 'plate') {
     Object.assign(m, {
       a: loadOrNull(s.a),
       b: loadOrNull(s.b),

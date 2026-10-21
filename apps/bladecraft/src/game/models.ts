@@ -7,6 +7,10 @@
 //   merger           a hopper with a pointer that turns to the input whose turn it is
 //   sorter           a glass jar holding its sample, and a flap that swings toward a match's side
 //   crossing         two belts crossing under a brass turntable plate
+//   charge           a brass ball on an insulator that glows red when positive and blue when negative
+//   wire             a copper rod up out of the field, beads of light running along it with the current
+//   antenna          a coil and mast whose beads rock up and down with the current, sparking at the top
+//   probe            a glass bulb that flashes with each reading, and a gauge showing how strong it is
 //   adder            two meshing gears that turn while it works
 //   wedger           a stamping press whose ram comes down as the work completes
 //   multiplier       a spoked flywheel that spins up while it works
@@ -20,6 +24,7 @@ import { DUCT_SPEED, EXTRACT_EVERY, WORK_TIME, COLLECTOR_CAPACITY, MERGE_ORDER, 
 import type { MachineType } from './items';
 import { MACHINE_LOOK, hex } from './looks';
 import { E3, bloch, fiber, project, toQuat } from './qubit';
+import { FREQUENCIES, scalarPart, upPart } from './field';
 import { SINGLE_INPUT, type Block } from './world';
 import { parts, toWorld } from './glyph';
 
@@ -1007,6 +1012,169 @@ function orrery(): Model {
   };
 }
 
+// --- the field ---------------------------------------------------------------------------------
+
+const ceramic = new THREE.MeshStandardMaterial({ color: 0xece4d4, metalness: 0, roughness: 0.25 });
+
+/** a stack of ceramic insulator discs from y0 up to y1 */
+function insulator(g: THREE.Group, x: number, z: number, y0: number, y1: number, r = 0.09) {
+  g.add(mesh(cyl(r * 0.45, r * 0.45, y1 - y0, 10), ceramic, x, (y0 + y1) / 2, z));
+  for (let y = y0 + 0.04; y < y1; y += 0.07) g.add(mesh(cyl(r, r, 0.025, 14), ceramic, x, y, z));
+}
+
+/** the iron foot every field machine stands on, with a plate naming it */
+function fieldBase(type: MachineType, label: string) {
+  const g = new THREE.Group();
+  g.add(mesh(box(1, 0.125, 1), M.darkIron, 0, 0.0625, 0), mesh(box(0.5, 0.08, 0.5), M.iron, 0, 0.165, 0));
+  rivets(g, 0.21, 0.22, 2);
+  const pl = plate(label, 0.3, 0.1, 0x2a1a08);
+  pl.position.set(0, 0.165, 0.251);
+  g.add(pl);
+  const lamp = pilot(MACHINE_LOOK[type].colour);
+  lamp.lamp.position.set(-0.32, 0.125, 0.32);
+  g.add(lamp.lamp);
+  return { g, lamp };
+}
+
+/** beads of light running along a vertical rod, showing a current: up for positive, down for negative */
+function currentBeads(g: THREE.Group, y0: number, y1: number, colour: number) {
+  const mat = new THREE.MeshBasicMaterial({ color: colour });
+  const beads = Array.from({ length: 5 }, () => mesh(sphere(0.035), mat));
+  g.add(...beads);
+  let travel = 0;
+  return (speed: number, dt: number) => {
+    travel += speed * dt;
+    beads.forEach((b, i) => {
+      const t = (((travel + i / beads.length) % 1) + 1) % 1;
+      b.position.set(0, y0 + t * (y1 - y0), 0);
+      b.visible = Math.abs(speed) > 0.01;
+    });
+  };
+}
+
+function charge(): Model {
+  const { g, lamp } = fieldBase('charge', 'CHARGE');
+  insulator(g, 0, 0, 0.2, 0.62);
+  // a brass ball that glows red when positive and blue when negative
+  const glow = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.8, roughness: 0.25, emissive: 0x000000 });
+  const band = mesh(torus(0.2, 0.015), M.darkBrass, 0, 0.8, 0);
+  band.rotation.x = Math.PI / 2;
+  g.add(mesh(sphere(0.2), glow, 0, 0.8, 0), band);
+  const red = new THREE.Color(0xff3020);
+  const blue = new THREE.Color(0x2060ff);
+  return {
+    group: g,
+    anchors: ANCHORS(),
+    chimney: new THREE.Vector3(0, 1.1, 0),
+    update(b, dt, time) {
+      const q = b?.kind === 'machine' && b.type === 'charge' ? scalarPart(b.charge) : 0;
+      glow.emissive.copy(q >= 0 ? red : blue);
+      glow.emissiveIntensity = Math.min(1.5, Math.abs(q) * 0.6) * (0.85 + 0.15 * Math.sin(time * 3));
+      lamp.set(q !== 0, dt);
+    },
+  };
+}
+
+function wire(): Model {
+  const { g, lamp } = fieldBase('wire', 'WIRE');
+  // a copper rod running up out of the field, held by insulators top and bottom
+  g.add(mesh(cyl(0.035, 0.035, 1.5, 10), M.copper, 0, 0.95, 0));
+  insulator(g, 0, 0, 0.2, 0.4, 0.08);
+  g.add(mesh(box(0.06, 0.06, 0.4), M.darkIron, 0, 1.55, 0.2), mesh(box(0.06, 1.5, 0.06), M.darkIron, 0, 0.95, 0.4));
+  const top = mesh(cyl(0.06, 0.06, 0.06, 12), ceramic, 0, 1.55, 0);
+  g.add(top);
+  const beads = currentBeads(g, 0.25, 1.65, 0xffd080);
+  return {
+    group: g,
+    anchors: ANCHORS(),
+    chimney: new THREE.Vector3(0, 1.7, 0),
+    update(b, dt) {
+      const i = b?.kind === 'machine' && b.type === 'wire' ? upPart(b.current) : 0;
+      beads(i * 0.8, dt);
+      lamp.set(i !== 0, dt);
+    },
+  };
+}
+
+function antenna(): Model {
+  const { g, lamp } = fieldBase('antenna', 'ANTENNA');
+  // a coil at the foot drives a mast with a crossbar and a spark ball at the top
+  for (let k = 0; k < 5; k++) {
+    const turn = mesh(torus(0.11, 0.018), M.copper, 0, 0.25 + k * 0.045, 0);
+    turn.rotation.x = Math.PI / 2;
+    g.add(turn);
+  }
+  g.add(mesh(cyl(0.08, 0.08, 0.24, 12), M.darkIron, 0, 0.33, 0));
+  g.add(mesh(cyl(0.025, 0.03, 1.25, 8), M.iron, 0, 1.07, 0));
+  const bar = mesh(cyl(0.015, 0.015, 0.6, 6), M.brass, 0, 1.6, 0);
+  bar.rotation.x = Math.PI / 2;
+  g.add(bar, mesh(sphere(0.045), M.brass, 0, 1.6, 0.3), mesh(sphere(0.045), M.brass, 0, 1.6, -0.3));
+  const spark = new THREE.MeshStandardMaterial({ color: 0xeeddff, emissive: 0xb080ff, emissiveIntensity: 0 });
+  g.add(mesh(sphere(0.06), spark, 0, 1.72, 0));
+  const beads = currentBeads(g, 0.45, 1.6, 0xd7a6ff);
+  return {
+    group: g,
+    anchors: ANCHORS(),
+    chimney: new THREE.Vector3(0, 1.8, 0),
+    update(b, dt, time) {
+      const m = b?.kind === 'machine' && b.type === 'antenna' ? b : null;
+      const amp = m ? upPart(m.current) : 0;
+      const swing = m ? Math.cos(2 * Math.PI * FREQUENCIES[m.frequency] * time) : 0;
+      // the beads rock up and down with the current
+      beads(amp * swing * 1.2, dt);
+      spark.emissiveIntensity = Math.abs(amp) * Math.abs(swing) * 2;
+      lamp.set(amp !== 0, dt);
+    },
+  };
+}
+
+function probe(): Model {
+  const { g, lamp } = fieldBase('probe', 'PROBE');
+  // a glass bulb at the field's height, a gauge whose needle shows how strong the reading is, and an output spout
+  g.add(mesh(cyl(0.04, 0.05, 0.3, 10), M.brass, 0, 0.35, 0));
+  g.add(mesh(geo('bulb', () => new THREE.SphereGeometry(0.13, 16, 12)), M.glass, 0, 0.6, 0));
+  const filament = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x7dff6a, emissiveIntensity: 0 });
+  const collar = mesh(torus(0.13, 0.012), M.brass, 0, 0.6, 0);
+  collar.rotation.x = Math.PI / 2;
+  g.add(mesh(sphere(0.04), filament, 0, 0.6, 0), collar);
+  const gauge = new THREE.Group();
+  const face = mesh(cyl(0.1, 0.1, 0.02, 20), M.gaugeFace);
+  face.rotation.x = Math.PI / 2;
+  const needle = mesh(box(0.012, 0.085, 0.006), M.needle, 0, 0.035, 0.012);
+  const pivot = new THREE.Group();
+  pivot.add(needle);
+  gauge.add(face, mesh(torus(0.1, 0.014), M.brass), pivot);
+  gauge.position.set(-0.22, 0.42, 0);
+  gauge.rotation.y = -Math.PI / 2;
+  g.add(gauge, mesh(box(0.04, 0.2, 0.04), M.darkIron, -0.22, 0.27, 0));
+  const spout = mesh(cyl(0.07, 0.07, 0.26), M.copper, 0.33, 0.28, 0);
+  spout.rotation.z = Math.PI / 2;
+  const flange = mesh(torus(0.08, 0.025), M.brass, 0.46, 0.28, 0);
+  flange.rotation.y = Math.PI / 2;
+  g.add(spout, flange);
+  let angle = 0;
+  let flash = 0;
+  let last: Multivector | null = null;
+  return {
+    group: g,
+    anchors: { ...ANCHORS(), out: new THREE.Vector3(0.72, 0.3, 0), reading: new THREE.Vector3(0, 1.15, 0) },
+    chimney: new THREE.Vector3(0, 0.9, 0),
+    update(b, dt) {
+      const m = b?.kind === 'machine' && b.type === 'probe' ? b : null;
+      const r = m?.reading ?? null;
+      if (r && r !== last) flash = 1;
+      last = r;
+      // the needle swings further for a bigger reading, out to three quarters of the dial
+      const size = r ? Math.sqrt([...r.terms.values()].reduce((n, c) => n + (c.n / c.d) ** 2, 0)) : 0;
+      angle += ((size / (size + 1)) * 4 - angle) * Math.min(1, dt * 6);
+      pivot.rotation.z = 2 - angle;
+      flash = Math.max(0, flash - dt * 2);
+      filament.emissiveIntensity = 0.3 + flash * 2;
+      lamp.set(!!r && !r.isZero(), dt);
+    },
+  };
+}
+
 /** what a block is drawn as: a duct fed only from one side is drawn as a corner */
 export type ModelKind = MachineType | 'hub' | 'bench' | 'duct-left' | 'duct-right';
 
@@ -1024,6 +1192,17 @@ export function buildModel(kind: ModelKind): Model {
       return sorter();
     case 'crossing':
       return crossing();
+    case 'charge':
+      return charge();
+    case 'wire':
+      return wire();
+    case 'antenna':
+      return antenna();
+    case 'probe':
+      return probe();
+    case 'plate':
+      // plates are drawn all together (fieldview.ts)
+      return { group: new THREE.Group(), anchors: ANCHORS(), chimney: new THREE.Vector3(), update() {} };
     case 'adder':
       return adder();
     case 'wedger':

@@ -18,7 +18,12 @@ export type MachineType =
   | 'splitter'
   | 'merger'
   | 'sorter'
-  | 'crossing';
+  | 'crossing'
+  | 'plate'
+  | 'charge'
+  | 'wire'
+  | 'antenna'
+  | 'probe';
 
 export type Item =
   | { kind: 'lattice' }
@@ -54,6 +59,11 @@ export const MACHINE_NAMES: Record<MachineType, string> = {
   merger: 'Merger',
   sorter: 'Sorter',
   crossing: 'Crossing',
+  plate: 'Field plate',
+  charge: 'Charge',
+  wire: 'Wire',
+  antenna: 'Antenna',
+  probe: 'Field probe',
 };
 
 export function itemKey(item: Item) {

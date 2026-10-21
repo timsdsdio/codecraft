@@ -4,8 +4,9 @@ This repository holds two games that share a look and a toolchain.
 
 **Bladecraft** is a block-building factory game where the items are elements of geometric algebra.
 Extractors draw vectors from deposits, ducts carry them into machines that add, wedge, multiply and
-rotate them, and a hub at spawn orders specific elements, ending with qubit states built from gates
-and phases, whose Hopf fibers you can watch. Machines are built from elements you
+rotate them, and a hub at spawn orders specific elements, then qubit states built from gates and
+phases, whose Hopf fibers you can watch, then readings of an electromagnetic field laid out on the
+floor and run by Maxwell's equations as one. Machines are built from elements you
 first made by hand, and an optional tree of achievements teaches the algebra as you play. Its
 design is in `docs/BLADECRAFT.md`.
 

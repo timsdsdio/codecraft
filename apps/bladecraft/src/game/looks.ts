@@ -17,6 +17,11 @@ export const MACHINE_LOOK: Record<MachineType, { colour: number; symbol: string 
   merger: { colour: 0xffb347, symbol: 'MERGE' },
   sorter: { colour: 0xffb347, symbol: 'SORT' },
   crossing: { colour: 0xffb347, symbol: '' },
+  plate: { colour: 0x4a8ab0, symbol: '' },
+  charge: { colour: 0xff6a5a, symbol: 'q' },
+  wire: { colour: 0xffa04a, symbol: 'I' },
+  antenna: { colour: 0xd7a6ff, symbol: '∿' },
+  probe: { colour: 0x7dff6a, symbol: 'E+IB' },
 };
 
 export const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
