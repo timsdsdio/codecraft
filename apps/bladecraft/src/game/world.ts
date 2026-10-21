@@ -11,6 +11,7 @@
 // right-handed set, so the arrow drawn for e₁ points the way you walk to go east.
 import type { Multivector } from '@codecraft/ga';
 import { el, loadMv, saveMv, scalar, MACHINE_NAMES, type Item, type MachineType, type SavedMv } from './items.ts';
+import type { GateId } from './qubit.ts';
 
 /** 0 east (+x), 1 north (−z), 2 west (−x), 3 south (+z): counter-clockwise from above */
 export type Dir = 0 | 1 | 2 | 3;
@@ -31,7 +32,22 @@ export type MachineState =
   | { type: 'duct'; item: Carried | null }
   | { type: 'extractor'; timer: number; out: Carried | null }
   | { type: 'collector'; stored: { mv: Multivector; count: number }[] }
-  | { type: 'adder' | 'wedger' | 'multiplier' | 'sandwich'; a: Multivector | null; b: Multivector | null; fixed: Multivector | null; out: Multivector | null; work: number };
+  | ({ type: 'adder' | 'wedger' | 'multiplier' | 'sandwich' | 'gate' | 'bloch' | 'detector' } & Inputs)
+  | ({ type: 'orrery'; seen: Multivector[] } & Inputs);
+
+/** what an operation machine holds: A, B (or a fixed B, possibly one of the preset gates), the result, and how far along it is */
+interface Inputs {
+  a: Multivector | null;
+  b: Multivector | null;
+  fixed: Multivector | null;
+  /** a gate set from the presets in its panel, which costs nothing and isn't given back */
+  preset: GateId | null;
+  out: Multivector | null;
+  work: number;
+}
+
+/** machines that take only A (from any side but the front) */
+export const SINGLE_INPUT: readonly MachineType[] = ['bloch', 'detector', 'orrery'];
 
 export type Machine = { kind: 'machine'; facing: Dir } & MachineState;
 export type OperationMachine = Extract<Machine, { a: unknown }>;
@@ -42,7 +58,9 @@ export function newMachine(type: MachineType, facing: Dir): Machine {
   if (type === 'duct') return { kind: 'machine', facing, type, item: null };
   if (type === 'extractor') return { kind: 'machine', facing, type, timer: 0, out: null };
   if (type === 'collector') return { kind: 'machine', facing, type, stored: [] };
-  return { kind: 'machine', facing, type, a: null, b: null, fixed: null, out: null, work: 0 };
+  const inputs = { a: null, b: null, fixed: null, preset: null, out: null, work: 0 };
+  if (type === 'orrery') return { kind: 'machine', facing, type, seen: [], ...inputs };
+  return { kind: 'machine', facing, type, ...inputs };
 }
 
 export const SIZE = 64;
@@ -75,7 +93,8 @@ export function contents(m: Machine): Multivector[] {
   if (m.type === 'duct') return m.item ? [m.item.mv] : [];
   if (m.type === 'extractor') return m.out ? [m.out.mv] : [];
   if (m.type === 'collector') return m.stored.flatMap((s) => Array(s.count).fill(s.mv));
-  return [m.a, m.b, m.fixed, m.out].filter((x): x is Multivector => !!x);
+  // a preset gate was never the player's to get back
+  return [m.a, m.b, m.preset ? null : m.fixed, m.out].filter((x): x is Multivector => !!x);
 }
 
 /** blocks you can use (open a panel for) rather than place against */
@@ -180,7 +199,16 @@ function saveBlock(b: Block): SavedBlock {
     case 'collector':
       return { ...base, stored: b.stored.map((s) => [saveMv(s.mv), s.count]) };
     default:
-      return { ...base, a: mvOrNull(b.a), b: mvOrNull(b.b), fixed: mvOrNull(b.fixed), out: mvOrNull(b.out), work: b.work };
+      return {
+        ...base,
+        a: mvOrNull(b.a),
+        b: mvOrNull(b.b),
+        fixed: mvOrNull(b.fixed),
+        preset: b.preset,
+        out: mvOrNull(b.out),
+        work: b.work,
+        ...(b.type === 'orrery' ? { seen: b.seen.map(saveMv) } : {}),
+      };
   }
 }
 
@@ -198,7 +226,15 @@ function loadBlock(s: SavedBlock): Block {
   } else if (m.type === 'collector') {
     m.stored = ((s.stored as [SavedMv, number][]) ?? []).map(([mv, count]) => ({ mv: loadMv(mv), count }));
   } else if (m.type !== 'duct') {
-    Object.assign(m, { a: loadOrNull(s.a), b: loadOrNull(s.b), fixed: loadOrNull(s.fixed), out: loadOrNull(s.out), work: (s.work as number) ?? 0 });
+    Object.assign(m, {
+      a: loadOrNull(s.a),
+      b: loadOrNull(s.b),
+      fixed: loadOrNull(s.fixed),
+      preset: (s.preset as GateId | null) ?? null,
+      out: loadOrNull(s.out),
+      work: (s.work as number) ?? 0,
+    });
+    if (m.type === 'orrery') m.seen = ((s.seen as SavedMv[]) ?? []).map(loadMv);
   }
   return m;
 }

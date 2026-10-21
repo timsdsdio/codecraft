@@ -120,7 +120,7 @@ test('a duct never hands back into a duct that points at it', () => {
   assert.ok(a.item && !b.item);
 });
 
-test('a sandwich press with B = 1 − e₁₂ turns e₁ + e₂ into −e₁ + e₂, the last order', () => {
+test('a sandwich press with B = 1 − e₁₂ turns e₁ + e₂ into −e₁ + e₂, the last algebra order', () => {
   const { w, f, hub } = setup();
   const rotor = el('2').gp(el('1').add(el('2')));
   assert.ok(rotor.equals(scalar(1).sub(el('1', '2'))));
@@ -128,10 +128,10 @@ test('a sandwich press with B = 1 − e₁₂ turns e₁ + e₂ into −e₁ + e
   press.fixed = rotor;
   w.set(9, Y, 5, press);
   press.a = el('1').add(el('2'));
-  hub.order = ORDERS.length - 1;
+  hub.order = ORDERS.findIndex((o) => o.want.equals(el('2').sub(el('1'))));
+  assert.ok(hub.order > 0);
   run(f, 2);
   assert.equal(hub.delivered, 1);
-  assert.ok(ORDERS[ORDERS.length - 1].want.equals(el('2').sub(el('1'))));
 });
 
 test('the world saves and loads machines with what they hold', () => {
@@ -150,4 +150,99 @@ test('the world saves and loads machines with what they hold', () => {
   assert.ok(m2.a?.equals(el('1')) && m2.fixed?.equals(el('1').add(el('2'))) && !m2.b);
   assert.ok(d2.item?.mv.equals(el('3')) && d2.item.t === 0.5);
   assert.equal(back.active.size, 3); // hub, multiplier, duct
+});
+
+// --- qubits ------------------------------------------------------------------------------------
+
+import { GATES, sameState as same, samePoint } from './qubit.ts';
+import { counts } from './factory.ts';
+
+/** a machine at (7,Y,5) facing east, its A fed by hand, its output into a collector at (8,Y,5) */
+function station(type: 'gate' | 'bloch' | 'detector' | 'orrery', setup?: (m: OperationMachine) => void, rng?: () => number) {
+  const w = new World();
+  const hub = { order: 0, delivered: 0 };
+  const log: string[] = [];
+  const f = new Factory(w, hub, { qubit: (k, a, r) => log.push(`${k} ${a} → ${r}`), orrery: (s) => log.push(`orrery ${s.length}`) }, rng);
+  const m = newMachine(type, E) as OperationMachine;
+  setup?.(m);
+  w.set(7, Y, 5, m);
+  w.set(8, Y, 5, newMachine('collector', E));
+  const collected = () => (w.get(8, Y, 5) as Extract<Machine, { type: 'collector' }>).stored;
+  return { w, f, m, log, collected };
+}
+
+test('a gate set to X turns |0⟩ into a state pointing down', () => {
+  const { f, m, log, collected } = station('gate', (m) => {
+    m.fixed = GATES.X.rotor;
+    m.preset = 'X';
+  });
+  m.a = scalar(1);
+  run(f, 1.5);
+  assert.equal(collected().length, 1);
+  assert.ok(samePoint(collected()[0].mv, GATES.X.rotor));
+  assert.ok(log.some((l) => l.startsWith('gate')));
+});
+
+test('a gate multiplies on the left: H then S points along e₂', () => {
+  const { f, m, collected } = station('gate', (m) => (m.fixed = GATES.S.rotor));
+  m.a = GATES.H.rotor;
+  run(f, 1.5);
+  assert.ok(samePoint(collected()[0].mv, GATES.S.rotor.gp(GATES.H.rotor)));
+});
+
+test('the Bloch projector outputs R e₃ R⁻¹ and takes A from a side too', () => {
+  const { f, w, collected } = station('bloch');
+  const ok = f.accept(7, Y, 5, GATES.H.rotor, N);
+  assert.ok(ok);
+  run(f, 1.5);
+  assert.ok(collected()[0].mv.equals(el('1')));
+  assert.ok(!f.accept(7, Y, 5, scalar(1), E), 'never from its front');
+  void w;
+});
+
+test('the detector follows the Born rule: |+⟩ comes out up or down by chance, |0⟩ always up', () => {
+  let flip = 0;
+  const { f, m, collected } = station('detector', undefined, () => ((flip++ % 2) * 0.99));
+  for (let i = 0; i < 6; i++) {
+    m.a = GATES.H.rotor;
+    run(f, 1.2);
+  }
+  const counts = Object.fromEntries(collected().map((s) => [String(s.mv), s.count]));
+  assert.ok(counts['e₃'] > 0 && counts['−e₃'] > 0, JSON.stringify(counts));
+  const zero = station('detector', undefined, () => 0.999);
+  zero.m.a = scalar(1);
+  run(zero.f, 1.2);
+  assert.ok(zero.collected()[0].mv.equals(el('3')));
+});
+
+test('the orrery passes states through and remembers each distinct one', () => {
+  const { f, m, log, collected } = station('orrery');
+  const phase = scalar(1).add(el('1', '2'));
+  for (const s of [GATES.H.rotor, GATES.H.rotor.scale(2), GATES.H.rotor.gp(phase)]) {
+    m.a = s;
+    run(f, 1.2);
+  }
+  assert.equal((m as Extract<Machine, { type: 'orrery' }>).seen.length, 2, 'a rescaled state is the same state');
+  assert.equal(collected().reduce((n, s) => n + s.count, 0), 3);
+  assert.ok(log.includes('orrery 2'));
+});
+
+test('state orders count any state on the point; phase orders need a new phase each time', () => {
+  const plus = GATES.H.rotor;
+  const phase = scalar(1).add(el('1', '2'));
+  const hub = { order: 0, delivered: 0, seen: [] };
+  const stateOrder = { want: plus, count: 8, hint: '', kind: 'state' as const };
+  assert.ok(counts(stateOrder, plus.gp(phase), hub));
+  assert.ok(!counts(stateOrder, el('1'), hub), 'the Bloch vector itself is not a state');
+  const { w } = setup();
+  const f = new Factory(w, { order: ORDERS.findIndex((o) => o.kind === 'phases'), delivered: 0 });
+  const order = f.order!;
+  let r = plus;
+  for (let i = 0; i < order.count; i++) {
+    assert.ok(f.accept(10, Y, 5, r, W));
+    assert.ok(f.accept(10, Y, 5, r.scale(3), W)); // the same state again doesn't count
+    r = r.gp(phase);
+  }
+  assert.equal(f.hub.order, ORDERS.findIndex((o) => o.kind === 'phases') + 1);
+  void same;
 });

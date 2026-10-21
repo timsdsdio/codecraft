@@ -11,10 +11,13 @@
 //   hub              a pedestal with armillary rings turning around the element it wants
 //   bench            a workbench with a vice and a gear train
 import * as THREE from 'three';
+import type { Multivector } from '@codecraft/ga';
 import { DUCT_SPEED, EXTRACT_EVERY, WORK_TIME, COLLECTOR_CAPACITY } from './factory';
 import type { MachineType } from './items';
 import { MACHINE_LOOK, hex } from './looks';
-import type { Block } from './world';
+import { E3, bloch, fiber, project, toQuat } from './qubit';
+import { SINGLE_INPUT, type Block } from './world';
+import { parts, toWorld } from './glyph';
 
 // --- shared materials and geometry -------------------------------------------------------------
 
@@ -231,11 +234,11 @@ const ANCHORS = () => ({
   a: new THREE.Vector3(-0.72, 0.42, 0),
   b: new THREE.Vector3(0, 0.42, 0.72),
   out: new THREE.Vector3(0.72, 0.42, 0),
-  fixed: new THREE.Vector3(0, 1.5, 0),
+  fixed: new THREE.Vector3(0.3, 1.42, 0.3),
 });
 
 /** the iron cabinet every operation machine is built on */
-function chassis(type: MachineType) {
+function chassis(type: MachineType, sides = 'B', stand = true) {
   const g = new THREE.Group();
   g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
   g.add(mesh(box(0.8, 0.5, 0.8), M.iron, 0, 0.35, 0));
@@ -243,8 +246,8 @@ function chassis(type: MachineType) {
   g.add(mesh(box(0.88, 0.06, 0.88), M.brass, 0, 0.63, 0));
   rivets(g, 0.665, 0.4, 3);
   port(g, new THREE.Vector3(-1, 0, 0), 0.34, 'A');
-  port(g, new THREE.Vector3(0, 0, 1), 0.34, 'B');
-  port(g, new THREE.Vector3(0, 0, -1), 0.34, 'B');
+  port(g, new THREE.Vector3(0, 0, 1), 0.34, sides);
+  port(g, new THREE.Vector3(0, 0, -1), 0.34, sides);
   // output chute
   const chute = new THREE.Group();
   chute.add(mesh(box(0.2, 0.06, 0.26), M.copper, 0.48, 0.24, 0));
@@ -263,10 +266,12 @@ function chassis(type: MachineType) {
   sym.position.set(-0.24, 0.664, 0);
   g.add(sym);
   // a stand for a fixed B, which floats above
-  g.add(mesh(cyl(0.012, 0.012, 0.62, 6), M.brass, 0.3, 0.97, 0.3));
-  const ring = mesh(torus(0.08, 0.012), M.brass, 0.3, 1.28, 0.3);
-  ring.rotation.x = Math.PI / 2;
-  g.add(ring);
+  if (stand) {
+    g.add(mesh(cyl(0.012, 0.012, 0.62, 6), M.brass, 0.3, 0.97, 0.3));
+    const ring = mesh(torus(0.08, 0.012), M.brass, 0.3, 1.28, 0.3);
+    ring.rotation.x = Math.PI / 2;
+    g.add(ring);
+  }
   const lamp = pilot(MACHINE_LOOK[type].colour);
   lamp.lamp.position.set(-0.32, 0.66, 0.32);
   g.add(lamp.lamp);
@@ -276,7 +281,7 @@ function chassis(type: MachineType) {
 type OpBlock = Extract<Block, { kind: 'machine'; a: unknown }>;
 const opState = (b: Block | undefined) => {
   const m = b?.kind === 'machine' && 'a' in b ? (b as OpBlock) : null;
-  const working = !!m && !!m.a && !!(m.fixed ?? m.b) && !m.out;
+  const working = !!m && !!m.a && (SINGLE_INPUT.includes(m.type) || !!(m.fixed ?? m.b)) && !m.out;
   return { m, working, progress: m ? m.work / WORK_TIME : 0 };
 };
 
@@ -583,6 +588,204 @@ function bench(): Model {
   };
 }
 
+// --- qubit machines ----------------------------------------------------------------------------
+
+/** a colour for a point on the Bloch sphere: hue from its longitude, light at the top and dark at the bottom */
+export function blochColour([x, y, z]: number[]) {
+  const hue = (Math.atan2(y, x) / (Math.PI * 2) + 1) % 1;
+  return new THREE.Color().setHSL(hue, 0.85, 0.42 + 0.22 * z);
+}
+
+function gate(): Model {
+  const { g, lamp } = chassis('gate');
+  // a valve handwheel on a column: it turns through the gate's angle each time it works
+  g.add(mesh(cyl(0.05, 0.06, 0.28, 12), M.darkIron, -0.02, 0.8, 0));
+  const wheelArm = new THREE.Group();
+  const hand = wheel(0.24, 4, M.brass);
+  hand.rotation.y = Math.PI / 2; // face the input side
+  wheelArm.add(hand);
+  wheelArm.position.set(-0.02, 1.02, 0);
+  g.add(wheelArm);
+  // the gate's letter on a plate the player can read from the input side
+  const letter = plate('?', 0.2, 0.2, 0x0a3a50);
+  letter.position.set(-0.19, 0.8, 0);
+  letter.rotation.y = -Math.PI / 2;
+  g.add(letter);
+  let shown = '?';
+  let turned = 0;
+  let wasWorking = false;
+  return {
+    group: g,
+    anchors: ANCHORS(),
+    chimney: new THREE.Vector3(0, 1.3, 0),
+    update(b, dt) {
+      const { m, working, progress } = opState(b);
+      const label = m?.preset ?? (m?.fixed ? 'B' : m?.b ? 'B' : '?');
+      if (label !== shown) {
+        shown = label;
+        letter.material = plate(label, 0.2, 0.2, 0x0a3a50).material;
+      }
+      const angle = m?.preset === 'S' ? Math.PI / 2 : Math.PI;
+      if (wasWorking && !working) turned += angle;
+      wasWorking = working;
+      hand.rotation.x = turned + (working ? progress * angle : 0);
+      lamp.set(working, dt);
+    },
+  };
+}
+
+function blochProjector(): Model {
+  const g = new THREE.Group();
+  g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
+  g.add(mesh(cyl(0.3, 0.38, 0.2, 8), M.iron, 0, 0.2, 0));
+  port(g, new THREE.Vector3(-1, 0, 0), 0.22, 'A');
+  const spout = mesh(cyl(0.08, 0.08, 0.3), M.copper, 0.36, 0.22, 0);
+  spout.rotation.z = Math.PI / 2;
+  g.add(spout, mesh(cyl(0.04, 0.05, 0.4, 10), M.brass, 0, 0.5, 0));
+  // the globe: an equator, two meridians, and an axis from |0⟩ (top) to |1⟩ (bottom)
+  const globe = new THREE.Group();
+  globe.position.y = 1.0;
+  const R = 0.3;
+  const equator = mesh(torus(R, 0.012), M.brass);
+  equator.rotation.x = Math.PI / 2;
+  const m1 = mesh(torus(R, 0.01), M.darkBrass);
+  const m2 = mesh(torus(R, 0.01), M.darkBrass);
+  m2.rotation.y = Math.PI / 2;
+  globe.add(equator, m1, m2, mesh(cyl(0.008, 0.008, R * 2.3, 6), M.steel));
+  globe.add(mesh(sphere(0.035), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x666666 }), 0, R, 0));
+  globe.add(mesh(sphere(0.035), M.darkIron, 0, -R, 0));
+  const glassBall = mesh(geo('globeGlass', () => new THREE.SphereGeometry(R, 24, 16)), M.glass);
+  globe.add(glassBall);
+  // the pointer: where the last state pointed
+  const pointer = new THREE.Group();
+  const pmat = new THREE.MeshStandardMaterial({ color: 0xff6a3c, emissive: 0x802010, roughness: 0.3 });
+  pointer.add(mesh(cyl(0.012, 0.012, R * 0.8, 8), pmat, 0, R * 0.4, 0), mesh(geo('pcone', () => new THREE.ConeGeometry(0.035, 0.08, 10)), pmat, 0, R * 0.85, 0));
+  globe.add(pointer);
+  const pl = plate('BLOCH', 0.34, 0.11);
+  pl.position.set(0, 0.22, 0.34);
+  g.add(globe, pl);
+  const lamp = pilot(MACHINE_LOOK.bloch.colour);
+  lamp.lamp.position.set(0.3, 0.1, 0.3);
+  g.add(lamp.lamp);
+  const target = new THREE.Vector3(0, 1, 0);
+  const up = new THREE.Vector3(0, 1, 0);
+  const current = new THREE.Quaternion();
+  return {
+    group: g,
+    anchors: { ...ANCHORS(), a: new THREE.Vector3(-0.72, 0.3, 0), out: new THREE.Vector3(0.72, 0.3, 0) },
+    chimney: new THREE.Vector3(0, 1.35, 0),
+    update(b, dt, time) {
+      const { m, working } = opState(b);
+      if (m?.out) {
+        const v = parts(m.out).vector;
+        target.copy(toWorld(...v)).normalize();
+      }
+      // the world turns with the machine; the pointer must show algebra directions, so undo the machine's turn
+      const local = target.clone().applyQuaternion(g.quaternion.clone().invert());
+      current.slerp(new THREE.Quaternion().setFromUnitVectors(up, local), Math.min(1, dt * 4));
+      pointer.quaternion.copy(current);
+      globe.rotation.y = 0;
+      glassBall.rotation.y = time * 0.2;
+      lamp.set(working, dt);
+    },
+  };
+}
+
+function detector(): Model {
+  const { g, lamp } = chassis('detector', 'A', false);
+  // Stern–Gerlach magnet: a wedge pole above, a trough pole below, the beam passing between
+  const north = mesh(geo('wedge', () => new THREE.CylinderGeometry(0.0, 0.16, 0.22, 4, 1)), new THREE.MeshStandardMaterial({ color: 0xb03030, metalness: 0.6, roughness: 0.4 }), 0.02, 1.0, 0);
+  north.rotation.z = Math.PI;
+  north.rotation.y = Math.PI / 4;
+  const south = mesh(box(0.3, 0.12, 0.3), new THREE.MeshStandardMaterial({ color: 0x3050b0, metalness: 0.6, roughness: 0.4 }), 0.02, 0.73, 0);
+  g.add(north, south, mesh(box(0.06, 0.48, 0.3), M.darkIron, -0.16, 0.9, 0));
+  // a screen with two lamps: up and down
+  g.add(mesh(box(0.04, 0.4, 0.3), M.darkBrass, 0.22, 0.88, 0));
+  const upMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0 });
+  const downMat = new THREE.MeshStandardMaterial({ color: 0x9ad0ff, emissive: 0x9ad0ff, emissiveIntensity: 0 });
+  g.add(mesh(sphere(0.045), upMat, 0.25, 1.0, 0), mesh(sphere(0.045), downMat, 0.25, 0.76, 0));
+  let lastOut = '';
+  let flashUp = 0;
+  let flashDown = 0;
+  return {
+    group: g,
+    anchors: ANCHORS(),
+    chimney: new THREE.Vector3(0.02, 1.2, 0),
+    update(b, dt) {
+      const { m, working } = opState(b);
+      const outKey = m?.out ? String(m.out) : '';
+      if (outKey && outKey !== lastOut) {
+        if (outKey === 'e₃') flashUp = 1;
+        else flashDown = 1;
+      }
+      lastOut = outKey;
+      flashUp = Math.max(0, flashUp - dt * 1.5);
+      flashDown = Math.max(0, flashDown - dt * 1.5);
+      upMat.emissiveIntensity = flashUp * 3;
+      downMat.emissiveIntensity = flashDown * 3;
+      lamp.set(working, dt);
+    },
+  };
+}
+
+function orrery(): Model {
+  const g = new THREE.Group();
+  g.add(mesh(box(1, 0.1, 1), M.darkIron, 0, 0.05, 0));
+  g.add(mesh(cyl(0.34, 0.4, 0.16, 16), M.iron, 0, 0.18, 0));
+  port(g, new THREE.Vector3(-1, 0, 0), 0.2, 'A');
+  const spout = mesh(cyl(0.08, 0.08, 0.3), M.copper, 0.36, 0.2, 0);
+  spout.rotation.z = Math.PI / 2;
+  g.add(spout);
+  // a tripod holding a brass ring, under which the fibers turn
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const leg = mesh(cyl(0.015, 0.02, 0.9, 6), M.brass, Math.cos(a) * 0.28, 0.7, Math.sin(a) * 0.28);
+    leg.rotation.z = Math.cos(a) * 0.12;
+    leg.rotation.x = -Math.sin(a) * 0.12;
+    g.add(leg);
+  }
+  const crown = mesh(torus(0.3, 0.02), M.brass, 0, 1.16, 0);
+  crown.rotation.x = Math.PI / 2;
+  g.add(crown, mesh(cyl(0.02, 0.02, 0.5, 8), M.steel, 0, 0.5, 0));
+  const pl = plate('HOPF', 0.3, 0.1);
+  pl.position.set(0, 0.2, 0.37);
+  g.add(pl);
+  const fibers = new THREE.Group();
+  fibers.position.y = 1.75;
+  g.add(fibers);
+  let key = '';
+  const build = (seen: Multivector[]) => {
+    fibers.children.forEach((c) => (c as THREE.Mesh).geometry?.dispose());
+    fibers.clear();
+    const loops = seen.map((r) => ({ r, pts: fiber(r, 120) }));
+    const maxR = Math.max(0.5, ...loops.flatMap((l) => l.pts.map((p) => Math.hypot(...p))));
+    const scale = Math.min(0.45, 0.85 / maxR);
+    for (const { r, pts } of loops) {
+      const v = parts(bloch(r) ?? E3).vector;
+      const colour = blochColour(v);
+      const curve = new THREE.CatmullRomCurve3(pts.map((p) => toWorld(...p).multiplyScalar(scale)), true);
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 120, 0.018, 6, true), new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.35, metalness: 0.3, roughness: 0.4 }));
+      const bead = mesh(sphere(0.04), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: colour, emissiveIntensity: 0.8 }));
+      bead.position.copy(toWorld(...project(toQuat(r))).multiplyScalar(scale));
+      fibers.add(tube, bead);
+    }
+  };
+  return {
+    group: g,
+    anchors: { ...ANCHORS(), a: new THREE.Vector3(-0.72, 0.3, 0), out: new THREE.Vector3(0.72, 0.3, 0) },
+    chimney: new THREE.Vector3(0, 1.2, 0),
+    update(b, dt) {
+      const m = b?.kind === 'machine' && b.type === 'orrery' ? b : null;
+      const k = m ? m.seen.map((s) => s.key()).join('|') : '';
+      if (m && k !== key) {
+        key = k;
+        build(m.seen);
+      }
+      fibers.rotation.y += dt * 0.25;
+    },
+  };
+}
+
 export function buildModel(kind: MachineType | 'hub' | 'bench'): Model {
   switch (kind) {
     case 'adder':
@@ -603,6 +806,14 @@ export function buildModel(kind: MachineType | 'hub' | 'bench'): Model {
       return hub();
     case 'bench':
       return bench();
+    case 'gate':
+      return gate();
+    case 'bloch':
+      return blochProjector();
+    case 'detector':
+      return detector();
+    case 'orrery':
+      return orrery();
   }
 }
 

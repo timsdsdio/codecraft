@@ -3,6 +3,7 @@
 // lets you automate it.
 import type { Multivector } from '@codecraft/ga';
 import { machine, type Inventory, type Item, type MachineType } from './items.ts';
+import { E3 } from './qubit.ts';
 
 export interface Ingredient {
   /** shown in the recipe, e.g. "any bivector" */
@@ -58,6 +59,34 @@ export const RECIPES: Recipe[] = [
       lattice(4),
       { label: 'a rotor', count: 1, test: isEl((m) => grades(m) === '0,2') },
       { label: 'a trivector (e.g. e₁ ∧ e₂ ∧ e₃)', count: 1, test: isEl((m) => grades(m) === '3') },
+    ],
+  },
+  {
+    makes: 'gate',
+    count: 1,
+    does: 'Outputs B A: applies a gate (X, Y, Z, H, S, or any rotor as B) to the qubit state A.',
+    needs: [lattice(4), { label: 'a rotor', count: 1, test: isEl((m) => grades(m) === '0,2') }],
+  },
+  {
+    makes: 'bloch',
+    count: 1,
+    does: 'Outputs A e₃ A⁻¹: where the qubit state A points, its Bloch vector.',
+    needs: [lattice(4), { label: 'e₃', count: 1, test: isEl((m) => m.equals(E3)) }, { label: 'a rotor', count: 1, test: isEl((m) => grades(m) === '0,2') }],
+  },
+  {
+    makes: 'detector',
+    count: 1,
+    does: 'Measures the qubit state A: outputs e₃ (up) or −e₃ (down), up with probability (1 + z) / 2.',
+    needs: [lattice(4), { label: 'e₃', count: 2, test: isEl((m) => m.equals(E3)) }],
+  },
+  {
+    makes: 'orrery',
+    count: 1,
+    does: 'Passes states through and draws the Hopf fiber of each one above itself.',
+    needs: [
+      lattice(4),
+      { label: 'a rotor', count: 1, test: isEl((m) => grades(m) === '0,2') },
+      { label: 'a trivector', count: 1, test: isEl((m) => grades(m) === '3') },
     ],
   },
 ];

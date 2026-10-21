@@ -8,6 +8,8 @@ import { apply, type Op } from '../game/ops';
 import { ORDERS } from '../game/orders';
 import { RECIPES, canBuild } from '../game/recipes';
 import { DIR_NAMES, STEP, opposite } from '../game/world';
+import { GATES, bloch, probUp, type GateId } from '../game/qubit';
+import { Q } from '@codecraft/ga';
 import { Icon } from './Icon';
 
 function Sheet({ title, game, children, icon }: { title: string; game: Game; children: ReactNode; icon?: ReactNode }) {
@@ -259,7 +261,7 @@ function Held({ name, mv, note }: { name: string; mv: Multivector | null; note: 
   );
 }
 
-const OP_SYMBOL = { adder: '+', wedger: '∧', multiplier: '×', sandwich: 'applied by' } as const;
+const OP_SYMBOL = { adder: '+', wedger: '∧', multiplier: '×', sandwich: 'applied by', gate: 'on' } as const;
 
 export function MachineScreen({ game }: { game: Game }) {
   const m = game.panelBlock;
@@ -328,27 +330,98 @@ export function MachineScreen({ game }: { game: Game }) {
 
   if (m.type === 'duct') return null;
 
+  if (m.type === 'bloch' || m.type === 'detector' || m.type === 'orrery') {
+    const v = m.a ? bloch(m.a) : null;
+    return (
+      <Sheet title={title} game={game} icon={icon}>
+        <p>{recipe.does} It takes A from any side but its front.</p>
+        <div className="machine-view">
+          <Held name="A (state)" mv={m.a} note="waiting" />
+          <span className="op-sym">→</span>
+          <Held name="OUT (front)" mv={m.out} note={m.a ? `working ${Math.round((100 * m.work) / WORK_TIME)}%` : 'nothing yet'} />
+        </div>
+        {m.a && !v && <p className="callout">{String(m.a)} isn’t a qubit state: a state is a scalar plus a bivector (a rotor). It will vanish.</p>}
+        {m.type === 'detector' && m.a && v && (
+          <p className="dim">
+            Up (e₃) with probability {String(Q.show(probUp(m.a)!))}, down (−e₃) otherwise.
+          </p>
+        )}
+        {m.type === 'orrery' && (
+          <>
+            <h3>Fibers shown</h3>
+            {m.seen.length ? (
+              <div className="stored">
+                {m.seen.map((r) => (
+                  <div key={r.key()} className="held-slot">
+                    <Icon item={el(r)} size={44} />
+                    <span>{String(r)}</span>
+                    <span className="dim">points {String(bloch(r))}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="dim">None yet. Each distinct state that passes through adds its Hopf fiber above the orrery; states with the same Bloch vector share a fiber and show as beads on it.</p>
+            )}
+            <div className="row">
+              <button disabled={!m.seen.length} onClick={() => game.clearOrrery()}>
+                Clear the fibers
+              </button>
+            </div>
+          </>
+        )}
+        <div className="row">{rotate}</div>
+      </Sheet>
+    );
+  }
+
   const sandwich = m.type === 'sandwich';
+  const gateMachine = m.type === 'gate';
   return (
     <Sheet title={title} game={game} icon={icon}>
       <p>
-        {recipe.does} {sandwich ? 'A arrives at its back; B is the rotor or vector applied to it.' : 'A arrives at its back, B at either side.'}
+        {recipe.does}{' '}
+        {sandwich ? 'A arrives at its back; B is the rotor or vector applied to it.' : gateMachine ? 'The state A arrives at its back; the gate B is set below or arrives at a side.' : 'A arrives at its back, B at either side.'}
       </p>
       <div className="machine-view">
-        <Held name="A (back)" mv={m.a} note="waiting" />
-        <span className="op-sym">{OP_SYMBOL[m.type]}</span>
-        <Held name={m.fixed ? 'B (fixed)' : 'B (sides)'} mv={m.fixed ?? m.b} note="waiting" />
+        {gateMachine ? (
+          <>
+            <Held name={m.preset ? `gate ${m.preset}` : m.fixed ? 'B (fixed)' : 'B (sides)'} mv={m.fixed ?? m.b} note="waiting" />
+            <span className="op-sym">{OP_SYMBOL.gate}</span>
+            <Held name="A (back)" mv={m.a} note="waiting" />
+          </>
+        ) : (
+          <>
+            <Held name="A (back)" mv={m.a} note="waiting" />
+            <span className="op-sym">{OP_SYMBOL[m.type]}</span>
+            <Held name={m.fixed ? 'B (fixed)' : 'B (sides)'} mv={m.fixed ?? m.b} note="waiting" />
+          </>
+        )}
         <span className="op-sym">→</span>
         <Held name="OUT (front)" mv={m.out} note={m.a && (m.fixed ?? m.b) ? `working ${Math.round((100 * m.work) / WORK_TIME)}%` : 'nothing yet'} />
       </div>
-      <h3>Fixed B</h3>
+      {gateMachine && (
+        <>
+          <h3>Gate</h3>
+          <div className="gates">
+            {(Object.keys(GATES) as GateId[]).map((id) => (
+              <button key={id} className={m.preset === id ? 'primary' : ''} onClick={() => game.setGate(id)} title={GATES[id].does}>
+                <b>{id}</b>
+                <span className="dim">{GATES[id].does}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <h3>{gateMachine ? 'Or any rotor as the gate' : 'Fixed B'}</h3>
       <p className="dim">
         Set B to one of your elements and the machine uses it for every A, so a single duct of A is enough.
         {sandwich ? ' For a sandwich press this is the rotor that turns everything passing through.' : ''}
       </p>
       {m.fixed && (
         <div className="row">
-          <button onClick={() => game.setFixed(null)}>Clear fixed B ({String(m.fixed)} goes back to you)</button>
+          <button onClick={() => game.setFixed(null)}>
+            {m.preset ? `Clear gate ${m.preset}` : `Clear fixed B (${String(m.fixed)} goes back to you)`}
+          </button>
         </div>
       )}
       <Slots game={game} onPick={(i) => game.setFixed(i)} filter={(i) => game.inventory.slots[i]?.item.kind === 'element'} />

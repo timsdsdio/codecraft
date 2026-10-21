@@ -3,7 +3,18 @@
 import { G3, Multivector, Q, type Rational } from '@codecraft/ga';
 
 /** machines that can be placed; each faces one of four directions */
-export type MachineType = 'extractor' | 'duct' | 'collector' | 'adder' | 'wedger' | 'multiplier' | 'sandwich';
+export type MachineType =
+  | 'extractor'
+  | 'duct'
+  | 'collector'
+  | 'adder'
+  | 'wedger'
+  | 'multiplier'
+  | 'sandwich'
+  | 'gate'
+  | 'bloch'
+  | 'detector'
+  | 'orrery';
 
 export type Item =
   | { kind: 'lattice' }
@@ -31,6 +42,10 @@ export const MACHINE_NAMES: Record<MachineType, string> = {
   wedger: 'Wedger',
   multiplier: 'Multiplier',
   sandwich: 'Sandwich press',
+  gate: 'Gate',
+  bloch: 'Bloch projector',
+  detector: 'Detector',
+  orrery: 'Fibration orrery',
 };
 
 export function itemKey(item: Item) {
