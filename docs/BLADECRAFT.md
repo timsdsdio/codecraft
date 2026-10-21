@@ -286,8 +286,9 @@ another branch says so on its card ("after Volume").
 - **Desktop:** WASD moves, the mouse looks (pointer lock), space jumps. Left click breaks (or takes
   from a deposit). Right click uses the bench, a machine or the hub, and otherwise places; shift +
   right click always places. R rotates what you're about to place, 1–9 or the wheel pick a hotbar
-  slot, E opens your items, L the achievements. The line under the crosshair names the block and
-  what each click would do to it.
+  slot, E opens your items, L the achievements. Esc frees the mouse to click the buttons on screen
+  while the game carries on, and clicking the world takes it back. The line under the crosshair
+  names the block and what each click would do to it.
 - **Touch:** the left side is a joystick wherever the thumb lands; the right side drags to look.
   Buttons on the right appear when they apply: Break (Take on a deposit), Use, Place, Rotate when
   holding a machine, and Jump.
