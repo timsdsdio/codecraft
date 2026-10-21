@@ -127,6 +127,7 @@ export class Game {
       qubit: (kind, input, result) => this.emit({ type: 'qubit', kind, input, result }),
       orrery: (seen) => this.emit({ type: 'orrery', seen }),
       field: (kind, mv) => this.emit({ type: 'field', kind, mv }),
+      route: (kind) => this.emit({ type: 'route', kind }),
       orderDone: (order, next) => {
         this.inventory.add({ kind: 'lattice' }, 16);
         this.toast(next ? `Order done: ${orderLabel(order)}. Next: ${orderLabel(next)}` : `All ${ORDERS.length} orders done!`, 'order');

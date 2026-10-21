@@ -263,14 +263,23 @@ achievement can be earned at any time, and the algebra ones count whether the op
 the bench or in a machine. An achievement appears in the tree once one of its parents is earned.
 Each has a goal and a lesson, and the lesson can be read at any time (`achievements.ts`).
 
-The tree starts with breaking ground and collecting the three axes, branches into adding vectors,
-squaring a vector and the outer product, and leads through bivectors squaring to −1, volume and
-mixed grades to rotors, applying rotors, reflections, and the factory: building a machine,
-delivering to the hub, filling an order and having a machine do an operation. From rotors a qubit
-branch grows: projecting a state, a gate, the Born rule, a new phase, a Hopf fiber and linked rings.
-From volume (the trivector I) a field branch grows, one achievement per grade of Maxwell's equation:
-a field, Gauss's law, Ampère's law, Faraday's law, no monopoles, and one equation, for a reading
-with E and IB together.
+The tree has four branches, each drawn as its own band read left to right, with lines from each
+idea to the ones that build on it and a count of how many are earned. An idea that follows one in
+another branch says so on its card ("after Volume").
+
+- **The algebra** starts from a vector and the three axes, and branches into adding vectors,
+  squaring a vector and the outer product. It leads through orientation, a vector wedged with itself,
+  the reverse, bivectors squaring to −1, contraction, mixed grades, rotors, applying rotors,
+  reflections, volume and duality (multiplying by e₁₂₃).
+- **The factory** starts with breaking ground: building a machine, having a machine do an
+  operation, delivering to the hub and filling an order, then each logistics block (a splitter
+  sending to a side, a merger passing a side input, a sorter sending a match aside, a crossing) and
+  finishing the algebra orders.
+- **Qubits** grows from rotors: projecting a state, a gate, the Born rule, a new phase, a Hopf fiber,
+  linked rings, and finishing the qubit orders.
+- **The field** grows from duality, one achievement per grade of Maxwell's equation: a field,
+  Gauss's law, Ampère's law, Faraday's law, no monopoles, and one equation, for a reading with E and
+  IB together. Filling the hub's last order ends it.
 
 ## Controls
 

@@ -54,6 +54,8 @@ export interface FactoryEvents {
   qubit?(kind: 'project' | 'gate' | 'measure', input: Multivector, result: Multivector): void;
   /** an orrery's record of states changed */
   orrery?(seen: Multivector[]): void;
+  /** a logistics block sent an element somewhere other than straight on */
+  route?(kind: 'split' | 'merge' | 'sort' | 'cross'): void;
   /** a field source was set while standing in a field, or a probe made a reading */
   field?(kind: 'charge' | 'wire' | 'antenna' | 'reading', mv: Multivector): void;
 }
@@ -155,6 +157,7 @@ export class Factory {
         for (let k = 0; k < 3; k++) {
           const i = (m.next + k) % 3;
           if (this.push(x, y, z, rel(m.facing, SPLIT_ORDER[i]), m.item)) {
+            if (SPLIT_ORDER[i] !== 0) this.events.route?.('split');
             m.item = null;
             m.next = (i + 1) % 3;
             return;
@@ -170,6 +173,7 @@ export class Factory {
           const mv = m.slots[side];
           if (!mv) continue;
           if (this.push(x, y, z, m.facing, mv)) {
+            if (side !== 2) this.events.route?.('merge');
             m.slots[side] = null;
             m.next = (i + 1) % 3;
           }
@@ -179,15 +183,21 @@ export class Factory {
       }
       case 'sorter': {
         if (!m.item) return;
-        const dir = sortMatches(m.mode, m.filter, m.item) ? rel(m.facing, m.side) : m.facing;
-        if (this.push(x, y, z, dir, m.item)) m.item = null;
+        const match = sortMatches(m.mode, m.filter, m.item);
+        if (this.push(x, y, z, match ? rel(m.facing, m.side) : m.facing, m.item)) {
+          if (match) this.events.route?.('sort');
+          m.item = null;
+        }
         return;
       }
       case 'crossing': {
         // straight through: whatever came in on one side leaves by the opposite side
         for (const from of [0, 1, 2, 3] as Dir[]) {
           const mv = m.slots[from];
-          if (mv && this.push(x, y, z, opposite(from), mv)) m.slots[from] = null;
+          if (mv && this.push(x, y, z, opposite(from), mv)) {
+            m.slots[from] = null;
+            this.events.route?.('cross');
+          }
         }
         return;
       }
