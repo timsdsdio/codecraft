@@ -2,7 +2,7 @@
 // the hub's current order. Each step is worked out from the state of the world, so it never gets
 // out of step with what the player has actually done.
 import type { Inventory } from './items.ts';
-import { ORDERS, type HubProgress } from './orders.ts';
+import { ORDERS, orderLabel, type HubProgress } from './orders.ts';
 import { STEP, opposite, type World } from './world.ts';
 
 export interface GuideStep {
@@ -71,7 +71,7 @@ export function guide({ world, inventory, hub, delivered }: GuideState): GuideSt
   if (!order) return { label: 'All orders delivered', title: 'Free build', hint: 'Every order is done. Build whatever you like, or chase the remaining achievements.' };
   return {
     label: `Order ${hub.order + 1} of ${ORDERS.length}`,
-    title: `Deliver ${order.count} × ${order.want}`,
+    title: `Deliver ${order.count} × ${orderLabel(order)}`,
     hint: order.hint,
     progress: { done: hub.delivered, of: order.count },
   };

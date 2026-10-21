@@ -1,11 +1,13 @@
 // Achievements: an optional tree of milestones that teaches geometric algebra by doing it. Like
 // Minecraft's advancements, nothing is locked behind them; an achievement can be earned at any time,
-// and the tree only shows how the ideas build on each other. A node is listed once one of its
-// parents is earned, so the next ideas come into view as you go.
+// and the tree only shows how the ideas build on each other. It is drawn in four branches (the
+// algebra, the factory, qubits and the field), each read left to right. A node is named once one of
+// its parents is earned, so the next ideas come into view as you go.
 import { G3, Multivector } from '@codecraft/ga';
 import type { MachineType } from './items.ts';
 import type { Op } from './ops.ts';
 import type { Block } from './world.ts';
+import { ORDERS } from './orders.ts';
 
 export type GameEvent =
   | { type: 'break'; block: Block }
@@ -16,10 +18,24 @@ export type GameEvent =
   | { type: 'deliver'; mv: Multivector }
   | { type: 'order'; index: number }
   | { type: 'qubit'; kind: 'project' | 'gate' | 'measure'; input: Multivector; result: Multivector }
-  | { type: 'orrery'; seen: Multivector[] };
+  | { type: 'orrery'; seen: Multivector[] }
+  /** a source set while standing in a field, or a probe's reading */
+  | { type: 'field'; kind: 'charge' | 'wire' | 'antenna' | 'reading'; mv: Multivector }
+  /** a logistics block sent an element somewhere other than straight on */
+  | { type: 'route'; kind: 'split' | 'merge' | 'sort' | 'cross' };
+
+/** the bands the tree is drawn in */
+export type Branch = 'algebra' | 'factory' | 'qubits' | 'field';
+export const BRANCHES: { id: Branch; title: string }[] = [
+  { id: 'algebra', title: 'The algebra' },
+  { id: 'factory', title: 'The factory' },
+  { id: 'qubits', title: 'Qubits' },
+  { id: 'field', title: 'The field' },
+];
 
 export interface Achievement {
   id: string;
+  branch: Branch;
   title: string;
   /** what to do, shown before it's earned */
   goal: string;
@@ -38,11 +54,18 @@ const isPhase = (m: Multivector) => m.terms.has(3) && [...m.terms.keys()].every(
 const pointKey = (r: Multivector) => r.sandwich(el3)?.key() ?? '';
 const el3 = Multivector.e(G3, '3');
 const onAxis = (m: Multivector) => m.terms.size === 1;
+const isTrivector = (m: Multivector) => !m.isZero() && m.grades().join() === '3';
+/** the index of the last order of each tier, so finishing a tier can be noticed */
+const lastOf = (test: (kind: string) => boolean) => ORDERS.reduce((last, o, i) => (test(o.kind ?? 'exact') ? i : last), -1);
+const LAST_ALGEBRA = lastOf((k) => k === 'exact');
+const LAST_QUBIT = lastOf((k) => k === 'state' || k === 'phases');
+const LAST_FIELD = lastOf((k) => k === 'reading');
 const negativeOnly = (m: Multivector) => [...m.terms.values()].every((c) => c.n < 0);
 
 export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'break-ground',
+    branch: 'factory',
     title: 'Break ground',
     goal: 'Break any block.',
     lesson:
@@ -52,6 +75,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'direction',
+    branch: 'algebra',
     title: 'A sense of direction',
     goal: 'Collect a vector from a deposit.',
     lesson:
@@ -61,6 +85,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'three-axes',
+    branch: 'algebra',
     title: 'Three axes',
     goal: 'Hold e₁, e₂ and e₃ at the same time.',
     lesson:
@@ -70,6 +95,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'head-to-tail',
+    branch: 'algebra',
     title: 'Head to tail',
     goal: 'Add two vectors into one that lies off the axes.',
     lesson:
@@ -79,6 +105,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'squares-to-a-number',
+    branch: 'algebra',
     title: 'Squares to a number',
     goal: 'Multiply a vector by itself with the geometric product (AB).',
     lesson:
@@ -88,6 +115,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'oriented-area',
+    branch: 'algebra',
     title: 'Oriented area',
     goal: 'Wedge two vectors into a bivector (A ∧ B).',
     lesson:
@@ -97,6 +125,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'order-matters',
+    branch: 'algebra',
     title: 'Order matters',
     goal: 'Wedge two vectors in the other order and get a negative bivector.',
     lesson: 'b ∧ a = −(a ∧ b). Swapping the order flips the orientation: e₂ ∧ e₁ = −e₁₂ is the same plane turning the other way.',
@@ -105,6 +134,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'nothing-at-all',
+    branch: 'algebra',
     title: 'Nothing at all',
     goal: 'Wedge a vector with itself.',
     lesson: 'a ∧ a = 0. A vector with itself sweeps out no area, and neither do any two vectors that point the same or opposite ways.',
@@ -113,6 +143,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'two-grades',
+    branch: 'algebra',
     title: 'Two grades at once',
     goal: 'Take the geometric product of two different vectors that are neither parallel nor at right angles.',
     lesson:
@@ -122,6 +153,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'square-root-of-minus-one',
+    branch: 'algebra',
     title: 'A real √−1',
     goal: 'Multiply a bivector like e₁₂ by itself.',
     lesson:
@@ -131,6 +163,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'volume',
+    branch: 'algebra',
     title: 'Volume',
     goal: 'Wedge a bivector with a third vector into a trivector.',
     lesson:
@@ -140,6 +173,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'quarter-turn',
+    branch: 'algebra',
     title: 'Quarter turn',
     goal: 'Make a rotor: a scalar plus a bivector, such as 1 + e₁₂.',
     lesson:
@@ -149,6 +183,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'sandwich',
+    branch: 'algebra',
     title: 'Sandwich',
     goal: 'Apply a rotor to a vector with A B A⁻¹ (A the rotor, B the vector).',
     lesson:
@@ -158,6 +193,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'mirror',
+    branch: 'algebra',
     title: 'Mirror',
     goal: 'Apply a vector to a vector with A B A⁻¹.',
     lesson:
@@ -166,7 +202,38 @@ export const ACHIEVEMENTS: Achievement[] = [
     test: (e) => e.type === 'craft' && e.op === 'sandwich' && isVector(e.a) && !!e.b && isVector(e.b),
   },
   {
+    id: 'whats-left',
+    branch: 'algebra',
+    title: 'What’s left',
+    goal: 'Contract a vector into a bivector (A ⌋ B).',
+    lesson:
+      'a ⌋ B takes a out of B: e₁ ⌋ e₁₂ = e₂, what is left of the floor plane once e₁ is taken out. Contracting a vector into a vector gives their dot product, a number. The wedge raises grade and the contraction lowers it.',
+    parents: ['oriented-area'],
+    test: (e) => e.type === 'craft' && e.op === 'contract' && isVector(e.a) && !!e.b && isBivector(e.b) && isVector(e.result),
+  },
+  {
+    id: 'backwards',
+    branch: 'algebra',
+    title: 'Backwards',
+    goal: 'Reverse a bivector (Ã).',
+    lesson:
+      'The reverse writes every product backwards: e₁e₂ becomes e₂e₁ = −e₁₂. Scalars and vectors stay as they are, while bivectors and trivectors change sign. The reverse of a rotor turns the other way, so R R̃ is a plain number and R̃ undoes R.',
+    parents: ['order-matters'],
+    test: (e) => e.type === 'craft' && e.op === 'reverse' && e.a.grades().includes(2),
+  },
+  {
+    id: 'right-angles',
+    branch: 'algebra',
+    title: 'At right angles',
+    goal: 'Multiply a vector by a trivector with the geometric product.',
+    lesson:
+      'e₁₂₃ e₃ = e₁₂: multiplying by the unit volume I = e₁₂₃ swaps a direction for the plane at right angles to it, and a plane for the direction at right angles to it. This is duality, and it is how the magnetic field B, a direction, becomes the plane IB in the field F = E + IB.',
+    parents: ['volume'],
+    test: (e) => e.type === 'craft' && e.op === 'product' && !!e.b && ((isTrivector(e.a) && isVector(e.b)) || (isVector(e.a) && isTrivector(e.b))),
+  },
+  {
     id: 'built',
+    branch: 'factory',
     title: 'Built to last',
     goal: 'Build a machine at the bench.',
     lesson:
@@ -176,6 +243,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'delivery',
+    branch: 'factory',
     title: 'Special delivery',
     goal: 'Get an element to the hub by duct.',
     lesson:
@@ -185,6 +253,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'order-filled',
+    branch: 'factory',
     title: 'Order filled',
     goal: 'Complete an order at the hub.',
     lesson: 'Each order asks for an element one operation further along. Its hint says which machine makes it and what to feed it.',
@@ -193,6 +262,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'hands-off',
+    branch: 'factory',
     title: 'Hands off',
     goal: 'Have a machine combine two elements.',
     lesson:
@@ -201,7 +271,57 @@ export const ACHIEVEMENTS: Achievement[] = [
     test: (e) => e.type === 'craft' && e.by === 'machine',
   },
   {
+    id: 'fork',
+    branch: 'factory',
+    title: 'Fork in the road',
+    goal: 'Have a splitter send an element out of one of its sides.',
+    lesson:
+      'A splitter deals what arrives at its back to its front, left and right in turn, skipping any side with nowhere to go. One extractor can then feed both inputs of a machine, or three machines at once.',
+    parents: ['delivery'],
+    test: (e) => e.type === 'route' && e.kind === 'split',
+  },
+  {
+    id: 'two-into-one',
+    branch: 'factory',
+    title: 'Two into one',
+    goal: 'Have a merger send on an element that came in at one of its sides.',
+    lesson:
+      'A merger takes from its back, left and right in turn and sends everything out of its front, so no input crowds out the others. Several lines can then share one duct to the hub.',
+    parents: ['fork'],
+    test: (e) => e.type === 'route' && e.kind === 'merge',
+  },
+  {
+    id: 'sorted',
+    branch: 'factory',
+    title: 'Sorted',
+    goal: 'Have a sorter send a match out of its side.',
+    lesson:
+      'A sorter looks at each element: those matching its sample, or of the kind it is set to (scalars, vectors, bivectors, trivectors or qubit states), leave by one side and the rest go straight on. Sorting by grade is sorting by what kind of object something is.',
+    parents: ['fork'],
+    test: (e) => e.type === 'route' && e.kind === 'sort',
+  },
+  {
+    id: 'crossroads',
+    branch: 'factory',
+    title: 'Crossroads',
+    goal: 'Send an element through a crossing.',
+    lesson: 'A crossing lets two lines pass through one block: whatever comes in on one side leaves by the opposite side, so the lines never mix.',
+    parents: ['fork'],
+    test: (e) => e.type === 'route' && e.kind === 'cross',
+  },
+  {
+    id: 'algebra-delivered',
+    branch: 'factory',
+    title: 'Algebra delivered',
+    goal: 'Fill the hub’s first seven orders, up to the sandwich press.',
+    lesson:
+      'From two vectors you have made a sum, a bivector of each orientation, a rotor, a volume and a rotation, each by a machine. Every element of G(3) can be reached this way: sums of products of e₁, e₂ and e₃.',
+    parents: ['order-filled'],
+    test: (e) => e.type === 'order' && e.index === LAST_ALGEBRA,
+  },
+  {
     id: 'qubit',
+    branch: 'qubits',
     title: 'A qubit',
     goal: 'Send a rotor through a Bloch projector.',
     lesson:
@@ -211,6 +331,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'quantum-gate',
+    branch: 'qubits',
     title: 'Quantum gate',
     goal: 'Have a gate machine act on a state.',
     lesson:
@@ -220,6 +341,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'born-rule',
+    branch: 'qubits',
     title: 'Born rule',
     goal: 'Measure a state with a detector.',
     lesson:
@@ -229,6 +351,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'new-phase',
+    branch: 'qubits',
     title: 'A new phase',
     goal: 'Multiply a state on the right by a phase such as 1 + e₁₂.',
     lesson:
@@ -238,6 +361,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'hopf-fiber',
+    branch: 'qubits',
     title: 'Hopf fiber',
     goal: 'Show an orrery two different states with the same Bloch vector.',
     lesson:
@@ -251,6 +375,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'linked',
+    branch: 'qubits',
     title: 'Linked rings',
     goal: 'Show an orrery states on two different Bloch points.',
     lesson:
@@ -258,7 +383,139 @@ export const ACHIEVEMENTS: Achievement[] = [
     parents: ['hopf-fiber'],
     test: (e) => e.type === 'orrery' && new Set(e.seen.map(pointKey)).size >= 2,
   },
+  {
+    id: 'qubits-delivered',
+    branch: 'qubits',
+    title: 'Qubits delivered',
+    goal: 'Fill every qubit order.',
+    lesson:
+      'Up, down, |+⟩ in four phases and |+i⟩: you have pointed a qubit along every axis of the Bloch sphere using nothing but rotors, and moved it round its fiber without moving the point it shows.',
+    parents: ['quantum-gate'],
+    test: (e) => e.type === 'order' && e.index === LAST_QUBIT,
+  },
+  // the field: Maxwell's four equations are the four grades of one, (∂ₜ + ∇)F = ρ − j
+  {
+    id: 'a-field',
+    branch: 'field',
+    title: 'A field',
+    goal: 'Lay a field plate.',
+    lesson:
+      'A field gives every point a value. The electromagnetic field gives each point one multivector, F = E + IB with I = e₁₂₃: the electric field E is its vector part, and the magnetic field B, times I, is its bivector part, a small plane at right angles to the way B points. Plates draw E as an orange arrow and IB as a blue disc. Maxwell’s four equations are the four grades of one: (∂ₜ + ∇)F = ρ − j, with ∇ = e₁∂₁ + e₂∂₂ + e₃∂₃.',
+    parents: ['right-angles'],
+    test: (e) => e.type === 'place' && e.block.kind === 'machine' && e.block.type === 'plate',
+  },
+  {
+    id: 'gauss',
+    branch: 'field',
+    title: 'Gauss’s law',
+    goal: 'Give a charge standing in a field a scalar.',
+    lesson:
+      'The scalar part of (∂ₜ + ∇)F = ρ − j is ∇·E = ρ: electric field spreads out from charge, away from a positive one and toward a negative one. The plates are one layer, so the field acts as if each charge were a long rod running straight up, and it falls off as 1/r. A field’s edge is earthed, which pulls the field toward it.',
+    parents: ['a-field'],
+    test: (e) => e.type === 'field' && e.kind === 'charge' && !e.mv.isZero(),
+  },
+  {
+    id: 'ampere',
+    branch: 'field',
+    title: 'Ampère’s law',
+    goal: 'Run a current up a wire standing in a field.',
+    lesson:
+      'The vector part is ∂ₜE = ∇×B − j: a current makes the magnetic field circle it. Current up a wire (along e₃) makes B run anticlockwise round it, seen from above. IB is the plane at right angles to B, so round a wire the discs stand upright and fan out from it, like the pages of an open book.',
+    parents: ['a-field'],
+    test: (e) => e.type === 'field' && e.kind === 'wire' && e.mv.terms.has(4),
+  },
+  {
+    id: 'faraday',
+    branch: 'field',
+    title: 'Faraday’s law',
+    goal: 'Run an antenna in a field.',
+    lesson:
+      'The bivector part is ∂ₜB = −∇×E: a changing magnetic field makes an electric field curl round it. Together with the vector part, a changing E makes B and a changing B makes E, so the field carries itself away from a swinging current as a wave, at the speed of light: 4 blocks a second here.',
+    parents: ['ampere'],
+    test: (e) => e.type === 'field' && e.kind === 'antenna' && e.mv.terms.has(4),
+  },
+  {
+    id: 'no-monopoles',
+    branch: 'field',
+    title: 'No monopoles',
+    goal: 'Have a probe read a magnetic field.',
+    lesson:
+      'The trivector part is ∇·B = 0: magnetic field has no sources, because there is no magnetic charge. Round a wire B runs in closed loops with no start or end, where E from a charge starts at the charge.',
+    parents: ['ampere'],
+    test: (e) => e.type === 'field' && e.kind === 'reading' && e.mv.grades().includes(2),
+  },
+  {
+    id: 'one-equation',
+    branch: 'field',
+    title: 'One equation',
+    goal: 'Have a probe read E and IB together.',
+    lesson:
+      'A reading is the whole field at a point as one multivector: E + IB, a vector plus a bivector. In a wave E and B are at right angles and equally strong, so F² = E² − B² + 2I E·B is 0: light is a field whose square vanishes.',
+    parents: ['gauss', 'faraday'],
+    test: (e) => e.type === 'field' && e.kind === 'reading' && e.mv.grades().join() === '1,2',
+  },
+  {
+    id: 'every-order',
+    branch: 'field',
+    title: 'Every order filled',
+    goal: 'Fill the hub’s last order.',
+    lesson:
+      'Vectors, planes and volumes; rotations and reflections; qubits and their fibers; and Maxwell’s equations as one. All of it came from one rule, that a vector times itself is its length squared.',
+    parents: ['one-equation'],
+    test: (e) => e.type === 'order' && e.index === LAST_FIELD,
+  },
 ];
+
+export interface TreeNode {
+  a: Achievement;
+  col: number;
+  row: number;
+  /** parents in other branches, shown as a note on the node */
+  outside: Achievement[];
+}
+
+/**
+ * Lays out one branch as a tree read left to right: a node's column is one more than its deepest
+ * parent's in the same branch, and within a column nodes sit in the order of their parents' rows,
+ * so lines from parents to children cross as little as possible.
+ */
+export function layoutBranch(branch: Branch) {
+  const mine = ACHIEVEMENTS.filter((a) => a.branch === branch);
+  const ids = new Set(mine.map((a) => a.id));
+  const byId = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
+  const col = new Map<string, number>();
+  const colOf = (a: Achievement): number => {
+    if (!col.has(a.id)) col.set(a.id, Math.max(-1, ...a.parents.filter((p) => ids.has(p)).map((p) => colOf(byId.get(p)!))) + 1);
+    return col.get(a.id)!;
+  };
+  const columns: Achievement[][] = [];
+  for (const a of mine) (columns[colOf(a)] ??= []).push(a);
+  const row = new Map<string, number>();
+  for (const c of columns) {
+    const key = (a: Achievement) => {
+      const rows = a.parents.filter((p) => row.has(p)).map((p) => row.get(p)!);
+      return rows.length ? rows.reduce((n, r) => n + r, 0) / rows.length : -1;
+    };
+    // a stable sort keeps the written order among children of the same parents
+    [...c].sort((x, y) => key(x) - key(y)).forEach((a, i) => row.set(a.id, Math.max(i, Math.round(key(a)))));
+    // nudge down any node that landed on a row already taken in this column
+    const taken = new Set<number>();
+    for (const a of [...c].sort((x, y) => row.get(x.id)! - row.get(y.id)!)) {
+      let r = row.get(a.id)!;
+      while (taken.has(r)) r++;
+      taken.add(r);
+      row.set(a.id, r);
+    }
+  }
+  const nodes: TreeNode[] = mine.map((a) => ({
+    a,
+    col: col.get(a.id)!,
+    row: row.get(a.id)!,
+    outside: a.parents.filter((p) => !ids.has(p)).map((p) => byId.get(p)!),
+  }));
+  const edges = mine.flatMap((a) => a.parents.filter((p) => ids.has(p)).map((p) => [p, a.id] as const));
+  return { nodes, edges, columns: columns.length, rows: Math.max(...nodes.map((n) => n.row)) + 1 };
+}
 
 export class Achievements {
   earned = new Map<string, number>();

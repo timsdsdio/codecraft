@@ -5,8 +5,9 @@ nature: no trees, animals or weather. The things you extract, carry and deliver 
 geometric algebra, and machines combine them. The name comes from *blades*, the basis elements of
 the algebra (e₁, e₁₂, e₁₂₃, …).
 
-The game is also a way to learn geometric algebra, and through it quantum states: a rotor is a qubit,
-and the Hopf fibration is something you build and watch. Every idea it uses is something you build
+The game is also a way to learn geometric algebra, and through it quantum states and
+electromagnetism: a rotor is a qubit, the Hopf fibration is something you build and watch, and
+Maxwell's four equations are one equation for one multivector field that you lay out on the floor. Every idea it uses is something you build
 with, and the hub's orders and an optional achievement tree walk through the ideas in order.
 
 ## The algebra
@@ -64,6 +65,10 @@ block there. What a block takes depends on the side something arrives from (`fac
 | Merger | one element at a time from each of its back, left and right | sends them out of its front, taking each input in turn so none starves the others |
 | Sorter | anything, from its back | sends matches out of one side (left or right, set in its panel) and everything else out of its front |
 | Crossing | one element at a time from each side | sends each out of the side opposite where it came in, so two lines can cross |
+| Charge | a scalar, from any side | in a field, holds that scalar as its charge |
+| Wire | a vector, from any side | in a field, carries a current up along e₃ as big as the vector's e₃ part |
+| Antenna | a vector, from any side | in a field, carries a current that swings up and down, as big as the vector's e₃ part at its peak |
+| Field probe | nothing | in a field, outputs a reading of the field where it stands once a second |
 | Collector | anything, up to 256 | stores it; its panel gives everything to you |
 | Hub | anything, from any side | counts elements that match its current order |
 
@@ -71,8 +76,8 @@ A sorter matches either elements equal to a sample, picked in its panel from you
 used up, or every element of one kind: scalars, vectors, bivectors, trivectors or qubit states.
 
 A blocked output waits, and everything behind it backs up, so elements are never lost. Results of 0
-(e₁ ∧ e₁), sandwiches whose B has no inverse, and anything that isn't a state sent to the projector or
-detector vanish.
+(e₁ ∧ e₁), sandwiches whose B has no inverse, anything that isn't a state sent to the projector or
+detector, and anything but a scalar sent to a charge or a vector sent to a wire or antenna vanish.
 
 An operation machine's panel can fix B to one of your elements. The machine then uses it for every
 A, so one duct of A is enough: a wedger with B fixed to e₃ wedges everything with e₃, and a sandwich
@@ -108,6 +113,47 @@ multiple of the other.
   points never touch, yet every pair is linked. The 3-sphere is turned by a fixed rotor before
   projecting, so that no common state's fiber passes through the projection point and becomes a line.
 
+## The electromagnetic field
+
+Field plates are floor slabs you lay out like tiles (`field.ts`). Plates that touch at one height,
+together with the charges, wires, antennas and probes standing among them, make one field region,
+and every block of a region holds the electromagnetic field there as one multivector,
+F = E + IB, where I = e₁₂₃. The electric field E is its vector part. The magnetic field B is a
+vector too, but multiplied by I it becomes the bivector IB, a plane at right angles to B, so F mixes
+grades 1 and 2. Maxwell's four equations are the four grades of one equation,
+
+  (∂ₜ + ∇)F = ρ − j,  with ∇ = e₁∂₁ + e₂∂₂ + e₃∂₃
+
+in units where light's speed and ε₀ are 1:
+
+| Grade | Part of the equation | Law | In the game |
+|---|---|---|---|
+| scalar | ∇·E = ρ | Gauss's law | E spreads out from a charge, away from positive and toward negative, as q/r |
+| vector | ∂ₜE − ∇×B = −j | Ampère–Maxwell law | current up a wire makes B circle it, as I/r |
+| bivector | I(∂ₜB + ∇×E) = 0 | Faraday's law | a changing B makes E curl round it; with the vector part, an antenna's swinging current sends out waves |
+| trivector | I ∇·B = 0 | no magnetic charge | B runs in closed loops round a wire, with no start or end |
+
+A region is one layer, so the field depends only on e₁ and e₂ and acts as if every charge and wire
+ran straight up forever. It then splits into two halves that never mix. Charges make E in the plane
+of the plates, which is static because charges never move, and it is found by relaxing a potential
+until ∇·E = ρ. Wires and antennas carry current along e₃, which makes E along e₃ and B in the
+plane, stepped by the vector and bivector parts on a staggered grid at 20 steps a second. Waves
+travel at 4 blocks a second, so an antenna's waves are 16, 8 or 4 blocks apart at its three
+frequencies. Outside a region the field is 0: its edge is earthed, which bends the field near it,
+and it absorbs most of a wave rather than echoing it. A gap in the plates, where a duct runs through
+for example, is an edge too.
+
+The field is computed in floating point, not exactly, because it changes smoothly in time. A probe
+turns it back into an element: its reading is F with each coefficient rounded to the nearest half,
+such as e₁ + ½e₂₃. A field too weak to round to a half reads 0, which a probe doesn't send. The hub
+can tell a probe's readings from equal elements made any other way.
+
+Each plate draws E as an orange arrow and IB as a translucent blue disc lying in the plane of the
+bivector, and glows brighter where the field holds more energy (E² + B²). Around a charge the arrows
+point out like spines; around a wire the discs stand upright and fan out from it like the pages of an
+open book; an antenna sends rings of glow outward. The line under the crosshair gives a plate's E
+and IB to one decimal place. A source's panel sets it from one of your elements, as well as by duct.
+
 ## How machines look
 
 Machines are small steampunk contraptions built in code from primitives (`models.ts`): riveted iron
@@ -132,6 +178,11 @@ the factory leaves in its block, so you can see what a machine is doing without 
 | Bloch projector | a glass globe with brass meridians on a column | its pointer swings to the Bloch vector of the last state |
 | Detector | a Stern–Gerlach magnet (a wedge pole over a trough pole) with two lamps | the up or down lamp flashes with each measurement |
 | Fibration orrery | a brass tripod and crown | the Hopf fibers of the states it has seen turn slowly above it |
+| Charge | a brass ball on a ceramic insulator | it glows red when positive and blue when negative, brighter for more charge |
+| Wire | a copper rod running up out of the field between insulators | beads of light run along it with the current, up or down |
+| Antenna | a coil and a mast with a crossbar and a spark ball | its beads rock up and down with the current, and the ball sparks at each peak |
+| Field probe | a glass bulb at the field's height, a gauge and a spout | the bulb flashes with each reading, the needle shows how strong it is, and the reading floats above it |
+| Field plate | a steel slab with a brass border | it glows with the field's energy, under the field's arrows and discs |
 | Collector | a banded tank with a gauge window | the level in the window rises as it fills |
 | Hub | an iron pedestal with armillary rings | the rings turn around the element it wants, and its lamp flashes as one arrives |
 | Bench | a wooden workbench with a vice and a gear train | its gears turn slowly |
@@ -160,6 +211,11 @@ operation by hand once is what lets you automate it (`recipes.ts`):
 | Splitter, Merger | 6 lattice |
 | Sorter | 6 lattice, the scalar 1 |
 | Crossing | 4 lattice |
+| 8 field plates | 4 lattice, a trivector |
+| Charge | 4 lattice, the scalar 1 |
+| Wire | 4 lattice, e₃ |
+| Antenna | 4 lattice, e₃, a rotor |
+| Field probe | 4 lattice, a vector, a bivector |
 
 The bench's other tab combines elements by hand. It has two inputs, A and B, and shows the result
 of every operation at once, so you can compare them before making one: A + B, A − B, A ∧ B, A B,
@@ -171,8 +227,9 @@ and one B; a result of 0 uses nothing.
 The hub's orders run in sequence (`orders.ts`), and each hint names the machine and inputs that make
 the element. The first seven want exactly one element. The qubit orders want *states*: any state
 pointing the right way counts, whatever its phase, and the fiber order wants states in different
-phases. Above the hub floats the element it wants, or for a state order the Bloch vector it should
-point along.
+phases. The field orders want probe readings of a given kind. Above the hub floats the element it
+wants, or for a state order the Bloch vector it should point along, or for a field order an example
+reading.
 
 1. e₁: an extractor and ducts
 2. e₁ + e₂: an adder
@@ -186,6 +243,9 @@ point along.
 10. 8 states along e₁ (|+⟩): a gate set to H
 11. |+⟩ in 4 different phases: multipliers with B fixed to 1 + e₁₂, ideally watched by an orrery
 12. 8 states along e₂ (|+i⟩): H, then S
+13. 4 readings of an electric field (a vector): a charge and a probe in a field
+14. 4 readings of a magnetic field (a bivector): a wire and a probe
+15. 4 readings of a wave (a vector and a bivector together): an antenna and a probe
 
 ## The guide
 
@@ -203,11 +263,23 @@ achievement can be earned at any time, and the algebra ones count whether the op
 the bench or in a machine. An achievement appears in the tree once one of its parents is earned.
 Each has a goal and a lesson, and the lesson can be read at any time (`achievements.ts`).
 
-The tree starts with breaking ground and collecting the three axes, branches into adding vectors,
-squaring a vector and the outer product, and leads through bivectors squaring to −1, volume and
-mixed grades to rotors, applying rotors, reflections, and the factory: building a machine,
-delivering to the hub, filling an order and having a machine do an operation. From rotors a qubit
-branch grows: projecting a state, a gate, the Born rule, a new phase, a Hopf fiber and linked rings.
+The tree has four branches, each drawn as its own band read left to right, with lines from each
+idea to the ones that build on it and a count of how many are earned. An idea that follows one in
+another branch says so on its card ("after Volume").
+
+- **The algebra** starts from a vector and the three axes, and branches into adding vectors,
+  squaring a vector and the outer product. It leads through orientation, a vector wedged with itself,
+  the reverse, bivectors squaring to −1, contraction, mixed grades, rotors, applying rotors,
+  reflections, volume and duality (multiplying by e₁₂₃).
+- **The factory** starts with breaking ground: building a machine, having a machine do an
+  operation, delivering to the hub and filling an order, then each logistics block (a splitter
+  sending to a side, a merger passing a side input, a sorter sending a match aside, a crossing) and
+  finishing the algebra orders.
+- **Qubits** grows from rotors: projecting a state, a gate, the Born rule, a new phase, a Hopf fiber,
+  linked rings, and finishing the qubit orders.
+- **The field** grows from duality, one achievement per grade of Maxwell's equation: a field,
+  Gauss's law, Ampère's law, Faraday's law, no monopoles, and one equation, for a reading with E and
+  IB together. Filling the hub's last order ends it.
 
 ## Controls
 
@@ -224,10 +296,10 @@ branch grows: projecting a state, a gate, the Born rule, a new phase, a Hopf fib
 
 ## Open questions
 
-- Maxwell's equations are planned as a live field: a region of field plates where every cell holds
-  F = E + e₁₂₃B and steps by (∂ₜ + ∇)F = J, with charges, currents and oscillating sources as
-  machines, and the four equations taught as the scalar, vector, bivector and trivector parts of that
-  one. How big should a field region be, and how are its values shown without hiding the factory?
+- Should fields act back on the factory, with a force F on charged elements or a coil that turns a
+  changing B into a current?
+- Should charges be able to move, so that in-plane currents and the other half of the field (E in the
+  plane with B along e₃) come into play?
 - Should several qubits come next, through the tensor product, with entangling gates?
 - Should projective GA arrive as a second tier of orders, with points, lines and planes as
   elements and translations as machines?

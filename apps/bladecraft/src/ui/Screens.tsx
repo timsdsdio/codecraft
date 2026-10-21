@@ -1,14 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import type { Multivector } from '@codecraft/ga';
-import { ACHIEVEMENTS, type Achievement } from '../game/achievements';
+import { ACHIEVEMENTS, BRANCHES, layoutBranch, type Achievement } from '../game/achievements';
 import { COLLECTOR_CAPACITY, MERGE_ORDER, SPLIT_ORDER, WORK_TIME } from '../game/factory';
 import type { Game } from '../game/game';
 import { HOTBAR, MACHINE_NAMES, describe, itemName, SLOTS } from '../game/items';
 import { apply, type Op } from '../game/ops';
-import { ORDERS } from '../game/orders';
+import { ORDERS, orderLabel } from '../game/orders';
 import { RECIPES, canBuild, sortLabel } from '../game/recipes';
 import { DIR_NAMES, STEP, opposite, type Dir, type SortMode } from '../game/world';
 import { GATES, bloch, probUp, type GateId } from '../game/qubit';
+import { FREQUENCIES, WAVE_SPEED, fieldText, scalarPart, upPart } from '../game/field';
 import { Q } from '@codecraft/ga';
 import { Icon } from './Icon';
 
@@ -328,7 +329,84 @@ export function MachineScreen({ game }: { game: Game }) {
     );
   }
 
-  if (m.type === 'duct') return null;
+  if (m.type === 'duct' || m.type === 'plate') return null;
+
+  if (m.type === 'charge' || m.type === 'wire' || m.type === 'antenna' || m.type === 'probe') {
+    const field = game.factory.field;
+    const region = field.regionAt(x, y, z);
+    const where = region ? (
+      <p className="dim">Part of a field of {region.size} blocks.</p>
+    ) : (
+      <p className="callout">Not in a field: it does nothing until it stands among field plates, beside at least one of them.</p>
+    );
+    if (m.type === 'probe') {
+      const now = fieldText(field.at(x, y, z), 2);
+      return (
+        <Sheet title={title} game={game} icon={icon}>
+          <p>{recipe.does}</p>
+          {where}
+          <div className="detail">
+            <div>
+              Here now: E = <b>{now.e}</b>, IB = <b>{now.ib}</b>
+            </div>
+          </div>
+          <div className="machine-view">
+            <Held name="last reading" mv={m.reading && !m.reading.isZero() ? m.reading : null} note={region ? 'the field here is 0' : 'none'} />
+            <span className="op-sym">→</span>
+            <Held name="OUT (front)" mv={m.out} note="sent" />
+          </div>
+          <p className="dim">A reading’s vector part is E and its bivector part is IB. A field too weak to round to a half reads 0, which sends nothing.</p>
+          <div className="row">{rotate}</div>
+        </Sheet>
+      );
+    }
+    const isCharge = m.type === 'charge';
+    const value = isCharge ? m.charge : m.current;
+    const wants = isCharge ? 'a scalar' : 'a vector';
+    return (
+      <Sheet title={title} game={game} icon={icon}>
+        <p>{recipe.does}</p>
+        {where}
+        <div className="machine-view">
+          <Held name={isCharge ? 'charge' : 'current'} mv={value} note="none" />
+        </div>
+        {isCharge ? (
+          <p className="dim">{scalarPart(value) > 0 ? 'Positive: E points away from it.' : scalarPart(value) < 0 ? 'Negative: E points toward it.' : 'No charge, so no field. Give it a scalar (−1 is e₁₂ e₁₂).'}</p>
+        ) : (
+          <p className="dim">
+            {upPart(value) !== 0
+              ? `A current of ${upPart(value)} up the wire${m.type === 'antenna' ? ' at the peak of each swing' : ''}. While it runs up, B circles the wire anticlockwise, seen from above.`
+              : value
+                ? `${value} has no e₃ part, and only current along the wire flows.`
+                : 'No current. Give it a vector with an e₃ part, such as e₃ or −e₃.'}
+          </p>
+        )}
+        {m.type === 'antenna' && (
+          <>
+            <h3>Frequency</h3>
+            <div className="row">
+              {FREQUENCIES.map((f, i) => (
+                <button key={f} className={m.frequency === i ? 'primary' : ''} onClick={() => game.setFrequency(i)}>
+                  A swing every {1 / f} s (waves {WAVE_SPEED / f} blocks apart)
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <h3>Set it</h3>
+        <p className="dim">Pick {wants} from your elements, or duct them in from any side. Each new one replaces the last; one set here comes back to you when replaced.</p>
+        <Slots
+          game={game}
+          onPick={(i) => game.setSource(i)}
+          filter={(i) => {
+            const it = game.inventory.slots[i]?.item;
+            return it?.kind === 'element' && it.mv.grades().join() === (isCharge ? '0' : '1');
+          }}
+        />
+        <div className="row">{rotate}</div>
+      </Sheet>
+    );
+  }
 
   if (m.type === 'splitter' || m.type === 'merger' || m.type === 'crossing') {
     const sideName = (r: number) => ['front', 'left', 'back', 'right'][r];
@@ -512,7 +590,7 @@ export function HubScreen({ game }: { game: Game }) {
               <Icon item={el(o.want)} size={44} />
               <div className="grow">
                 <b>
-                  {o.count} × {String(o.want)}
+                  {o.count} × {orderLabel(o)}
                 </b>
                 {state === 'done' && <span className="dim"> · delivered</span>}
                 {state === 'current' && (
@@ -535,46 +613,81 @@ export function HubScreen({ game }: { game: Game }) {
   );
 }
 
+const NODE_W = 188;
+const NODE_H = 78;
+const GAP_X = 40;
+const GAP_Y = 12;
+
 export function AchievementsScreen({ game }: { game: Game }) {
   const [open, setOpen] = useState<Achievement | null>(null);
-  const depth = new Map<string, number>();
-  const d = (a: Achievement): number => {
-    if (depth.has(a.id)) return depth.get(a.id)!;
-    const v = a.parents.length ? 1 + Math.max(...a.parents.map((p) => d(ACHIEVEMENTS.find((x) => x.id === p)!))) : 0;
-    depth.set(a.id, v);
-    return v;
-  };
-  const columns: Achievement[][] = [];
-  for (const a of ACHIEVEMENTS) (columns[d(a)] ??= []).push(a);
+  const earned = game.achievements.earned;
   const title = (id: string) => ACHIEVEMENTS.find((a) => a.id === id)!.title;
 
   return (
     <Sheet title="Achievements" game={game}>
       <p className="dim">
         These are optional, like Minecraft’s advancements: nothing is locked behind them. Each one is a small idea from geometric algebra or
-        the factory; new ones appear as you earn the ones before them.
+        the factory, and each branch reads left to right. New ones are named as you earn the ones before them. {earned.size} of {ACHIEVEMENTS.length}{' '}
+        earned.
       </p>
-      <div className="tree">
-        {columns.map((col, i) => (
-          <div key={i} className="col">
-            {col.map((a) => {
-              const earned = game.achievements.earned.has(a.id);
-              const seen = game.achievements.visible(a);
-              return (
-                <button key={a.id} className={`node${earned ? ' earned' : ''}`} disabled={!seen} onClick={() => setOpen(a)}>
-                  <b>{seen ? a.title : '?'}</b>
-                  {seen && <span className="dim">{earned ? 'Earned' : a.goal}</span>}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+      {BRANCHES.map((br) => {
+        const { nodes, edges, columns, rows } = layoutBranch(br.id);
+        const at = new Map(nodes.map((n) => [n.a.id, n]));
+        const x = (n: { col: number }) => n.col * (NODE_W + GAP_X);
+        const y = (n: { row: number }) => n.row * (NODE_H + GAP_Y);
+        const width = columns * (NODE_W + GAP_X) - GAP_X;
+        const height = rows * (NODE_H + GAP_Y) - GAP_Y;
+        return (
+          <section key={br.id} className="branch">
+            <h3>
+              {br.title} <span className="dim">{nodes.filter((n) => earned.has(n.a.id)).length} of {nodes.length}</span>
+            </h3>
+            <div className="tree-scroll">
+              <div className="tree" style={{ width, height }}>
+                <svg width={width} height={height} aria-hidden>
+                  {edges.map(([from, to]) => {
+                    const a = at.get(from)!;
+                    const b = at.get(to)!;
+                    const [x1, y1, x2, y2] = [x(a) + NODE_W, y(a) + NODE_H / 2, x(b), y(b) + NODE_H / 2];
+                    const mid = (x1 + x2) / 2;
+                    const lit = earned.has(from) && earned.has(to);
+                    const known = game.achievements.visible(b.a);
+                    return (
+                      <path
+                        key={`${from}-${to}`}
+                        d={`M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`}
+                        className={`edge${lit ? ' lit' : ''}${known ? '' : ' unknown'}`}
+                      />
+                    );
+                  })}
+                </svg>
+                {nodes.map((n) => {
+                  const done = earned.has(n.a.id);
+                  const seen = game.achievements.visible(n.a);
+                  return (
+                    <button
+                      key={n.a.id}
+                      className={`node${done ? ' earned' : ''}${open?.id === n.a.id ? ' open' : ''}`}
+                      style={{ left: x(n), top: y(n), width: NODE_W, height: NODE_H }}
+                      disabled={!seen}
+                      onClick={() => setOpen(n.a)}
+                    >
+                      <b>{seen ? n.a.title : '?'}</b>
+                      {seen && <span className="dim goal">{done ? 'Earned' : n.a.goal}</span>}
+                      {seen && n.outside.length > 0 && <span className="after">after {n.outside.map((o) => o.title).join(', ')}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        );
+      })}
       {open && (
         <div className="detail lesson">
           <div>
             <b>{open.title}</b>
-            <div className="dim">{game.achievements.earned.has(open.id) ? 'Earned' : `Goal: ${open.goal}`}</div>
+            <div className="dim">{earned.has(open.id) ? 'Earned' : `Goal: ${open.goal}`}</div>
             {open.parents.length > 0 && <div className="dim">Follows: {open.parents.map(title).join(', ')}</div>}
             <p>{open.lesson}</p>
           </div>

@@ -34,6 +34,16 @@ each with its reason. When one changes, edit its entry.
   algebra: the even subalgebra is the quaternions, its Bloch vector is a sandwich with e₃, and gates
   such as H ∝ e₂₃ + e₁₂ need no √2, so states stay exact and stack. A negative scale is kept apart
   because it is the phase −1, a different point on the same Hopf fiber.
+- **The electromagnetic field is floating point; probe readings are exact.** The field changes
+  smoothly in time, so it can't be exact rationals. A probe rounds each coefficient to the nearest
+  half, which makes a reading an ordinary element that stacks, sorts and counts like any other.
+- **A field region is one layer of plates.** The field then depends only on e₁ and e₂, which keeps
+  the simulation small enough for a phone and every arrow visible from above. Charges give E in the
+  plane and currents run along e₃, so the two halves of the field stay apart and the static half can
+  be solved directly.
+- **The hub knows a probe's readings by identity.** A reading of e₁ equals the e₁ from an extractor,
+  but only readings count toward field orders, so the factory remembers which element objects probes
+  made. Readings still in ducts when the game is saved count as ordinary elements after loading.
 - **One block per operation.** An adder, a wedger and a multiplier look different and are told apart
   at a glance, which a single machine with a chosen operation would not allow.
 - **Machines cost elements you made by hand**, so the bench's hand operations are the tech tree: a

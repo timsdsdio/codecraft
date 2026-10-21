@@ -9,6 +9,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { Glyph, parts } from './glyph';
 import { hex } from './looks';
 import { relative, rel, outputs } from './factory';
+import { FieldView } from './fieldview';
+import type { Field } from './field';
 import { Steam, buildModel, curvePoint, scrollBelts, type Model, type ModelKind } from './models';
 import { STEP, opposite, type Block, type Dir, type Machine, type World } from './world';
 
@@ -127,6 +129,7 @@ export class Renderer {
   private beacon: { key: string; glyph: Glyph } | null = null;
   private hubDelivered = -1;
   private steam: Steam;
+  private fieldView: FieldView;
   private world: World | null = null;
   private builtVersion = -1;
   private time = 0;
@@ -145,6 +148,7 @@ export class Renderer {
     sun.position.set(0.4, 1, 0.25);
     this.scene.add(sun, this.terrain);
     this.steam = new Steam(this.scene);
+    this.fieldView = new FieldView(this.scene);
 
     this.selection = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.01, 1.01, 1.01)), new THREE.LineBasicMaterial({ color: 0xffffff }));
     this.selection.visible = false;
@@ -205,10 +209,11 @@ export class Renderer {
     this.beacon = { key, glyph };
   }
 
-  sync(world: World) {
+  sync(world: World, field: Field) {
     this.world = world;
     if (world.version !== this.builtVersion) this.rebuild(world);
     this.syncContents(world);
+    this.fieldView.update(field);
   }
 
   private rebuild(world: World) {
@@ -246,6 +251,7 @@ export class Renderer {
       this.remove(s);
       this.shown.delete(key);
     }
+    this.fieldView.rebuild(world);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
@@ -263,10 +269,23 @@ export class Renderer {
 
   /** the model for a machine, the bench or the hub; rebuilt when its type changes, turned when its facing does */
   private show(x: number, y: number, z: number, b: Block, world: World) {
+    // plates are drawn all together by the field view
     const kind: ModelKind | null =
-      b.kind === 'machine' ? (b.type === 'duct' ? ductKind(world, x, y, z, b.facing) : b.type) : b.kind === 'hub' || b.kind === 'bench' ? b.kind : null;
-    if (!kind) return;
+      b.kind === 'machine'
+        ? b.type === 'plate'
+          ? null
+          : b.type === 'duct'
+            ? ductKind(world, x, y, z, b.facing)
+            : b.type
+        : b.kind === 'hub' || b.kind === 'bench'
+          ? b.kind
+          : null;
     const key = at(x, y, z);
+    if (!kind) {
+      const old = this.shown.get(key);
+      if (old) this.remove(old), this.shown.delete(key);
+      return;
+    }
     let s = this.shown.get(key);
     if (s && s.model.group.userData.kind !== kind) {
       this.remove(s);
@@ -333,6 +352,11 @@ export class Renderer {
     }
     if ((m.type === 'splitter' || m.type === 'sorter') && m.item) want.set('item', m.item);
     if (m.type === 'sorter' && m.filter) want.set('filter', m.filter);
+    // a probe shows its last reading above it, and holds the one it's waiting to send
+    if (m.type === 'probe') {
+      if (m.reading && !m.reading.isZero()) want.set('reading', m.reading);
+      if (m.out) want.set('out', m.out);
+    }
     // merger slots are kept by side relative to its facing, crossing slots by the side they came in from
     if (m.type === 'merger') m.slots.forEach((mv, r) => mv && want.set(`s${r}`, mv));
     if (m.type === 'crossing') m.slots.forEach((mv, d) => mv && want.set(`s${relative(m.facing, d as Dir)}`, mv));

@@ -1,5 +1,5 @@
-// The hub's orders, in sequence. Each asks for a number of one element, delivered by duct, and its
-// hint names the machine and inputs that make it. Delivering an order moves the hub to the next.
+// The hub's orders, in sequence. Each asks for a number of one element (or of qubit states, or of
+// probe readings), delivered by duct, and its hint names the machine and inputs that make it. Delivering an order moves the hub to the next.
 import type { Multivector } from '@codecraft/ga';
 import { el, scalar, type SavedMv } from './items.ts';
 import { GATES } from './qubit.ts';
@@ -10,8 +10,11 @@ export interface Order {
   count: number;
   hint: string;
   /** exact (the default): exactly this element; state: any qubit state pointing the same way;
-   *  phases: such states, each a different phase from the ones already delivered */
-  kind?: 'exact' | 'state' | 'phases';
+   *  phases: such states, each a different phase from the ones already delivered; reading: any
+   *  probe reading with the same grades as `want` */
+  kind?: 'exact' | 'state' | 'phases' | 'reading';
+  /** what the order asks for, in words, where `want` is only an example */
+  label?: string;
 }
 
 const e1 = el('1');
@@ -86,7 +89,32 @@ export const ORDERS: Order[] = [
     count: 8,
     hint: 'Two gates in a row: H, then S, turns |0⟩ into |+i⟩, pointing along e₂.',
   },
+  // the field: probes read F = E + IB where they stand; readings count, elements made otherwise don't
+  {
+    want: e1,
+    kind: 'reading',
+    label: 'readings of an electric field (a vector)',
+    count: 4,
+    hint: 'Lay field plates side by side, stand a charge among them and give it a scalar such as 1 (in its panel or by duct). Put a field probe a block or two away and duct its readings to the hub. The charge’s E points away from it.',
+  },
+  {
+    want: e2.op(e3),
+    kind: 'reading',
+    label: 'readings of a magnetic field (a bivector, IB)',
+    count: 4,
+    hint: 'Stand a wire in a field and give it e₃: current runs up it and B circles it. A probe beside it reads IB, a bivector, with no vector part.',
+  },
+  {
+    want: e3.add(e2.op(e3)),
+    kind: 'reading',
+    label: 'readings of a wave (E and IB together)',
+    count: 4,
+    hint: 'Give an antenna e₃: its current swings up and down and sends waves across the field. A probe in their path reads E and IB at once: both parts of F, carried along together.',
+  },
 ];
+
+/** what an order wants, in words */
+export const orderLabel = (o: Order) => o.label ?? String(o.want);
 
 export interface HubProgress {
   order: number;

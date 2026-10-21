@@ -3,10 +3,11 @@
 import type { Multivector } from '@codecraft/ga';
 import { Achievements, type GameEvent } from './achievements';
 import { Factory } from './factory';
+import { fieldText, upPart, type Field } from './field';
 import { guide } from './guide';
 import { Inventory, HOTBAR, element, itemName, placeable, type Item } from './items';
 import { apply, type Op } from './ops';
-import { ORDERS } from './orders';
+import { ORDERS, orderLabel } from './orders';
 import { Player, raycast, type Hit } from './player';
 import { GATES, bloch, type GateId } from './qubit';
 import { build, type Recipe } from './recipes';
@@ -125,9 +126,11 @@ export class Game {
       },
       qubit: (kind, input, result) => this.emit({ type: 'qubit', kind, input, result }),
       orrery: (seen) => this.emit({ type: 'orrery', seen }),
+      field: (kind, mv) => this.emit({ type: 'field', kind, mv }),
+      route: (kind) => this.emit({ type: 'route', kind }),
       orderDone: (order, next) => {
         this.inventory.add({ kind: 'lattice' }, 16);
-        this.toast(next ? `Order done: ${order.want}. Next: ${next.want}` : `All ${ORDERS.length} orders done!`, 'order');
+        this.toast(next ? `Order done: ${orderLabel(order)}. Next: ${orderLabel(next)}` : `All ${ORDERS.length} orders done!`, 'order');
         this.emit({ type: 'order', index: this.factory.hub.order - 1 });
         this.changed();
       },
@@ -434,6 +437,26 @@ export class Game {
     this.changed();
   }
 
+  /** set the open charge, wire or antenna from an inventory slot; the element it held comes back to you */
+  setSource(slot: number) {
+    const m = this.panelBlock;
+    if (m?.kind !== 'machine' || !this.panel || (m.type !== 'charge' && m.type !== 'wire' && m.type !== 'antenna')) return;
+    const it = this.inventory.slots[slot]?.item;
+    if (it?.kind !== 'element') return;
+    const old = m.type === 'charge' ? m.charge : m.current;
+    if (!this.factory.setSource(m, ...this.panel, it.mv)) return;
+    this.inventory.take(slot);
+    if (old) this.inventory.add(element(old));
+    this.inventoryChanged();
+  }
+
+  setFrequency(i: number) {
+    const m = this.panelBlock;
+    if (m?.kind !== 'machine' || m.type !== 'antenna') return;
+    m.frequency = i;
+    this.changed();
+  }
+
   clearOrrery() {
     const m = this.panelBlock;
     if (m?.kind !== 'machine' || m.type !== 'orrery') return;
@@ -489,10 +512,10 @@ export class Game {
     // a count that only goes up: orders completed and elements toward the current one
     const order = this.factory.order;
     // a state order shows where the state should point
-    const shows = order ? ((order.kind ?? 'exact') === 'exact' ? order.want : bloch(order.want)) : null;
+    const shows = order ? (order.kind === 'state' || order.kind === 'phases' ? bloch(order.want) : order.want) : null;
     this.renderer.hubWants(HUB, shows, this.factory.hub.order * 1000 + this.factory.hub.delivered);
     this.updatePrompt(p);
-    this.renderer.sync(this.world);
+    this.renderer.sync(this.world, this.factory.field);
     this.renderer.render(dt);
     // open panels show live contents
     if ((this.screen === 'machine' || this.screen === 'hub') && Math.floor(now / 250) !== Math.floor((now - dt * 1000) / 250)) this.changed();
@@ -512,7 +535,7 @@ export class Game {
       if (usable(b)) actions.push(b.kind === 'hub' ? 'Use: see orders' : 'Use: open');
       const item = this.held;
       if (p && item) actions.push(`Place: ${itemName(item)}${p.facing !== null ? ` facing ${DIR_NAMES[p.facing]}` : ''}`);
-      prompt = { name: describeBlock(b, this.world, this.target!.block), actions };
+      prompt = { name: describeBlock(b, this.world, this.target!.block, this.factory.field), actions };
     }
     const key = JSON.stringify(prompt);
     if (key !== this.promptKey) {
@@ -586,13 +609,20 @@ export class Game {
 }
 
 /** what the crosshair shows for a block: its name and, for machines, what it holds or lacks */
-function describeBlock(b: Block, world: World, at: [number, number, number]) {
+function describeBlock(b: Block, world: World, at: [number, number, number], field: Field) {
   const name = blockName(b);
   if (b.kind !== 'machine') return name;
-  return `${name} facing ${DIR_NAMES[b.facing]}${machineNote(b, world, at)}`;
+  // a plate's facing means nothing; what it shows is the field there
+  if (b.type === 'plate') return `${name} · ${field.regionAt(...at) ? `E ${fieldText(field.at(...at)).e} · IB ${fieldText(field.at(...at)).ib}` : 'no field'}`;
+  return `${name} facing ${DIR_NAMES[b.facing]}${machineNote(b, world, at, field)}`;
 }
 
-function machineNote(m: Machine, world: World, [x, y, z]: [number, number, number]) {
+function machineNote(m: Machine, world: World, [x, y, z]: [number, number, number], field: Field) {
+  const inField = !!field.regionAt(x, y, z);
+  if (m.type === 'charge') return inField ? ` · charge ${m.charge ?? 0}` : ' · not in a field';
+  if (m.type === 'wire' || m.type === 'antenna') return inField ? ` · current ${upPart(m.current)}e₃` : ' · not in a field';
+  if (m.type === 'probe') return inField ? ` · reads ${m.reading ?? 'nothing yet'}` : ' · not in a field';
+  if (m.type === 'plate') return '';
   if (m.type === 'extractor') {
     const [dx, dz] = STEP[opposite(m.facing)];
     return world.get(x + dx, y, z + dz)?.kind === 'deposit' ? '' : ' · no deposit behind it';

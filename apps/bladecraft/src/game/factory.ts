@@ -11,15 +11,21 @@
 //   merger      from its back, left and right, one each; sends them out the front in turn
 //   sorter      from its back; matches go out one side, everything else straight on
 //   crossing    from any side, one per side; each leaves by the opposite side
+//   charge      a scalar, from any side, which becomes its charge
+//   wire        a vector, from any side; its e₃ part becomes the current up the wire
+//   antenna     the same, as the size of a current that swings up and down
+//   probe       nothing; once a second it outputs the field where it stands (field.ts)
 //   collector   anything, until full
 //   hub         anything; elements matching its order count toward it
-// Results of 0, sandwiches whose B has no inverse, and non-states sent to qubit machines vanish
-// (the orrery passes anything through, recording only states).
+// Results of 0, sandwiches whose B has no inverse, non-states sent to qubit machines, elements of the
+// wrong kind sent to field sources, and readings of a zero field vanish (the orrery passes anything
+// through, recording only states).
 import type { Multivector } from '@codecraft/ga';
 import { loadMv, saveMv } from './items.ts';
 import { apply, type Op } from './ops.ts';
 import { ORDERS, type HubProgress, type Order } from './orders.ts';
 import { E3, bloch, isState, probUp, samePoint, sameState } from './qubit.ts';
+import { Field, PROBE_EVERY, isReading } from './field.ts';
 import { SINGLE_INPUT, STEP, opposite, type Block, type Carried, type Dir, type Machine, type SortMode, type World } from './world.ts';
 import { Q } from '@codecraft/ga';
 
@@ -48,11 +54,16 @@ export interface FactoryEvents {
   qubit?(kind: 'project' | 'gate' | 'measure', input: Multivector, result: Multivector): void;
   /** an orrery's record of states changed */
   orrery?(seen: Multivector[]): void;
+  /** a logistics block sent an element somewhere other than straight on */
+  route?(kind: 'split' | 'merge' | 'sort' | 'cross'): void;
+  /** a field source was set while standing in a field, or a probe made a reading */
+  field?(kind: 'charge' | 'wire' | 'antenna' | 'reading', mv: Multivector): void;
 }
 
 /** does a delivery count toward the order? state and phase orders accept any state on the wanted Bloch point */
 export function counts(order: Order, mv: Multivector, hub: HubProgress) {
   if ((order.kind ?? 'exact') === 'exact') return mv.equals(order.want);
+  if (order.kind === 'reading') return isReading(mv) && mv.grades().join() === order.want.grades().join();
   if (!isState(mv) || !samePoint(mv, order.want)) return false;
   if (order.kind === 'state') return true;
   return !(hub.seen ?? []).some((s) => sameState(loadMv(s), mv));
@@ -66,6 +77,7 @@ export class Factory {
   hub: HubProgress;
   private events: FactoryEvents;
   private rng: () => number;
+  readonly field = new Field();
 
   constructor(world: World, hub: HubProgress, events: FactoryEvents = {}, rng: () => number = Math.random) {
     this.world = world;
@@ -88,6 +100,7 @@ export class Factory {
   }
 
   tick(dt: number) {
+    this.field.step(this.world, dt);
     for (const [x, y, z] of [...this.world.active.values()]) {
       const b = this.world.get(x, y, z);
       if (b?.kind === 'machine') this.run(b, x, y, z, dt);
@@ -116,13 +129,35 @@ export class Factory {
         return;
       }
       case 'collector':
+      case 'plate':
+      case 'charge':
+      case 'wire':
+      case 'antenna':
         return;
+      case 'probe': {
+        if (!m.out && this.field.regionAt(x, y, z)) {
+          m.timer += dt;
+          if (m.timer >= PROBE_EVERY) {
+            m.timer = 0;
+            const r = this.field.read(x, y, z);
+            m.reading = r;
+            // a zero field gives nothing to send
+            if (!r.isZero()) {
+              m.out = r;
+              this.events.field?.('reading', r);
+            }
+          }
+        }
+        if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
+        return;
+      }
       case 'splitter': {
         // deal out to the front, left and right in turn, skipping any that are full
         if (!m.item) return;
         for (let k = 0; k < 3; k++) {
           const i = (m.next + k) % 3;
           if (this.push(x, y, z, rel(m.facing, SPLIT_ORDER[i]), m.item)) {
+            if (SPLIT_ORDER[i] !== 0) this.events.route?.('split');
             m.item = null;
             m.next = (i + 1) % 3;
             return;
@@ -138,6 +173,7 @@ export class Factory {
           const mv = m.slots[side];
           if (!mv) continue;
           if (this.push(x, y, z, m.facing, mv)) {
+            if (side !== 2) this.events.route?.('merge');
             m.slots[side] = null;
             m.next = (i + 1) % 3;
           }
@@ -147,15 +183,21 @@ export class Factory {
       }
       case 'sorter': {
         if (!m.item) return;
-        const dir = sortMatches(m.mode, m.filter, m.item) ? rel(m.facing, m.side) : m.facing;
-        if (this.push(x, y, z, dir, m.item)) m.item = null;
+        const match = sortMatches(m.mode, m.filter, m.item);
+        if (this.push(x, y, z, match ? rel(m.facing, m.side) : m.facing, m.item)) {
+          if (match) this.events.route?.('sort');
+          m.item = null;
+        }
         return;
       }
       case 'crossing': {
         // straight through: whatever came in on one side leaves by the opposite side
         for (const from of [0, 1, 2, 3] as Dir[]) {
           const mv = m.slots[from];
-          if (mv && this.push(x, y, z, opposite(from), mv)) m.slots[from] = null;
+          if (mv && this.push(x, y, z, opposite(from), mv)) {
+            m.slots[from] = null;
+            this.events.route?.('cross');
+          }
         }
         return;
       }
@@ -175,6 +217,17 @@ export class Factory {
         if (m.out && this.push(x, y, z, m.facing, m.out)) m.out = null;
       }
     }
+  }
+
+  /** a source takes the element that fits it (a scalar for a charge, a vector for a wire or antenna); anything else vanishes */
+  setSource(b: Extract<Machine, { type: 'charge' | 'wire' | 'antenna' }>, x: number, y: number, z: number, mv: Multivector) {
+    const kind = b.type === 'charge' ? '0' : '1';
+    if (mv.grades().join() !== kind) return false;
+    if (b.type === 'charge') b.charge = mv;
+    else b.current = mv;
+    this.field.sync(this.world);
+    if (this.field.regionAt(x, y, z)) this.events.field?.(b.type, mv);
+    return true;
   }
 
   private operate(m: Extract<Machine, { a: unknown }>, a: Multivector, b: Multivector | null): Multivector | null {
@@ -267,6 +320,14 @@ export class Factory {
       case 'crossing':
         if (b.slots[from]) return false;
         return (b.slots[from] = mv), true;
+      case 'plate':
+      case 'probe':
+        return false;
+      case 'charge':
+      case 'wire':
+      case 'antenna':
+        this.setSource(b, x, y, z, mv);
+        return true;
       default: {
         const side = SINGLE_INPUT.includes(b.type) ? (from === b.facing ? null : 'a') : inputSide(b.facing, from);
         if (side === 'a' && !b.a) return (b.a = mv), true;
@@ -288,6 +349,10 @@ export const MERGE_ORDER = [2, 1, 3];
 export function outputs(m: Machine): Dir[] {
   switch (m.type) {
     case 'collector':
+    case 'plate':
+    case 'charge':
+    case 'wire':
+    case 'antenna':
       return [];
     case 'splitter':
       return SPLIT_ORDER.map((r) => rel(m.facing, r));

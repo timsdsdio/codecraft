@@ -644,28 +644,77 @@ h3 {
 .orders li.later {
   opacity: 0.45;
 }
-.tree {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 6px;
+.branch h3 {
+  margin-bottom: 6px;
 }
-.col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 190px;
+.tree-scroll {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.tree {
+  position: relative;
+}
+.tree svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.edge {
+  fill: none;
+  stroke: rgba(0, 255, 240, 0.35);
+  stroke-width: 2;
+}
+.edge.lit {
+  stroke: var(--gold);
+}
+.edge.unknown {
+  stroke-dasharray: 4 5;
+  stroke: rgba(255, 255, 255, 0.15);
 }
 .node {
+  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   text-align: left;
   gap: 2px;
+  overflow: hidden;
+  padding: 8px 10px;
+}
+.node b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.node .goal {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.85em;
+}
+.node .after {
+  font-size: 0.75em;
+  color: var(--gold);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .node.earned {
   border-color: var(--gold);
   box-shadow: inset 3px 0 0 var(--gold);
+}
+.node.open {
+  outline: 2px solid var(--cyan, #00fff0);
+}
+.detail.lesson {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: rgba(4, 10, 20, 0.97);
 }
 @media (max-width: 560px) {
   .grid {
