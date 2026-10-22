@@ -346,6 +346,18 @@ another branch says so on its card ("after Volume").
   reading per grade of Maxwell's equation that a probe can see: E alone, IB alone, and E and IB
   together.
 
+## The gallery
+
+The menu's Gallery button opens a world with every machine on show, for looking at the whole game
+without playing through the goals tree (`gallery.ts`). Nearest the spawn is a row with one of each
+machine. Behind it, working lines run: a Generator filling a Store, a Mill multiplying, a Packer, a
+loaded Card Press, a qubit line (|0⟩ through an H gate, an orrery, a phase shifter, a second orrery
+and a detector feeding a splitter) and a merger feeding a sorter. At the back are three fields, around
+a charge, a wire and an antenna, each with a probe. The inventory holds one of every machine and verb
+plate, blank cards and plenty of blades, and every product rule counts as learned. The gallery is
+never saved and its goals don't count; your own world is saved when you open it and comes back when
+you choose Leave the gallery. The Menu button beside Items and Goals opens the menu during play.
+
 ## Controls
 
 - **Desktop:** WASD moves, the mouse looks (pointer lock), space jumps. Left click breaks. Right click opens the Workbench or a machine, and otherwise places; shift +

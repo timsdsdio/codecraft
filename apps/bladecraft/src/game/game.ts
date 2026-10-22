@@ -10,6 +10,7 @@ import { ACHIEVEMENTS, Achievements, type Holdings } from './achievements';
 import { pressCard } from './cards';
 import { Factory } from './factory';
 import { fieldText, upPart, type Field } from './field';
+import { galleryInventory, galleryWorld } from './gallery';
 import { guide } from './guide';
 import {
   canMerge,
@@ -167,10 +168,16 @@ export class Game {
   }
 
   get guide() {
+    if (this.gallery)
+      return {
+        label: 'Gallery',
+        title: 'Every machine, on show',
+        hint: 'Nearest is one of each machine, then working lines, then three fields. Nothing here is saved: Menu, then Leave the gallery, takes you back to your world.',
+      };
     return guide({ world: this.world, inventory: this.inventory, achievements: this.achievements });
   }
 
-  learned = (rule: Rule) => this.sorts[rule] >= SORTS_TO_LEARN;
+  learned = (rule: Rule) => this.gallery || this.sorts[rule] >= SORTS_TO_LEARN;
 
   /** a rule can be learned once the one before it is: the wedge, then the dot, then the geometric product */
   learnable = (rule: Rule) => rule === 'wedge' || this.learned(RULES[RULES.indexOf(rule) - 1]);
@@ -196,7 +203,35 @@ export class Game {
     this.factory = this.makeFactory();
   }
 
+  /** the gallery: every machine on show, in a world that is never saved. Your own world is saved
+   * first and comes back when you leave */
+  gallery = false;
+
+  openGallery() {
+    if (!this.gallery) this.save();
+    this.gallery = true;
+    this.world = galleryWorld();
+    this.inventory = galleryInventory();
+    this.cursor = null;
+    this.bench = { tray: Multivector.zero(G3), left: null, bottom: null, rule: this.bench.rule, rail: null };
+    this.player = new Player();
+    this.selected = 0;
+    this.factory = this.makeFactory();
+    this.play();
+  }
+
+  leaveGallery() {
+    if (!this.gallery) return;
+    this.gallery = false;
+    this.cursor = null;
+    this.bench = { tray: Multivector.zero(G3), left: null, bottom: null, rule: this.bench.rule, rail: null };
+    this.player = new Player();
+    if (!this.load()) this.fresh();
+    this.open('start');
+  }
+
   newWorld() {
+    this.gallery = false;
     this.fresh();
     this.save();
     this.changed();
@@ -225,6 +260,7 @@ export class Game {
   }
 
   save() {
+    if (this.gallery) return;
     try {
       // a stack on the cursor or the Workbench is the player's: it's saved in the inventory
       const inventory = [...this.inventory];
@@ -266,6 +302,8 @@ export class Game {
   }
 
   private checkGoals() {
+    // goals are for your own world; the gallery has everything already
+    if (this.gallery) return;
     const fresh = this.achievements.check(this.holdings());
     for (const a of fresh) this.toast(a.title, 'achievement');
     if (fresh.length) this.changed();

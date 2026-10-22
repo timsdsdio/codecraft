@@ -96,6 +96,7 @@ function Hud({ game }: { game: Game }) {
         <div className="hud-buttons">
           <button onClick={() => game.open('inventory')}>Items</button>
           <button onClick={() => game.open('achievements')}>Goals</button>
+          <button onClick={() => game.open('start')}>Menu</button>
         </div>
       </div>
       <div className="hud-bottom">

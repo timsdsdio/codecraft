@@ -86,12 +86,19 @@ export function StartScreen({ game }: { game: Game }) {
       </p>
       <div className="row">
         <button className="primary" onClick={() => game.play()}>
-          Play
+          {game.gallery ? 'Back to the gallery' : 'Play'}
         </button>
         <button onClick={() => game.open('achievements')}>
           Goals ({earned}/{ACHIEVEMENTS.length})
         </button>
-        {confirm ? (
+        {game.gallery ? (
+          <button onClick={() => game.leaveGallery()}>Leave the gallery</button>
+        ) : (
+          <button onClick={() => game.openGallery()} title="Every machine on show, in a world that isn’t saved">
+            Gallery
+          </button>
+        )}
+        {game.gallery ? null : confirm ? (
           <button className="danger" onClick={() => (setConfirm(false), game.newWorld())}>
             Replace this world
           </button>
