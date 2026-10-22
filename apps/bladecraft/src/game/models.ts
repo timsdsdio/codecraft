@@ -597,8 +597,8 @@ function store(): Model {
   g.add(window, level, pl);
   return {
     group: g,
-    // its three biggest stacks float in a row above the lid
-    anchors: { ...ANCHORS(), show0: new THREE.Vector3(0, 1.6, 0), show1: new THREE.Vector3(0, 1.6, -0.5), show2: new THREE.Vector3(0, 1.6, 0.5) },
+    // what its first slot holds floats above the lid
+    anchors: { ...ANCHORS(), show0: new THREE.Vector3(0, 1.6, 0) },
     chimney: new THREE.Vector3(0, 1.05, 0),
     update(b) {
       const m = b?.kind === 'machine' && b.type === 'store' ? b : null;

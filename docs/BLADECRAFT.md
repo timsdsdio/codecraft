@@ -288,7 +288,7 @@ state the factory leaves in its block, so you can see what a machine is doing wi
 |---|---|---|
 | Generator | a brass pump with a flywheel, pressure gauge and chimney, and a glass jar at the back holding its sample | its rod strokes and flywheel turns once per blade made; it stops when it has no sample or its output is blocked |
 | Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed stacks ride it; stacks coming in from a side ride round the bend |
-| Store | a banded tank with a gauge window | the level in the window rises as it fills, and its three biggest stacks float above it, each with its count |
+| Store | a banded tank with a gauge window | the level in the window rises as it fills, and what its first slot holds floats above it with its count |
 | Packer | a low iron box with a copper hopper and a + plate | the lid drops as a sum leaves |
 | Unpacker | the same box with a brass comb wheel | the wheel turns while blades are still to send |
 | Splitter | the same box with belts out of three sides and a brass pointer on a gear | the pointer turns to the side the next stack will go out of |
@@ -346,6 +346,18 @@ another branch says so on its card ("after Volume").
   reading per grade of Maxwell's equation that a probe can see: E alone, IB alone, and E and IB
   together.
 
+## The gallery
+
+The menu's Gallery button opens a world with every machine on show, for looking at the whole game
+without playing through the goals tree (`gallery.ts`). Nearest the spawn is a row with one of each
+machine. Behind it, working lines run: a Generator filling a Store, a Mill multiplying, a Packer, a
+loaded Card Press, a qubit line (|0⟩ through an H gate, an orrery, a phase shifter, a second orrery
+and a detector feeding a splitter) and a merger feeding a sorter. At the back are three fields, around
+a charge, a wire and an antenna, each with a probe. The inventory holds one of every machine and verb
+plate, blank cards and plenty of blades, and every product rule counts as learned. The gallery is
+never saved and its goals don't count; your own world is saved when you open it and comes back when
+you choose Leave the gallery. The Menu button beside Items and Goals opens the menu during play.
+
 ## Controls
 
 - **Desktop:** WASD moves, the mouse looks (pointer lock), space jumps. Left click breaks. Right click opens the Workbench or a machine, and otherwise places; shift +
@@ -358,9 +370,11 @@ another branch says so on its card ("after Volume").
   holding a machine, and Jump. Tap a hotbar slot to hold it; tap the held slot again to open your
   inventory.
 - **Inventory and panels:** as in Minecraft, described under Items and stacks. The Workbench and
-  every machine panel keep your inventory docked below their own slots, or beside them on a short
-  landscape screen, so the two are always on screen together and shift click moves a stack between
-  them. Nothing on these screens scrolls the inventory out of reach.
+  every machine panel keep your hotbar docked at the bottom, with a line above it naming the stack
+  you're holding. The three storage rows are a drawer: the Inventory handle beside that line slides
+  them up over the panel and hides them again, and the game remembers which way you left it. Shift
+  click moves a stack between the panel and your inventory either way, and nothing on these screens
+  scrolls.
 
 ## Open questions
 

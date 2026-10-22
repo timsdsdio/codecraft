@@ -4,7 +4,7 @@
 // number key over a slot swaps it with that hotbar slot. On a touch screen: tap is a left click, a
 // long press is a right click, and a double tap is a shift click. The stack being carried follows the
 // pointer, and hovering a slot names what's in it.
-import { useEffect, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { Q } from '@codecraft/ga';
 import type { Game, SlotRef } from '../game/game';
 import { describe, num, stackName, valueOf, type Stack } from '../game/items';
@@ -176,28 +176,55 @@ export function CursorLayer({ game }: { game: Game }) {
           {hovered.item.kind === 'element' && <span className="dim">{describe(valueOf(hovered)!)}</span>}
         </div>
       )}
-      {s && game.touch && (
-        <div className="cursor-note">
-          Holding <b>{stackName(s)}</b>. Tap a slot to put it down, long-press to put down one.
-        </div>
-      )}
     </>
   );
 }
 
-/** the player's 27 storage slots and 9 hotbar slots, as every container screen shows them */
-export function PlayerInventory({ game }: { game: Game }) {
+/** whether the inventory drawer is open, remembered between panels */
+let drawerOpen = false;
+
+/** the player's 27 storage slots and 9 hotbar slots, as every container screen shows them. As a
+ * drawer, the storage rows are hidden until the handle above the hotbar slides them out over the
+ * panel, so a small screen keeps its room for the work */
+export function PlayerInventory({ game, drawer = false }: { game: Game; drawer?: boolean }) {
+  const [open, setOpenState] = useState(drawerOpen);
+  const setOpen = (o: boolean) => setOpenState((drawerOpen = o));
+  const shown = !drawer || open;
+  const stored = game.inventory.slice(HOTBAR).filter(Boolean).length;
+  const storage = (
+    <div className="grid storage" aria-hidden={!shown}>
+      {Array.from({ length: 27 }, (_, k) => (
+        <SlotView key={k} game={game} at={{ c: 'inv', i: HOTBAR + k }} />
+      ))}
+    </div>
+  );
   return (
-    <div className="player-inv">
-      <div className="grid">
-        {Array.from({ length: 27 }, (_, k) => (
-          <SlotView key={k} game={game} at={{ c: 'inv', i: HOTBAR + k }} />
-        ))}
-      </div>
-      <div className="grid hotbar-row">
-        {Array.from({ length: HOTBAR }, (_, k) => (
-          <SlotView key={k} game={game} at={{ c: 'inv', i: k }} selected={k === game.selected} />
-        ))}
+    <div className={`player-inv${drawer ? ' drawer' : ''}${shown ? ' open' : ''}`}>
+      {!drawer && storage}
+      <div className="dock">
+        {drawer && <div className="drawer-sheet">{storage}</div>}
+        <div className="inv-bar">
+          {/* always one line tall, so picking something up never moves the layout */}
+          <div className="holding" aria-live="polite">
+            {game.cursor ? (
+              <>
+                Holding <b>{stackName(game.cursor)}</b>
+              </>
+            ) : (
+              '\u00a0'
+            )}
+          </div>
+          {drawer && (
+            <button className="small drawer-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+              {open ? '▾ Hide' : '▴ Inventory'} <span className="dim">{stored}/27</span>
+            </button>
+          )}
+        </div>
+        <div className="grid hotbar-row">
+          {Array.from({ length: HOTBAR }, (_, k) => (
+            <SlotView key={k} game={game} at={{ c: 'inv', i: k }} selected={k === game.selected} />
+          ))}
+        </div>
       </div>
     </div>
   );

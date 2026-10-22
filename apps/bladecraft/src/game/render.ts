@@ -329,10 +329,12 @@ export class Renderer {
         put('sample', m.sample);
         put('out', m.out);
         break;
-      case 'store':
-        // what it holds, so a glance tells the Stores apart: its three biggest stacks above the tank
-        storeShowcase(m.slots).forEach(({ mv, label }, k) => want.set(`show${k}:${label}`, mv));
+      case 'store': {
+        // what its first slot holds, so a glance tells the Stores apart
+        const shown = storeShowcase(m.slots[0]);
+        if (shown) want.set(`show0:${shown.label}`, shown.mv);
         break;
+      }
       case 'detector':
       case 'orrery':
         put('a', m.a);
@@ -448,24 +450,15 @@ function ridePosition(x: number, y: number, z: number, facing: Dir, from: Dir | 
   return c.add(new THREE.Vector3(ox * k, 0, oz * k));
 }
 
-/** a Store's biggest stacks that can be drawn, at unit size, with how many of each */
-function storeShowcase(slots: (Stack | null)[]) {
-  const byKind = new Map<string, { mv: Multivector; n: number; label: (n: number) => string }>();
-  for (const s of slots) {
-    if (!s) continue;
-    const base = s.item.kind === 'element' ? s.item.mv : shownMv(s);
-    if (!base || base.isZero()) continue;
-    const key = `${s.item.kind}:${base.key()}`;
-    const n = Q.toNumber(s.count);
-    const was = byKind.get(key);
-    if (was) was.n += n;
-    else byKind.set(key, { mv: base, n, label: (k) => (s.item.kind === 'element' ? Q.show(Q.q(Math.round(k * 1000), 1000)).replace('-', '−') : `×${k}`) });
-  }
-  return [...byKind.values()]
-    .sort((a, b) => Math.abs(b.n) - Math.abs(a.n))
-    .slice(0, 3)
-    .map((e) => ({ mv: e.mv, label: e.label(e.n) }));
+/** what a Store shows above its lid: its first slot, at unit size, with how many */
+function storeShowcase(first: Stack | null) {
+  if (!first) return null;
+  const mv = first.item.kind === 'element' ? first.item.mv : shownMv(first);
+  if (!mv || mv.isZero()) return null;
+  return { mv, label: first.item.kind === 'element' ? countLabelOf(first.count) : `×${Q.toNumber(first.count)}` };
 }
+
+const countLabelOf = (q: Stack['count']) => Q.show(q).replace('-', '−');
 
 /** a small number floating under a showcase glyph */
 function countSprite(text: string) {
