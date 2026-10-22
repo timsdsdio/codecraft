@@ -13,19 +13,47 @@ import { DIR_NAMES, type SortMode } from '../game/world';
 import { ElementIcon, GradeCard, GRADE_CARD, Icon } from './Icon';
 import { CursorLayer, PlayerInventory, SlotInput, SlotView, countLabel } from './Slots';
 
-function Sheet({ title, game, children, icon, slots = true }: { title: string; game: Game; children: ReactNode; icon?: ReactNode; slots?: boolean }) {
+/** a full-screen panel. A station (the Workbench, a machine) keeps the inventory docked below its work,
+ * or beside it on a short landscape screen, so moving things between them never needs a scroll */
+function Sheet({
+  title,
+  game,
+  children,
+  icon,
+  slots = true,
+  tabs,
+  station = false,
+}: {
+  title: string;
+  game: Game;
+  children: ReactNode;
+  icon?: ReactNode;
+  slots?: boolean;
+  tabs?: ReactNode;
+  station?: boolean;
+}) {
   return (
-    <div className="sheet" role="dialog" aria-label={title}>
-      <header>
+    <div className={`sheet${station ? ' station' : ''}`} role="dialog" aria-label={title}>
+      <header className={tabs ? 'has-tabs' : ''}>
         <h2>
           {icon}
           {title}
         </h2>
-        <button className="primary" onClick={() => game.play()}>
-          Back to game
+        {tabs}
+        <button className="primary back" onClick={() => game.play()}>
+          Back<span className="long"> to game</span>
         </button>
       </header>
-      {children}
+      {station ? (
+        <div className="station-body">
+          <div className="station-work">{children}</div>
+          <div className="station-inv">
+            <PlayerInventory game={game} />
+          </div>
+        </div>
+      ) : (
+        children
+      )}
       {slots && (
         <>
           <SlotInput game={game} />
@@ -90,20 +118,59 @@ export function InventoryScreen({ game }: { game: Game }) {
 
 // --- the Workbench -----------------------------------------------------------------------------
 
+/** whether the screen has room for Add and Multiply side by side */
+function useRoomy() {
+  const query = '(min-width: 1000px) and (min-height: 720px)';
+  const [roomy, setRoomy] = useState(() => matchMedia(query).matches);
+  useEffect(() => {
+    const m = matchMedia(query);
+    const f = () => setRoomy(m.matches);
+    m.addEventListener('change', f);
+    return () => m.removeEventListener('change', f);
+  }, []);
+  return roomy;
+}
+
+type BenchTab = 'add' | 'multiply' | 'build';
+let lastBenchTab: BenchTab = 'add';
+
 export function WorkbenchScreen({ game }: { game: Game }) {
-  const [tab, setTab] = useState<'algebra' | 'build'>('algebra');
+  const roomy = useRoomy();
+  const [tab, setTabState] = useState<BenchTab>(lastBenchTab);
+  const setTab = (t: BenchTab) => setTabState((lastBenchTab = t));
+  // on a roomy screen Add and Multiply share one tab
+  const shown: BenchTab = roomy && tab === 'multiply' ? 'add' : tab;
+  const tabList: [BenchTab, string][] = roomy
+    ? [
+        ['add', 'Hand work'],
+        ['build', 'Build'],
+      ]
+    : [
+        ['add', 'Add'],
+        ['multiply', 'Multiply'],
+        ['build', 'Build'],
+      ];
+  const tabs = (
+    <div className="tabs" role="tablist">
+      {tabList.map(([t, label]) => (
+        <button key={t} role="tab" aria-selected={shown === t} onClick={() => setTab(t)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
   return (
-    <Sheet title="Workbench" game={game}>
-      <div className="tabs" role="tablist">
-        <button role="tab" aria-selected={tab === 'algebra'} onClick={() => setTab('algebra')}>
-          Hand work
-        </button>
-        <button role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>
-          Build
-        </button>
-      </div>
-      {tab === 'algebra' ? <HandWork game={game} /> : <BuildTab game={game} />}
-      <PlayerInventory game={game} />
+    <Sheet title="Workbench" game={game} tabs={tabs} station>
+      {shown === 'build' ? (
+        <BuildTab game={game} />
+      ) : roomy ? (
+        <div className="bench">
+          <AddPanel game={game} />
+          <MultiplyPanel game={game} />
+        </div>
+      ) : (
+        <div className="bench">{shown === 'add' ? <AddPanel game={game} /> : <MultiplyPanel game={game} />}</div>
+      )}
     </Sheet>
   );
 }
@@ -155,15 +222,6 @@ function OutputSlot({ value, onTake, label }: { value: Multivector | null; onTak
   );
 }
 
-function HandWork({ game }: { game: Game }) {
-  return (
-    <div className="bench">
-      <AddPanel game={game} />
-      <MultiplyPanel game={game} />
-    </div>
-  );
-}
-
 function AddPanel({ game }: { game: Game }) {
   const tray = game.bench.tray;
   const drop = (e: ReactPointerEvent) => {
@@ -175,7 +233,7 @@ function AddPanel({ game }: { game: Game }) {
     <section className="panel add">
       <header>
         <h3>Add</h3>
-        <span className="dim">Drop elements on the tray; their sum comes out on the right.</span>
+        <span className="dim">Drop elements in, take their sum.</span>
       </header>
       <div className="craft-row">
         <div className={`tray${game.cursor?.item.kind === 'element' ? ' accepting' : ''}`} onPointerDown={drop} onContextMenu={(e) => e.preventDefault()} aria-label="Tray">
@@ -207,9 +265,9 @@ function AddPanel({ game }: { game: Game }) {
 }
 
 const RULE_TELLS: Record<Rule, string> = {
-  wedge: 'the wedge lets nothing cancel',
-  dot: 'the dot needs every A tile (outlined) to cancel',
-  geometric: 'the geometric product lets anything cancel',
+  wedge: 'nothing may cancel',
+  dot: 'every outlined A tile must cancel',
+  geometric: 'anything may cancel',
 };
 
 function MultiplyPanel({ game }: { game: Game }) {
@@ -233,7 +291,7 @@ function MultiplyPanel({ game }: { game: Game }) {
   else hint = <>Every square is worked out, so the product is ready to take.</>;
 
   return (
-    <section className="panel multiply">
+    <section className={`panel multiply${b.rail ? ' sorting' : ''}`}>
       <header>
         <h3>Multiply</h3>
         <div className="rules" role="tablist" aria-label="Product">
@@ -248,65 +306,67 @@ function MultiplyPanel({ game }: { game: Game }) {
         </div>
       </header>
       <p className="hint-line">{hint}</p>
-      <div className="table-scroll">
-        <div
-          className="mtable"
-          style={{ gridTemplateColumns: `auto repeat(${nB}, var(--cell)) auto auto auto`, gridTemplateRows: `auto repeat(${nA}, var(--cell)) auto` }}
-        >
-          <div className="labelled a-slot" style={{ gridColumn: 1, gridRow: 1 }}>
-            <SlotView game={game} at={{ c: 'bench', field: 'left', i: 0 }} label="A" />
-          </div>
-          {Array.from({ length: nA }, (_, i) => (
-            <div key={`a${i}`} style={{ gridColumn: 1, gridRow: i + 2 }} className="head">
-              {left[i] ? <BladeCell mv={left[i]} className="factor" /> : <div className="cell placeholder">A</div>}
+      <div className="mul-body">
+        <div className="table-scroll">
+          <div
+            className="mtable"
+            style={{ gridTemplateColumns: `auto repeat(${nB}, var(--cell)) auto auto auto`, gridTemplateRows: `auto repeat(${nA}, var(--cell)) auto` }}
+          >
+            <div className="labelled a-slot" style={{ gridColumn: 1, gridRow: 1 }}>
+              <SlotView game={game} at={{ c: 'bench', field: 'left', i: 0 }} label="A" />
             </div>
-          ))}
-          {Array.from({ length: nA }, (_, i) =>
-            Array.from({ length: nB }, (_, j) => {
-              const ta = left[i];
-              const tb = right[j];
-              const style = { gridColumn: j + 2, gridRow: i + 2 };
-              if (!ta || !tb) return <div key={`${i}-${j}`} className="cell placeholder" style={style} />;
-              const active = b.rail?.cell[0] === i && b.rail?.cell[1] === j;
-              if (!known(ta, tb))
-                return (
-                  <button key={`${i}-${j}`} style={style} className={`cell unknown${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} title={`${ta} times ${tb}: tap to work it out`}>
-                    ?
+            {Array.from({ length: nA }, (_, i) => (
+              <div key={`a${i}`} style={{ gridColumn: 1, gridRow: i + 2 }} className="head">
+                {left[i] ? <BladeCell mv={left[i]} className="factor" /> : <div className="cell placeholder">A</div>}
+              </div>
+            ))}
+            {Array.from({ length: nA }, (_, i) =>
+              Array.from({ length: nB }, (_, j) => {
+                const ta = left[i];
+                const tb = right[j];
+                const style = { gridColumn: j + 2, gridRow: i + 2 };
+                if (!ta || !tb) return <div key={`${i}-${j}`} className="cell placeholder" style={style} />;
+                const active = b.rail?.cell[0] === i && b.rail?.cell[1] === j;
+                if (!known(ta, tb))
+                  return (
+                    <button key={`${i}-${j}`} style={style} className={`cell unknown${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} title={`${ta} times ${tb}: tap to work it out`}>
+                      ?
+                    </button>
+                  );
+                const v = product(rule, ta, tb);
+                return v.isZero() ? (
+                  <button key={`${i}-${j}`} style={style} className={`cell zero${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} title={`${ta} times ${tb} is 0`}>
+                    0
                   </button>
+                ) : (
+                  <div key={`${i}-${j}`} style={style}>
+                    <BladeCell mv={v} active={active} onPointerDown={() => game.openCell(i, j)} title={`${ta} times ${tb} is ${v}`} />
+                  </div>
                 );
-              const v = product(rule, ta, tb);
-              return v.isZero() ? (
-                <button key={`${i}-${j}`} style={style} className={`cell zero${active ? ' on' : ''}`} onClick={() => game.openCell(i, j)} title={`${ta} times ${tb} is 0`}>
-                  0
-                </button>
-              ) : (
-                <div key={`${i}-${j}`} style={style}>
-                  <BladeCell mv={v} active={active} onPointerDown={() => game.openCell(i, j)} title={`${ta} times ${tb} is ${v}`} />
-                </div>
-              );
-            }),
-          )}
-          <div className="corner" style={{ gridColumn: 1, gridRow: nA + 2 }} aria-hidden="true">
-            {RULE_SYMBOLS[rule] || '·'}
-          </div>
-          {Array.from({ length: nB }, (_, j) => (
-            <div key={`b${j}`} style={{ gridColumn: j + 2, gridRow: nA + 2 }} className="head">
-              {right[j] ? <BladeCell mv={right[j]} className="factor" /> : <div className="cell placeholder">B</div>}
+              }),
+            )}
+            <div className="corner" style={{ gridColumn: 1, gridRow: nA + 2 }} aria-hidden="true">
+              {RULE_SYMBOLS[rule] || '·'}
             </div>
-          ))}
-          <div className="labelled b-slot" style={{ gridColumn: nB + 2, gridRow: nA + 2 }}>
-            <SlotView game={game} at={{ c: 'bench', field: 'bottom', i: 0 }} label="B" />
-          </div>
-          <span className="arrow" style={{ gridColumn: nB + 3, gridRow: `2 / span ${nA}` }} aria-hidden="true">
-            →
-          </span>
-          <div className="labelled" style={{ gridColumn: nB + 4, gridRow: `2 / span ${nA}` }}>
-            <OutputSlot value={result} onTake={(shift) => game.make(shift)} label={a && bottom ? '?' : 'A·B'} />
-            <small>{result ? (result.isZero() ? '0' : String(result)) : 'Product'}</small>
+            {Array.from({ length: nB }, (_, j) => (
+              <div key={`b${j}`} style={{ gridColumn: j + 2, gridRow: nA + 2 }} className="head">
+                {right[j] ? <BladeCell mv={right[j]} className="factor" /> : <div className="cell placeholder">B</div>}
+              </div>
+            ))}
+            <div className="labelled b-slot" style={{ gridColumn: nB + 2, gridRow: nA + 2 }}>
+              <SlotView game={game} at={{ c: 'bench', field: 'bottom', i: 0 }} label="B" />
+            </div>
+            <span className="arrow" style={{ gridColumn: nB + 3, gridRow: `2 / span ${nA}` }} aria-hidden="true">
+              →
+            </span>
+            <div className="labelled" style={{ gridColumn: nB + 4, gridRow: `2 / span ${nA}` }}>
+              <OutputSlot value={result} onTake={(shift) => game.make(shift)} label={a && bottom ? '?' : 'A·B'} />
+              <small>{result ? (result.isZero() ? '0' : String(result)) : 'Product'}</small>
+            </div>
           </div>
         </div>
+        <Sorter game={game} next={unknown[0] ? [unknown[0][0], unknown[0][1]] : null} />
       </div>
-      <Sorter game={game} next={unknown[0] ? [unknown[0][0], unknown[0][1]] : null} />
     </section>
   );
 }
@@ -337,15 +397,16 @@ function Sorter({ game, next }: { game: Game; next: [number, number] | null }) {
         <b>
           {bladeName(ba)} × {bladeName(bb)}
         </b>
-        <span className="dim">worked out by hand</span>
+        <span className="dim">
+          {RULE_NAMES[rule]}: {RULE_TELLS[rule]}
+        </span>
         <button className="small close" onClick={() => game.closeRail()} aria-label="Close">
           ✕
         </button>
       </div>
       {!done && (
         <p className="goal">
-          Put the tiles in order, <b>e₁ then e₂ then e₃</b>. Tap between two tiles to <b>swap</b> them, which flips the sign, or to{' '}
-          <b>cancel</b> two equal tiles, since e₁e₁ = 1. Here {RULE_TELLS[rule]}.
+          Sort the tiles into <b>e₁ e₂ e₃</b> order. <b>Swap</b> flips the sign; two equal tiles <b>cancel</b> to 1.
         </p>
       )}
       <div className="rail-row">
@@ -377,16 +438,15 @@ function Sorter({ game, next }: { game: Game; next: [number, number] | null }) {
       {done && (
         <div className={`verdict${why ? ' zero' : ''}`}>
           <b>{why ? '= 0' : `= ${answer && answer.sign < 0 ? '−' : ''}${answer ? bladeName(answer.blade) : '1'}`}</b>
-          <span>{why ?? 'times the weights of the two blades. The square is filled in.'}</span>
-          {!learned && (
-            <span className="dim">
-              {r.moves === 0
-                ? 'It was in order already, so it doesn’t count toward learning: try a square whose tiles are out of order.'
+          <span className="dim">
+            {why ?? 'times the two weights'}
+            {!learned &&
+              (r.moves === 0
+                ? '. Already in order, so it doesn’t count toward learning.'
                 : toLearn > 0
-                  ? `${toLearn} more sorted by hand and you know the ${ruleName}.`
-                  : `You know the ${ruleName} now.`}
-            </span>
-          )}
+                  ? `. ${toLearn} more to learn the ${ruleName}.`
+                  : `. You know the ${ruleName} now.`)}
+          </span>
           {next && (
             <button className="primary" onClick={() => game.openCell(...next)}>
               Next square
@@ -781,11 +841,10 @@ export function MachineScreen({ game }: { game: Game }) {
   }
 
   return (
-    <Sheet title={title} game={game} icon={icon}>
-      {recipe && <p>{recipe.does}</p>}
+    <Sheet title={title} game={game} icon={icon} station>
+      {recipe && <p className="does">{recipe.does}</p>}
       {body}
       {outputs(m).length > 0 && m.type !== 'crossing' && <div className="row">{rotate}</div>}
-      <PlayerInventory game={game} />
     </Sheet>
   );
 }

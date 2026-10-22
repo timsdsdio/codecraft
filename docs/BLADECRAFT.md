@@ -74,10 +74,12 @@ machine the game no longer has loads without it.
 
 ## The Workbench
 
-The Workbench is where you do algebra by hand and build everything else. Its Hand work tab has two
-panels laid out like Minecraft crafting: inputs on the left, an arrow, and an output slot on the
+The Workbench is where you do algebra by hand and build everything else. It has two panels, Add and
+Multiply, laid out like Minecraft crafting: inputs on the left, an arrow, and an output slot on the
 right. Clicking an output puts the result on the cursor (or stacks it onto a matching cursor), and
-shift-clicking sends it to the inventory.
+shift-clicking sends it to the inventory. A large screen shows both panels side by side under one
+Hand work tab; a phone gives each its own tab, beside Build, so a panel and the inventory always fit
+on the screen together.
 
 - **Add.** Drop elements on the tray and they add into one multivector, laid out on the grade card:
   the scalar, the three vectors, the three bivectors and the trivector each in their own cell.
@@ -173,7 +175,7 @@ What a block takes depends on the side something arrives from (`factory.ts`):
 |---|---|---|
 | Generator | a blade in its sample slot, set in its panel | makes another of that blade, weight +1 or −1 as the sample's sign, every 1.5 s, and keeps the sample |
 | Duct | anything, from any side but its front, one stack at a time | carries it the way it points, 1.5 blocks a second |
-| Store | anything, from any side, when all of the stack fits | holds 27 stacks; open it to take them by hand |
+| Store | anything, from any side, when all of the stack fits | holds 27 stacks; open it to take them by hand. The line under the crosshair lists what it holds |
 | Packer | an element at its back, left and right | waits until every side that something feeds has delivered, then sends their sum as one multivector |
 | Unpacker | a multivector at its back | sends each of its blades out on its own |
 | Mill | an element at its back, and at either side when a live card is set | runs it through its cards (below) |
@@ -286,7 +288,7 @@ state the factory leaves in its block, so you can see what a machine is doing wi
 |---|---|---|
 | Generator | a brass pump with a flywheel, pressure gauge and chimney, and a glass jar at the back holding its sample | its rod strokes and flywheel turns once per blade made; it stops when it has no sample or its output is blocked |
 | Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed stacks ride it; stacks coming in from a side ride round the bend |
-| Store | a banded tank with a gauge window | the level in the window rises as it fills |
+| Store | a banded tank with a gauge window | the level in the window rises as it fills, and its three biggest stacks float above it, each with its count |
 | Packer | a low iron box with a copper hopper and a + plate | the lid drops as a sum leaves |
 | Unpacker | the same box with a brass comb wheel | the wheel turns while blades are still to send |
 | Splitter | the same box with belts out of three sides and a brass pointer on a gear | the pointer turns to the side the next stack will go out of |
@@ -355,8 +357,10 @@ another branch says so on its card ("after Volume").
   Buttons on the right appear when they apply: Break, Use, Place, Rotate when
   holding a machine, and Jump. Tap a hotbar slot to hold it; tap the held slot again to open your
   inventory.
-- **Inventory and panels:** as in Minecraft, described under Items and stacks. Every panel shows
-  your inventory below its own slots, so shift click moves a stack between the two.
+- **Inventory and panels:** as in Minecraft, described under Items and stacks. The Workbench and
+  every machine panel keep your inventory docked below their own slots, or beside them on a short
+  landscape screen, so the two are always on screen together and shift click moves a stack between
+  them. Nothing on these screens scrolls the inventory out of reach.
 
 ## Open questions
 

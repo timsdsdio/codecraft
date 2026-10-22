@@ -1119,3 +1119,154 @@ button.small {
     height: 40px;
   }
 }
+
+/* stations: the Workbench and machine panels keep the inventory docked so nothing needs a scroll */
+.sheet.station {
+  --s: min(52px, calc((100vw - 32px - 8 * 4px) / 9));
+  height: 100dvh;
+  overflow: hidden;
+  gap: 8px;
+  padding-top: calc(10px + var(--sa-t));
+  padding-bottom: calc(10px + var(--sa-b));
+}
+.sheet.station header {
+  position: static;
+  padding: 0;
+  flex-wrap: wrap;
+}
+.sheet header.has-tabs .tabs {
+  margin-right: auto;
+}
+.station-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.station-work {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.station-work > p {
+  margin: 0;
+}
+.station-inv {
+  flex: none;
+}
+.station .player-inv {
+  gap: 6px;
+  margin: 0;
+}
+.station .grid {
+  grid-template-columns: repeat(9, var(--s));
+  gap: 4px;
+}
+.station .grid .slot {
+  width: var(--s);
+  height: var(--s);
+  aspect-ratio: auto;
+  padding: 2px;
+}
+.station .grid .slot svg {
+  width: 82%;
+  height: 82%;
+}
+.station .grid .count {
+  bottom: 1px;
+  right: 3px;
+  font-size: 10px;
+}
+.station .hotbar-row {
+  padding-top: 6px;
+}
+.panel.multiply {
+  position: relative;
+}
+.mul-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+.mul-body .sorter {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .sheet header.has-tabs h2 {
+    display: none;
+  }
+  .back .long {
+    display: none;
+  }
+  .sheet.station .tabs button {
+    padding: 7px 10px;
+  }
+  .station .panel {
+    flex: 1 1 auto;
+  }
+  .panel > header > span.dim {
+    display: none;
+  }
+  /* while sorting, the sorter needs the room more than the hint and the rule tabs */
+  .panel.multiply.sorting .hint-line,
+  .panel.multiply.sorting .rules {
+    display: none;
+  }
+}
+/* a short landscape screen: the inventory sits beside the work instead of under it */
+@media (orientation: landscape) and (max-height: 600px) {
+  .sheet.station {
+    --s: min(46px, calc((100dvh - 64px - 3 * 4px - 6px) / 4));
+    gap: 6px;
+  }
+  .sheet.station header h2 {
+    display: none;
+  }
+  .back .long {
+    display: none;
+  }
+  .station-body {
+    flex-direction: row;
+  }
+  .station-inv {
+    align-self: flex-end;
+  }
+  .station .bench {
+    --cell: 36px;
+  }
+  .station .panel {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .station .panel > header > span.dim,
+  .station .hint-line,
+  .panel.multiply.sorting .rules {
+    display: none;
+  }
+  /* the sorter opens over the table rather than under it */
+  .sorter {
+    position: absolute;
+    inset: 6px;
+    z-index: 2;
+    overflow: auto;
+    background: var(--panel);
+  }
+  .sorter .tile {
+    width: 38px;
+    height: 38px;
+  }
+}
+@media (max-width: 600px), (max-height: 600px) {
+  .sheet ~ .toasts .toast {
+    padding: 3px 8px;
+    font-size: 11px;
+    flex-direction: row;
+    gap: 6px;
+  }
+}
