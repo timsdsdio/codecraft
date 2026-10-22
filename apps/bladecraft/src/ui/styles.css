@@ -680,14 +680,17 @@ h3 {
   background: var(--panel);
   pointer-events: none;
 }
-.cursor-note {
-  position: sticky;
-  bottom: calc(-20px - var(--sa-b));
-  z-index: 4;
-  padding: 8px 10px;
-  border: 1px solid var(--gold);
-  border-radius: 6px;
-  background: var(--panel);
+.holding {
+  height: 1.4em;
+  line-height: 1.4em;
+  font-size: 12px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.holding b {
+  color: var(--gold);
 }
 .labelled {
   display: flex;

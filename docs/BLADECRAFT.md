@@ -288,7 +288,7 @@ state the factory leaves in its block, so you can see what a machine is doing wi
 |---|---|---|
 | Generator | a brass pump with a flywheel, pressure gauge and chimney, and a glass jar at the back holding its sample | its rod strokes and flywheel turns once per blade made; it stops when it has no sample or its output is blocked |
 | Duct | a conveyor belt on an iron frame, bent into a quarter circle when it is fed from one side and nothing feeds it from behind | the belt runs the way it carries, at the speed stacks ride it; stacks coming in from a side ride round the bend |
-| Store | a banded tank with a gauge window | the level in the window rises as it fills, and its three biggest stacks float above it, each with its count |
+| Store | a banded tank with a gauge window | the level in the window rises as it fills, and what its first slot holds floats above it with its count |
 | Packer | a low iron box with a copper hopper and a + plate | the lid drops as a sum leaves |
 | Unpacker | the same box with a brass comb wheel | the wheel turns while blades are still to send |
 | Splitter | the same box with belts out of three sides and a brass pointer on a gear | the pointer turns to the side the next stack will go out of |

@@ -176,11 +176,6 @@ export function CursorLayer({ game }: { game: Game }) {
           {hovered.item.kind === 'element' && <span className="dim">{describe(valueOf(hovered)!)}</span>}
         </div>
       )}
-      {s && game.touch && (
-        <div className="cursor-note">
-          Holding <b>{stackName(s)}</b>. Tap a slot to put it down, long-press to put down one.
-        </div>
-      )}
     </>
   );
 }
@@ -189,6 +184,16 @@ export function CursorLayer({ game }: { game: Game }) {
 export function PlayerInventory({ game }: { game: Game }) {
   return (
     <div className="player-inv">
+      {/* always one line tall, so picking something up never moves the layout */}
+      <div className="holding" aria-live="polite">
+        {game.cursor ? (
+          <>
+            Holding <b>{stackName(game.cursor)}</b>
+          </>
+        ) : (
+          '\u00a0'
+        )}
+      </div>
       <div className="grid">
         {Array.from({ length: 27 }, (_, k) => (
           <SlotView key={k} game={game} at={{ c: 'inv', i: HOTBAR + k }} />
