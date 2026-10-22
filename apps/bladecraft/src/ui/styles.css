@@ -700,11 +700,13 @@ h3 {
   font-size: 10px;
   text-align: center;
 }
-.labelled > .slot,
-.edge-left > .slot,
-.edge-bottom > .slot {
+.labelled > .slot {
   width: 58px;
   height: 66px;
+}
+.labelled > .slot.big {
+  width: 76px;
+  height: 84px;
 }
 button.small {
   padding: 2px 6px;
@@ -714,24 +716,51 @@ button.small {
   flex-wrap: wrap;
 }
 
-/* the Workbench: tray, matrix grid and rail */
+/* the Workbench: Add (tray → sum), Multiply (table → product) and the sorter */
 .bench {
+  --cell: 46px;
   display: flex;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
   align-items: flex-start;
 }
-.bench section {
+.panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 255, 240, 0.22);
+  border-radius: 10px;
+  background: rgba(0, 20, 30, 0.45);
 }
-.tray-area {
-  flex: 0 1 300px;
+.panel > header {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
 }
-.grid-area {
-  flex: 1 1 420px;
+.panel > header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.panel.add {
+  flex: 0 1 auto;
+}
+.panel.multiply {
+  flex: 1 1 460px;
+}
+.craft-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.arrow {
+  align-self: center;
+  justify-self: center;
+  font-size: 26px;
+  color: var(--gold);
+  line-height: 1;
 }
 .tray {
   display: flex;
@@ -741,6 +770,12 @@ button.small {
   border: 1px dashed var(--line);
   border-radius: 8px;
   align-items: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.tray.accepting {
+  border-color: var(--gold);
+  background: rgba(255, 210, 90, 0.07);
+  cursor: copy;
 }
 .tray-row {
   display: flex;
@@ -749,8 +784,8 @@ button.small {
 }
 .cell {
   position: relative;
-  width: 46px;
-  height: 46px;
+  width: var(--cell);
+  height: var(--cell);
   padding: 3px;
   display: grid;
   place-items: center;
@@ -770,8 +805,11 @@ button.small {
   color: rgba(214, 247, 255, 0.35);
   font-size: 11px;
 }
-.cell.zero,
-.cell.unknown {
+.cell.factor {
+  border-color: rgba(255, 210, 90, 0.45);
+  cursor: default;
+}
+.cell.zero {
   color: var(--dim);
   font-size: 16px;
 }
@@ -779,13 +817,34 @@ button.small {
   border-style: dashed;
   border-color: var(--gold);
   color: var(--gold);
+  font-size: 18px;
+  font-weight: 700;
+  animation: beckon 1.6s ease-in-out infinite;
+}
+@keyframes beckon {
+  50% {
+    background: rgba(255, 210, 90, 0.14);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cell.unknown {
+    animation: none;
+  }
 }
 .cell.on {
   box-shadow: 0 0 0 2px var(--cyan);
+  animation: none;
 }
-.sum {
-  align-self: center;
-  color: var(--cyan);
+.slot.output {
+  border-style: dashed;
+}
+.slot.output.ready {
+  border-style: solid;
+  border-color: var(--green);
+  box-shadow: 0 0 10px rgba(125, 255, 106, 0.35);
+}
+.labelled small {
+  max-width: 140px;
   overflow-wrap: anywhere;
 }
 .rules {
@@ -797,6 +856,7 @@ button.small {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  padding: 5px 10px;
 }
 .rules button small {
   font-size: 10px;
@@ -805,100 +865,109 @@ button.small {
 .rules [aria-selected='true'] {
   border-color: var(--gold);
   color: var(--gold);
+  box-shadow: inset 0 -2px 0 var(--gold);
 }
-.mgrid {
-  display: grid;
-  grid-template-columns: auto auto auto;
-  justify-content: start;
-  gap: 10px;
-  align-items: start;
+.hint-line {
+  margin: 0;
+  color: var(--dim);
+}
+.hint-line b {
+  color: var(--ink);
+}
+.table-scroll {
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 4px 2px 6px;
 }
-.edge-left {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.mtable {
+  display: grid;
   gap: 4px;
+  align-items: center;
+  justify-items: center;
+  width: max-content;
 }
-.edge-left > .slot {
-  margin-bottom: 6px;
+.mtable .a-slot,
+.mtable .b-slot {
+  padding: 2px;
 }
-.mgrid-main {
+.mtable .a-slot {
+  align-self: end;
+}
+.mtable .b-slot {
+  justify-self: start;
+  margin-left: 6px;
+}
+.mtable .arrow {
+  padding: 0 6px 0 10px;
+}
+.corner {
+  width: var(--cell);
+  height: var(--cell);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold);
+}
+.sorter {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  /* the left factor's slot sits above its column of terms: line the grid up with the terms */
-  padding-top: 76px;
-}
-.cells {
-  display: grid;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  min-height: 54px;
-  min-width: 54px;
-}
-.edge-bottom {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 4px;
-}
-.edge-bottom > .slot {
-  margin-left: 6px;
-}
-.result {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding-top: 76px;
-  max-width: 160px;
-}
-.result small {
-  color: var(--gold);
-}
-.rail-hint {
-  margin: 0;
-}
-.rail {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--cyan);
   border-radius: 8px;
+  background: rgba(0, 255, 240, 0.05);
 }
-.rail p {
+.sorter-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+}
+.sorter-head b {
+  font-size: 15px;
+}
+.sorter-head .close {
+  margin-left: auto;
+}
+.sorter p {
   margin: 0;
+}
+.goal {
+  color: var(--dim);
+  max-width: 70ch;
+}
+.goal b {
+  color: var(--ink);
 }
 .rail-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .rail-step {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 .token {
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 700;
-  color: var(--gold);
-  width: 18px;
+  color: var(--green);
+  width: 22px;
   text-align: center;
+}
+.token.minus {
+  color: var(--red);
 }
 .tile {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  font-size: 16px;
   font-weight: 700;
   color: #021015;
 }
@@ -911,17 +980,57 @@ button.small {
 .tile.axis2 {
   background: #6aa8ff;
 }
+.tile.scalar {
+  background: #e8f4ff;
+}
 .tile.from-left {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 .gap {
-  padding: 2px 6px;
-  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 3px 7px;
+  font-size: 16px;
+  line-height: 1.1;
+  opacity: 0.6;
 }
-.gap.cancel {
+.gap small {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.gap.useful {
+  opacity: 1;
   border-color: var(--gold);
   color: var(--gold);
+  box-shadow: 0 0 8px rgba(255, 210, 90, 0.4);
+}
+.verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+.verdict > b {
+  font-size: 20px;
+  color: var(--green);
+}
+.verdict.zero > b {
+  color: var(--dim);
+}
+.verdict .primary {
+  margin-left: auto;
+}
+.sheet ~ .toasts {
+  top: calc(64px + var(--sa-t));
+  bottom: auto;
+  left: auto;
+  right: max(16px, var(--sa-r));
+  transform: none;
+  align-items: flex-end;
 }
 
 /* machine panels: Card Press and Mill */
@@ -999,12 +1108,14 @@ button.small {
   .hud-buttons button {
     padding: 6px 9px;
   }
-  .cell {
-    width: 38px;
-    height: 38px;
+  .bench {
+    --cell: 40px;
+  }
+  .panel {
+    padding: 10px;
   }
   .tile {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
   }
 }

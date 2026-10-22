@@ -100,6 +100,8 @@ export class Game {
   factory: Factory;
   /** hand sorts done on the rail under each rule */
   sorts: Record<Rule, number> = { wedge: 0, dot: 0, geometric: 0 };
+  /** pairs of blades worked out on the rail, as "rule:blade:blade", so the grid shows what you found */
+  solved = new Set<string>();
   selected = 0;
   screen: Screen = 'start';
   target: Hit | null = null;
@@ -109,7 +111,7 @@ export class Game {
   /** the machine whose panel is open */
   panel: [number, number, number] | null = null;
   /** what's on the Workbench while it's open */
-  bench: { tray: Multivector; left: Stack | null; bottom: Stack | null; rule: Rule; rail: { cell: [number, number]; rail: Rail } | null } = {
+  bench: { tray: Multivector; left: Stack | null; bottom: Stack | null; rule: Rule; rail: { cell: [number, number]; pair: [number, number]; rail: Rail } | null } = {
     tray: Multivector.zero(G3),
     left: null,
     bottom: null,
@@ -186,6 +188,7 @@ export class Game {
     this.cursor = null;
     this.achievements = new Achievements();
     this.sorts = { wedge: 0, dot: 0, geometric: 0 };
+    this.solved = new Set();
     this.player = new Player();
     this.selected = 0;
     this.turn = 0;
@@ -208,6 +211,7 @@ export class Game {
       this.achievements.load(s.achievements ?? []);
       this.sorts = { wedge: 0, dot: 0, geometric: 0 };
       for (const [rule, n] of Object.entries(s.sorts ?? {})) this.sorts[savedName(rule) as Rule] = n as number;
+      this.solved = new Set(s.solved ?? []);
       this.player.pos.set(...(s.player.pos as [number, number, number]));
       this.player.yaw = s.player.yaw;
       this.player.pitch = s.player.pitch;
@@ -231,6 +235,7 @@ export class Game {
           inventory: saveSlots(inventory),
           achievements: this.achievements.save(),
           sorts: this.sorts,
+          solved: [...this.solved],
           player: { pos: this.player.pos.toArray(), yaw: this.player.yaw, pitch: this.player.pitch },
           selected: this.selected,
         }),
@@ -546,12 +551,26 @@ export class Game {
     this.changed();
   }
 
-  /** take the whole tray, packed into one item */
-  trayTakeAll() {
+  /** an output slot clicked, as in a Minecraft crafting table: the result goes onto the cursor, stacks
+   * onto a matching cursor, or with shift goes straight to the inventory; false if it can't go anywhere */
+  private takeOutput(s: Stack, shift: boolean) {
+    if (shift) {
+      const rest = addTo(this.inventory, s, PICKUP_ORDER);
+      if (rest) return this.toast('No room in your inventory'), false;
+      return true;
+    }
+    if (!this.cursor) return (this.cursor = s), true;
+    if (!canMerge(this.cursor, s)) return false;
+    const m = merge(this.cursor, s);
+    if (m.rest) return false;
+    this.cursor = m.target;
+    return true;
+  }
+
+  /** the tray's output slot: the whole sum, packed into one item */
+  trayOutput(shift = false) {
     const s = stackOf(this.bench.tray);
-    if (!s) return;
-    if (this.cursor) return this.trayDrop('left');
-    this.cursor = s;
+    if (!s || !this.takeOutput(s, shift)) return;
     this.bench.tray = Multivector.zero(G3);
     this.changed();
   }
@@ -567,25 +586,31 @@ export class Game {
     return [this.bench.left ? valueOf(this.bench.left) : null, this.bench.bottom ? valueOf(this.bench.bottom) : null];
   }
 
-  /** what MAKE gives under the current rule, or null when it can't make anything yet */
-  benchResult(): Multivector | null {
-    const [a, b] = this.factors();
-    if (!a || !b || !this.learned(this.bench.rule)) return null;
-    return product(this.bench.rule, a, b);
+  /** a pair of blades under a rule already worked out by hand on the rail */
+  solvedByHand(rule: Rule, ta: Multivector, tb: Multivector) {
+    return this.solved.has(`${rule}:${bladeOf(ta)}:${bladeOf(tb)}`);
   }
 
-  /** stack the grid into one result and put it on the cursor, using up both factors */
+  /** what the grid adds up to under the current rule, or null while it can't be made: the rule must be
+   * learned, or every cell of this grid worked out by hand */
+  benchResult(): Multivector | null {
+    const [a, b] = this.factors();
+    if (!a || !b) return null;
+    const rule = this.bench.rule;
+    const known = this.learned(rule) || terms(a).every((ta) => terms(b).every((tb) => this.solvedByHand(rule, ta, tb)));
+    return known ? product(rule, a, b) : null;
+  }
+
+  /** the grid's output slot: its sum, using up both factors */
   make(shift = false) {
     const r = this.benchResult();
     if (r === null) return;
     const s = stackOf(r);
+    if (s && !this.takeOutput(s, shift)) return;
+    if (!s) this.toast('Every cell is 0, so nothing is made.');
     this.bench.left = null;
     this.bench.bottom = null;
     this.bench.rail = null;
-    if (s) {
-      if (shift || this.cursor) this.give(s);
-      else this.cursor = s;
-    } else this.toast('Every cell was 0, so nothing is made.');
     this.changed();
   }
 
@@ -596,7 +621,11 @@ export class Game {
     const ta = terms(a)[i];
     const tb = terms(b)[j];
     if (!ta || !tb) return;
-    this.bench.rail = { cell: [i, j], rail: newRail(bladeOf(ta), bladeOf(tb)) };
+    const pair: [number, number] = [bladeOf(ta), bladeOf(tb)];
+    const rail = newRail(...pair);
+    // a cell already in order has nothing to sort: it's worked out as soon as it's opened
+    if (sorted(rail)) this.solved.add(`${this.bench.rule}:${pair[0]}:${pair[1]}`);
+    this.bench.rail = { cell: [i, j], pair, rail };
     this.changed();
   }
 
@@ -607,9 +636,15 @@ export class Game {
     open.rail = tap(open.rail, k);
     if (sorted(open.rail)) {
       const rule = this.bench.rule;
+      this.solved.add(`${rule}:${open.pair[0]}:${open.pair[1]}`);
       // learning a rule is a goal of its own, so the goals announce it
       if (!this.learned(rule) && this.learnable(rule)) this.sorts[rule]++;
     }
+    this.changed();
+  }
+
+  closeRail() {
+    this.bench.rail = null;
     this.changed();
   }
 

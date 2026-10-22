@@ -65,7 +65,8 @@ each with its reason. When one changes, edit its entry.
   projection are named as books and papers name them, so what a player learns carries over.
 - **Products are learned by hand before any machine does them.** The wedge, the dot and the
   geometric product are one blade sort on the rail with different rules for cancelling, and each verb plate needs its rule
-  learned by sorting three cells by hand. Machines and plates cost elements that only hand work
+  learned by sorting three cells by hand. A table whose every square has been worked out by hand
+  can be taken before its rule is learned, so hand work always pays off in something you keep. Machines and plates cost elements that only hand work
   makes. Lattice alone builds only ducts, Stores, splitters, mergers, crossings and blank cards.
 - **Goals are possession, not delivery.** A goal is met when the thing it names exists anywhere: in
   the inventory, a Store, a machine, or placed. Nothing has to be delivered, so a factory can grow
