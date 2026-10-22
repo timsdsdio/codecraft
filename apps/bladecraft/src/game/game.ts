@@ -15,6 +15,7 @@ import {
   canMerge,
   itemName,
   merge,
+  stackName,
   one,
   placeable,
   stack,
@@ -879,8 +880,12 @@ function machineNote(m: Machine, world: World, [x, y, z]: [number, number, numbe
   switch (m.type) {
     case 'generator':
       return m.sample ? ` · makes ${holds({ item: m.sample.item, count: Q.q(Math.sign(m.sample.count.n)) })}` : ' · no sample';
-    case 'store':
-      return ` · ${m.slots.filter(Boolean).length} of ${m.slots.length} slots used`;
+    case 'store': {
+      const held = m.slots.filter((s): s is Stack => !!s);
+      if (!held.length) return ' · empty';
+      const shown = held.slice(0, 3).map(stackName).join(', ');
+      return ` · ${shown}${held.length > 3 ? `, and ${held.length - 3} more` : ''} (${held.length} of ${m.slots.length} slots)`;
+    }
     case 'sorter':
       return ` · sends ${sortLabel(m.mode, m.filter)} ${m.side === 1 ? 'left' : 'right'}`;
     case 'mill': {

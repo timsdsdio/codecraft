@@ -124,7 +124,10 @@ export class Glyph extends THREE.Group {
       const m = o as THREE.Mesh;
       m.geometry?.dispose();
       const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-      (Array.isArray(mat) ? mat : mat ? [mat] : []).forEach((x) => x.dispose());
+      (Array.isArray(mat) ? mat : mat ? [mat] : []).forEach((x) => {
+        (x as THREE.SpriteMaterial).map?.dispose();
+        x.dispose();
+      });
     });
   }
 }

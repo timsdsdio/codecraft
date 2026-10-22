@@ -4,7 +4,7 @@
 // are drawn as their glyphs, and finished operations let off steam. A duct fed only from one side
 // is drawn as a corner, and elements coming in from a side ride round the bend.
 import * as THREE from 'three';
-import type { Multivector } from '@codecraft/ga';
+import { Q, type Multivector } from '@codecraft/ga';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Glyph, parts } from './glyph';
 import { hex } from './looks';
@@ -329,6 +329,10 @@ export class Renderer {
         put('sample', m.sample);
         put('out', m.out);
         break;
+      case 'store':
+        // what it holds, so a glance tells the Stores apart: its three biggest stacks above the tank
+        storeShowcase(m.slots).forEach(({ mv, label }, k) => want.set(`show${k}:${label}`, mv));
+        break;
       case 'detector':
       case 'orrery':
         put('a', m.a);
@@ -383,8 +387,10 @@ export class Renderer {
     }
     for (const [slot, mv] of want) {
       if (s.held.has(slot)) continue;
-      const glyph = new Glyph(mv, slot === 'fixed' ? 0.6 : slot === 'filter' ? 0.3 : 0.42);
-      glyph.position.copy(s.model.anchors[slot] ?? s.model.anchors.out);
+      const show = /^show(\d):(.*)$/.exec(slot);
+      const glyph = new Glyph(mv, slot === 'fixed' ? 0.6 : slot === 'filter' ? 0.3 : show ? 0.75 : 0.42);
+      glyph.position.copy(s.model.anchors[show ? `show${show[1]}` : slot] ?? s.model.anchors.out);
+      if (show) glyph.add(countSprite(show[2]));
       s.model.group.add(glyph);
       s.held.set(slot, { key: mv.key(), glyph });
     }
@@ -440,6 +446,45 @@ function ridePosition(x: number, y: number, z: number, facing: Dir, from: Dir | 
   }
   const k = t - 0.5;
   return c.add(new THREE.Vector3(ox * k, 0, oz * k));
+}
+
+/** a Store's biggest stacks that can be drawn, at unit size, with how many of each */
+function storeShowcase(slots: (Stack | null)[]) {
+  const byKind = new Map<string, { mv: Multivector; n: number; label: (n: number) => string }>();
+  for (const s of slots) {
+    if (!s) continue;
+    const base = s.item.kind === 'element' ? s.item.mv : shownMv(s);
+    if (!base || base.isZero()) continue;
+    const key = `${s.item.kind}:${base.key()}`;
+    const n = Q.toNumber(s.count);
+    const was = byKind.get(key);
+    if (was) was.n += n;
+    else byKind.set(key, { mv: base, n, label: (k) => (s.item.kind === 'element' ? Q.show(Q.q(Math.round(k * 1000), 1000)).replace('-', '−') : `×${k}`) });
+  }
+  return [...byKind.values()]
+    .sort((a, b) => Math.abs(b.n) - Math.abs(a.n))
+    .slice(0, 3)
+    .map((e) => ({ mv: e.mv, label: e.label(e.n) }));
+}
+
+/** a small number floating under a showcase glyph */
+function countSprite(text: string) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 48;
+  const c = canvas.getContext('2d')!;
+  c.font = 'bold 34px JetBrains Mono, monospace';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.lineWidth = 6;
+  c.strokeStyle = '#021015';
+  c.strokeText(text, 64, 26);
+  c.fillStyle = '#ffd25a';
+  c.fillText(text, 64, 26);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }));
+  sprite.scale.set(0.42, 0.16, 1);
+  sprite.position.set(0, -0.48, 0);
+  return sprite;
 }
 
 /** the multivector to draw for a stack: an element's value, a reading or a card's multivector */

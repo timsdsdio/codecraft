@@ -89,9 +89,9 @@ export function railResult(rail: Rail, rule: Rule): { blade: number; sign: 1 | -
 
 /** why a rule gives 0 for this sort, in words, or null when it doesn't */
 export function railWhyZero(rail: Rail, rule: Rule): string | null {
-  if (rule === 'wedge' && rail.cancelled > 0) return 'A pair had to cancel, and the wedge allows none: this cell is 0.';
+  if (rule === 'wedge' && rail.cancelled > 0) return 'a pair had to cancel, and the wedge allows none';
   if (rule === 'dot' && rail.tiles.some((t) => t.from === 'left'))
-    return 'A left-factor blade never cancelled, and the dot needs all of them to: this cell is 0.';
+    return 'an A tile never cancelled, and the dot needs all of them to';
   return null;
 }
 

@@ -28,7 +28,9 @@ each with its reason. When one changes, edit its entry.
   several slots everywhere would make every inventory screen a puzzle.
 - **Inventory follows Minecraft.** Left click, right click, shift click, drag to spread and number
   keys mean what they mean there, so a Minecraft player already knows how to move things. Touch
-  maps tap, long press and double tap onto left, right and shift click.
+  maps tap, long press and double tap onto left, right and shift click. Panels keep the inventory
+  docked and on screen, with slots sized to fit nine across, because moving a stack must never
+  mean scrolling between where it is and where it goes.
 - **Elements are from G(3), not projective GA.** Vectors are arrows and bivectors are planes, the
   usual way geometric algebra is taught. In projective GA a vector is a plane, which is a confusing
   first step.
