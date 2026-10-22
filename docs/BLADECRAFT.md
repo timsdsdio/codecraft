@@ -358,9 +358,11 @@ another branch says so on its card ("after Volume").
   holding a machine, and Jump. Tap a hotbar slot to hold it; tap the held slot again to open your
   inventory.
 - **Inventory and panels:** as in Minecraft, described under Items and stacks. The Workbench and
-  every machine panel keep your inventory docked below their own slots, or beside them on a short
-  landscape screen, so the two are always on screen together and shift click moves a stack between
-  them. Nothing on these screens scrolls the inventory out of reach.
+  every machine panel keep your hotbar docked at the bottom, with a line above it naming the stack
+  you're holding. The three storage rows are a drawer: the Inventory handle beside that line slides
+  them up over the panel and hides them again, and the game remembers which way you left it. Shift
+  click moves a stack between the panel and your inventory either way, and nothing on these screens
+  scrolls.
 
 ## Open questions
 

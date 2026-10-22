@@ -1222,10 +1222,10 @@ button.small {
     display: none;
   }
 }
-/* a short landscape screen: the inventory sits beside the work instead of under it */
+/* a short landscape screen: smaller slots, and the sorter over the table */
 @media (orientation: landscape) and (max-height: 600px) {
   .sheet.station {
-    --s: min(46px, calc((100dvh - 64px - 3 * 4px - 6px) / 4));
+    --s: 40px;
     gap: 6px;
   }
   .sheet.station header h2 {
@@ -1234,11 +1234,11 @@ button.small {
   .back .long {
     display: none;
   }
-  .station-body {
-    flex-direction: row;
-  }
   .station-inv {
-    align-self: flex-end;
+    align-self: center;
+  }
+  .inv-bar {
+    min-height: 22px;
   }
   .station .bench {
     --cell: 36px;
@@ -1248,6 +1248,7 @@ button.small {
     gap: 6px;
   }
   .station .panel > header > span.dim,
+  .station .panel > header > h3,
   .station .hint-line,
   .panel.multiply.sorting .rules {
     display: none;
@@ -1264,6 +1265,18 @@ button.small {
     width: 38px;
     height: 38px;
   }
+  /* the table's slots shrink to its cells so the whole table fits the short screen */
+  .mtable .labelled > .slot,
+  .mtable .labelled > .slot.big,
+  .craft-row .labelled > .slot.big {
+    width: calc(var(--cell) + 10px);
+    height: calc(var(--cell) + 10px);
+    padding: 2px;
+  }
+  .mtable .labelled small,
+  .craft-row .labelled small {
+    display: none;
+  }
 }
 @media (max-width: 600px), (max-height: 600px) {
   .sheet ~ .toasts .toast {
@@ -1271,5 +1284,63 @@ button.small {
     font-size: 11px;
     flex-direction: row;
     gap: 6px;
+  }
+}
+
+/* the inventory drawer: the hotbar stays put and the storage rows slide up out of it over the panel */
+.player-inv .dock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.inv-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+.inv-bar .holding {
+  flex: 1;
+  min-width: 0;
+}
+.drawer-toggle {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.drawer-toggle .dim {
+  margin-left: 4px;
+}
+.drawer-sheet {
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  padding: 8px;
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6);
+  transform: translateY(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.18s ease-out, opacity 0.18s ease-out;
+}
+.player-inv.drawer.open .drawer-sheet {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+.player-inv.drawer .hotbar-row {
+  border-top: none;
+  padding-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-sheet {
+    transition: none;
   }
 }

@@ -48,7 +48,7 @@ function Sheet({
         <div className="station-body">
           <div className="station-work">{children}</div>
           <div className="station-inv">
-            <PlayerInventory game={game} />
+            <PlayerInventory game={game} drawer />
           </div>
         </div>
       ) : (
